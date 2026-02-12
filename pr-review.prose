@@ -1,0 +1,18 @@
+---
+name: pr-review
+version: 0.1.0
+description: Review a pull request for correctness, style, and potential issues.
+---
+
+# PR Review
+
+Review the current pull request.
+
+## Steps
+
+1. Read the diff of all changed files.
+2. For each changed file, check for:
+   - Correctness: logic errors, off-by-one mistakes, missing error handling at boundaries.
+   - Style: consistency with the existing codebase conventions.
+   - Security: injection risks, leaked secrets, unsafe input handling.
+3. Summarise findings as a PR review comment. If everything looks good, say so briefly.
