@@ -2,7 +2,11 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   review:

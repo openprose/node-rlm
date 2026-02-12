@@ -1,18 +1,202 @@
----
-name: pr-review
-version: 0.1.0
-description: Review a pull request for correctness, style, and potential issues.
----
-
 # PR Review
+#
+# Multi-agent review pipeline. A haiku triages changes, sonnets do deep
+# contextual review, an opus judges integration quality, and a sonnet
+# scans for critical bugs. Results are posted as PR comments.
+#
+# Usage: prose run pr-review.prose
 
-Review the current pull request.
+agent triage:
+  model: haiku
+  prompt: """
+    You catalogue pull request changes. For each changed file, note:
+    - What changed (added, modified, deleted)
+    - Whether the change is trivial (formatting, comments, renames) or
+      substantive (new logic, changed behavior, new APIs, deleted code)
 
-## Steps
+    Return a JSON array of objects:
+    [{ "file": "path", "summary": "...", "needs_deep_review": true/false }]
 
-1. Read the diff of all changed files.
-2. For each changed file, check for:
-   - Correctness: logic errors, off-by-one mistakes, missing error handling at boundaries.
-   - Style: consistency with the existing codebase conventions.
-   - Security: injection risks, leaked secrets, unsafe input handling.
-3. Post your findings as a comment on the PR using `gh pr comment`. If everything looks good, say so briefly.
+    Mark needs_deep_review: true for anything substantive.
+  """
+
+agent context-reviewer:
+  model: sonnet
+  prompt: """
+    You are a senior engineer doing a deep contextual review of a specific
+    change in a pull request. You are given the project README and tenets
+    (if they exist) so you understand the project's values and architecture.
+
+    For your assigned file(s):
+    1. Read the full file (not just the diff) to understand surrounding context
+    2. Trace how the change interacts with the rest of the codebase
+    3. Note anything that feels bolted-on, inconsistent, or incomplete
+
+    Write your findings to a file. Be specific: reference file paths and
+    line numbers. If the change is well-integrated, say so and why.
+  """
+
+agent integration-judge:
+  model: opus
+  prompt: """
+    You are a principal engineer and project steward. You judge whether
+    changes are well-integrated into a project or merely bolted on.
+
+    Your core question: If this project were designed from scratch with
+    these changes included, would it look like this? Or would the changes
+    be woven in more elegantly?
+
+    You look for:
+    - Dead code left behind
+    - Parallel structures that should be unified
+    - Conventions broken without reason
+    - Abstractions that weren't updated to accommodate the change
+    - Changes that work but don't belong where they were placed
+
+    If the changes are well-integrated, say so clearly and briefly.
+    If not, recommend how to re-think the change so it fits as if it
+    were always part of the project.
+  """
+
+agent bug-scanner:
+  model: sonnet
+  prompt: """
+    You scan pull request changes for critical bugs only. You are not
+    interested in style, naming, or minor improvements. You only speak
+    up when you find something that will break in production:
+
+    - Logic errors, off-by-one, wrong comparisons
+    - Uncovered edge cases that will crash or corrupt
+    - Broken APIs (changed signatures, missing migrations)
+    - Race conditions, resource leaks
+    - Security vulnerabilities (injection, auth bypass, data exposure)
+    - Conflicting changes (two files that disagree)
+
+    If you find nothing critical, say so in one line and move on.
+    Do NOT pad your review with suggestions or nits.
+  """
+
+
+agent housekeeping:
+  model: sonnet
+  prompt: """
+    You prepare a PR for a fresh review pass. Before any new review begins,
+    you clean up stale state from previous reviews on this same PR.
+
+    Your tasks:
+    1. List all existing review comments on this PR
+    2. For comments left by previous automated reviews (from the bot or
+       github-actions user): if the code they reference has since changed,
+       mark them as resolved/outdated
+    3. Determine whether this is the first review or a re-review after
+       new commits. If re-review, note what changed since the last review
+       comment so downstream agents can focus on the delta.
+
+    Return:
+    - is_re_review: true/false
+    - delta_summary: what changed since last review (if re-review)
+    - resolved_count: how many stale comments you resolved
+  """
+
+
+# --- Gather context ---
+
+let pr_info = session "Fetch PR metadata and diff"
+  prompt: """
+    Gather everything about the current PR:
+    1. Run: gh pr view --json number,title,body,files
+    2. Run: gh pr diff
+    3. Read README.md for project context
+    4. Check if .prose/agents/ceo_voice/ or .prose/agents/codebase_voice/
+       exist. If so, read their latest state for project tenets.
+       If not, note that no tenets are available.
+
+    Return all of this as structured context.
+  """
+
+
+# --- Phase 0: Housekeeping ---
+
+let housekeeping_result = session: housekeeping
+  prompt: """
+    Clean up this PR before we start a fresh review.
+
+    1. Run: gh api repos/{owner}/{repo}/issues/{pr_number}/comments
+       to list existing comments. Resolve any from previous automated
+       reviews where the referenced code has since changed.
+    2. Check git log to see if there are commits after the last review
+       comment timestamp. If so, this is a re-review.
+    3. If re-review, run: gh api repos/{owner}/{repo}/compare/{base}...{head}
+       to summarize what changed since the last review.
+
+    Return your findings as structured context.
+  """
+  context: pr_info
+
+
+# --- Phase 1: Triage ---
+
+let triage_result = session: triage
+  prompt: "Catalogue all changes in this PR. Decide which need deep review."
+  context: [pr_info, housekeeping_result]
+
+
+# --- Phase 2: Deep contextual review (parallel) ---
+
+let files_for_review = triage_result
+  | filter: **item has needs_deep_review: true**
+
+let contextual_findings = files_for_review
+  | pmap:
+      session: context-reviewer
+        prompt: """
+          Deep review this change: {item.file}
+          Summary: {item.summary}
+
+          Read the full file and its surroundings, then write your findings
+          to .prose/runs/current/review-{item.file | slugify}.md
+        """
+        context: pr_info
+
+
+# --- Phase 3: Integration judgment (opus) ---
+
+let integration_review = session: integration-judge
+  prompt: """
+    Review the contextual findings from the deep review phase.
+    The project README and tenets (if any) are in the PR context.
+
+    Your question: If this project were designed from the beginning with
+    these changes, would it look like this? Or would the changes be
+    integrated more elegantly?
+
+    Post your review as a PR comment using `gh pr comment` with:
+    - A one-sentence summary that captures your judgment
+    - If needed, a paragraph of thinking and specific recommendations
+    - If well-integrated, just the summary line is enough
+
+    Be direct. No filler.
+  """
+  context: [pr_info, contextual_findings]
+
+
+# --- Phase 4: Bug scan (parallel with phase 3 is fine, but sequential is safer) ---
+
+let bug_findings = session: bug-scanner
+  prompt: """
+    Scan all changes in this PR for critical bugs.
+    Read the diff and the full files where changes occurred.
+
+    For each critical finding, add an inline review comment on the PR:
+      gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
+        --method POST \
+        -f body="..." \
+        -f commit_id="..." \
+        -f path="..." \
+        -F line=N \
+        -f side="RIGHT"
+
+    If you find nothing critical, post a single brief PR comment:
+      gh pr comment --body "No critical issues found."
+  """
+  context: pr_info
