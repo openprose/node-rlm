@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Downloads the OOLONG dataset (oolongbench/oolong-synth) from HuggingFace into eval/data/oolong/.
-// Usage: npx tsx eval/download.ts [--dataset oolong]
+// Downloads both test and validation splits (trec_coarse lives in validation).
+// Usage: npx tsx eval/download.ts [--dataset oolong] [--max-rows N]
 
 import { existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -12,14 +13,14 @@ const OOLONG_DIR = join(DATA_DIR, "oolong");
 // HuggingFace Datasets Server API
 const HF_API_BASE = "https://datasets-server.huggingface.co";
 const OOLONG_DATASET = "oolongbench/oolong-synth";
-const OOLONG_SPLIT = "test";
 
-// We fetch rows in pages of this size
-const PAGE_SIZE = 100;
+// Both splits are needed: test has metaphors/negation, validation has trec_coarse/spam
+const OOLONG_SPLITS = ["test", "validation"] as const;
 
-// Maximum rows to download (the test split has ~10.6K rows; we only need a subset)
-// The paper used 50 tasks from trec_coarse at 131K context. We download more to
-// ensure we have enough after filtering.
+// We fetch rows in pages of this size (smaller = more reliable with HF API)
+const PAGE_SIZE = 50;
+
+// Maximum rows to download per split (0 = all)
 const MAX_ROWS = 11000;
 
 interface HFRowsResponse {
@@ -30,42 +31,50 @@ interface HFRowsResponse {
 	partial: boolean;
 }
 
-async function fetchWithRetry(url: string, retries = 3, delayMs = 2000): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 5, delayMs = 3000): Promise<Response | null> {
 	for (let attempt = 1; attempt <= retries; attempt++) {
 		try {
 			const response = await fetch(url);
 			if (response.status === 429) {
-				// Rate limited — wait and retry
 				const retryAfter = response.headers.get("retry-after");
 				const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : delayMs * attempt;
 				console.log(`  Rate limited, waiting ${waitMs}ms before retry ${attempt}/${retries}...`);
 				await new Promise((r) => setTimeout(r, waitMs));
 				continue;
 			}
+			if (response.status >= 500) {
+				// Server error — retry with backoff, but don't crash
+				const waitMs = delayMs * attempt;
+				if (attempt < retries) {
+					console.log(`  Server error ${response.status}, retrying in ${waitMs}ms (${attempt}/${retries})...`);
+					await new Promise((r) => setTimeout(r, waitMs));
+					continue;
+				}
+				// Final attempt failed — return null to let caller skip this page
+				console.log(`  Server error ${response.status} after ${retries} attempts, skipping page.`);
+				return null;
+			}
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 			return response;
 		} catch (err) {
-			if (attempt === retries) throw err;
+			if (attempt === retries) {
+				console.log(`  Request failed after ${retries} attempts: ${err}. Skipping page.`);
+				return null;
+			}
 			console.log(`  Request failed (attempt ${attempt}/${retries}): ${err}. Retrying in ${delayMs * attempt}ms...`);
 			await new Promise((r) => setTimeout(r, delayMs * attempt));
 		}
 	}
-	throw new Error("Unreachable");
+	return null;
 }
 
-async function downloadOolong(maxRows: number): Promise<void> {
-	console.log("Downloading OOLONG dataset from HuggingFace...");
-	console.log(`  Dataset: ${OOLONG_DATASET}`);
-	console.log(`  Split: ${OOLONG_SPLIT}`);
-	console.log(`  Target directory: ${OOLONG_DIR}`);
-	console.log();
+async function downloadSplit(split: string, maxRows: number): Promise<number> {
+	console.log(`\n--- Downloading split: ${split} ---`);
 
-	mkdirSync(OOLONG_DIR, { recursive: true });
-
-	const outputFile = join(OOLONG_DIR, `${OOLONG_SPLIT}.jsonl`);
-	const progressFile = join(OOLONG_DIR, ".download-progress");
+	const outputFile = join(OOLONG_DIR, `${split}.jsonl`);
+	const progressFile = join(OOLONG_DIR, `.download-progress-${split}`);
 
 	// Check for resumability
 	let startOffset = 0;
@@ -80,27 +89,37 @@ async function downloadOolong(maxRows: number): Promise<void> {
 	}
 
 	if (startOffset === 0) {
-		// Fresh download — clear any existing file
 		writeFileSync(outputFile, "");
 	}
 
-	// First, get the total row count
-	const infoUrl = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${OOLONG_SPLIT}&offset=0&length=1`;
+	// Get total row count
+	const infoUrl = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${split}&offset=0&length=1`;
 	console.log("  Fetching dataset info...");
 	const infoResponse = await fetchWithRetry(infoUrl);
+	if (!infoResponse) {
+		console.log(`  Could not fetch info for split ${split}, skipping.`);
+		return 0;
+	}
 	const infoData = (await infoResponse.json()) as HFRowsResponse;
-	const totalRows = Math.min(infoData.num_rows_total, maxRows);
+	const totalRows = maxRows > 0 ? Math.min(infoData.num_rows_total, maxRows) : infoData.num_rows_total;
 	console.log(`  Total rows in split: ${infoData.num_rows_total}`);
 	console.log(`  Downloading up to: ${totalRows}`);
-	console.log();
 
 	let downloaded = startOffset;
+	let skippedPages = 0;
 
 	while (downloaded < totalRows) {
 		const length = Math.min(PAGE_SIZE, totalRows - downloaded);
-		const url = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${OOLONG_SPLIT}&offset=${downloaded}&length=${length}`;
+		const url = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${split}&offset=${downloaded}&length=${length}`;
 
 		const response = await fetchWithRetry(url);
+		if (!response) {
+			// Skip this page but keep going
+			skippedPages++;
+			downloaded += length;
+			continue;
+		}
+
 		const data = (await response.json()) as HFRowsResponse;
 
 		if (!data.rows || data.rows.length === 0) {
@@ -108,52 +127,77 @@ async function downloadOolong(maxRows: number): Promise<void> {
 			break;
 		}
 
-		// Append rows as JSONL
 		const lines = data.rows.map((r) => JSON.stringify(r.row));
 		appendFileSync(outputFile, lines.join("\n") + "\n");
 
 		downloaded += data.rows.length;
-
-		// Save progress
 		writeFileSync(progressFile, String(downloaded));
 
 		const pct = Math.round((downloaded / totalRows) * 100);
-		process.stdout.write(`\r  Progress: ${downloaded}/${totalRows} rows (${pct}%)`);
+		process.stdout.write(`\r  Progress: ${downloaded}/${totalRows} rows (${pct}%)${skippedPages ? ` [${skippedPages} pages skipped]` : ""}`);
 	}
 
 	console.log();
-	console.log(`  Downloaded ${downloaded} rows to ${outputFile}`);
+	console.log(`  Downloaded to ${outputFile}`);
+	if (skippedPages > 0) {
+		console.log(`  Warning: ${skippedPages} pages skipped due to server errors`);
+	}
 
 	// Clean up progress file
 	if (existsSync(progressFile)) {
 		unlinkSync(progressFile);
 	}
 
-	// Print summary stats
-	summarizeData(outputFile);
+	return downloaded;
 }
 
-function summarizeData(filePath: string): void {
+async function downloadOolong(maxRows: number): Promise<void> {
+	console.log("Downloading OOLONG dataset from HuggingFace...");
+	console.log(`  Dataset: ${OOLONG_DATASET}`);
+	console.log(`  Splits: ${OOLONG_SPLITS.join(", ")}`);
+	console.log(`  Target directory: ${OOLONG_DIR}`);
+
+	mkdirSync(OOLONG_DIR, { recursive: true });
+
+	let totalDownloaded = 0;
+	for (const split of OOLONG_SPLITS) {
+		totalDownloaded += await downloadSplit(split, maxRows);
+	}
+
+	console.log(`\n  Total rows downloaded across all splits: ${totalDownloaded}`);
+
+	// Summarize all data files
+	summarizeData();
+}
+
+function summarizeData(): void {
 	console.log();
 	console.log("Dataset summary:");
 
-	const content = readFileSync(filePath, "utf-8");
-	const lines = content.trim().split("\n").filter((l) => l.trim());
-
 	const datasets = new Map<string, number>();
 	const contextLens = new Map<number, number>();
+	let totalRows = 0;
 
-	for (const line of lines) {
-		try {
-			const row = JSON.parse(line) as { dataset: string; context_len: number };
-			datasets.set(row.dataset, (datasets.get(row.dataset) ?? 0) + 1);
-			contextLens.set(row.context_len, (contextLens.get(row.context_len) ?? 0) + 1);
-		} catch {
-			// skip
+	for (const split of OOLONG_SPLITS) {
+		const filePath = join(OOLONG_DIR, `${split}.jsonl`);
+		if (!existsSync(filePath)) continue;
+
+		const content = readFileSync(filePath, "utf-8");
+		const lines = content.trim().split("\n").filter((l) => l.trim());
+		totalRows += lines.length;
+
+		for (const line of lines) {
+			try {
+				const row = JSON.parse(line) as { dataset: string; context_len: number };
+				datasets.set(row.dataset, (datasets.get(row.dataset) ?? 0) + 1);
+				contextLens.set(row.context_len, (contextLens.get(row.context_len) ?? 0) + 1);
+			} catch {
+				// skip
+			}
 		}
 	}
 
-	console.log(`  Total rows: ${lines.length}`);
+	console.log(`  Total rows: ${totalRows}`);
 	console.log(`  Datasets: ${[...datasets.entries()].map(([k, v]) => `${k}(${v})`).join(", ")}`);
 	console.log(
 		`  Context lengths: ${[...contextLens.entries()]
