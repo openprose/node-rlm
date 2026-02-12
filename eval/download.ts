@@ -3,7 +3,8 @@
 // Downloads both test and validation splits (trec_coarse lives in validation).
 // Usage: npx tsx eval/download.ts [--dataset oolong] [--max-rows N]
 
-import { existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, unlinkSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, unlinkSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { join } from "node:path";
 
 const EVAL_DIR = new URL(".", import.meta.url).pathname;
@@ -167,10 +168,10 @@ async function downloadOolong(maxRows: number): Promise<void> {
 	console.log(`\n  Total rows downloaded across all splits: ${totalDownloaded}`);
 
 	// Summarize all data files
-	summarizeData();
+	await summarizeData();
 }
 
-function summarizeData(): void {
+async function summarizeData(): Promise<void> {
 	console.log();
 	console.log("Dataset summary:");
 
@@ -182,13 +183,14 @@ function summarizeData(): void {
 		const filePath = join(OOLONG_DIR, `${split}.jsonl`);
 		if (!existsSync(filePath)) continue;
 
-		const content = readFileSync(filePath, "utf-8");
-		const lines = content.trim().split("\n").filter((l) => l.trim());
-		totalRows += lines.length;
-
-		for (const line of lines) {
+		// Stream line-by-line to avoid Node.js string length limits on large files
+		const rl = createInterface({ input: createReadStream(filePath, "utf-8"), crlfDelay: Infinity });
+		for await (const line of rl) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			totalRows++;
 			try {
-				const row = JSON.parse(line) as { dataset: string; context_len: number };
+				const row = JSON.parse(trimmed) as { dataset: string; context_len: number };
 				datasets.set(row.dataset, (datasets.get(row.dataset) ?? 0) + 1);
 				contextLens.set(row.context_len, (contextLens.get(row.context_len) ?? 0) + 1);
 			} catch {
