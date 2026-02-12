@@ -29,6 +29,12 @@ on:
         description: Parallel tasks
         required: false
         default: "5"
+      drivers:
+        description: "Comma-separated driver plugins (e.g. no-tool-calls,one-block-per-iteration)"
+        required: false
+      app:
+        description: "App plugin name (e.g. structured-data-aggregation)"
+        required: false
       analyze:
         description: Run trajectory analysis after eval
         type: boolean
@@ -72,6 +78,12 @@ jobs:
           ARGS="$ARGS --concurrency ${{ inputs.concurrency }}"
           if [ -n "${{ inputs.max-tasks }}" ]; then
             ARGS="$ARGS --max-tasks ${{ inputs.max-tasks }}"
+          fi
+          if [ -n "${{ inputs.drivers }}" ]; then
+            ARGS="$ARGS --drivers ${{ inputs.drivers }}"
+          fi
+          if [ -n "${{ inputs.app }}" ]; then
+            ARGS="$ARGS --app ${{ inputs.app }}"
           fi
           npx tsx eval/run.ts $ARGS
 
