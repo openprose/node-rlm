@@ -1,0 +1,60 @@
+{
+	"name": "node-rlm",
+	"version": "0.1.0",
+	"description": "Recursive Language Model agent with persistent JavaScript REPL",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./drivers/openrouter-compatible": {
+			"types": "./dist/drivers/openrouter-compatible.d.ts",
+			"default": "./dist/drivers/openrouter-compatible.js"
+		},
+		"./plugins": {
+			"types": "./dist/plugins.d.ts",
+			"default": "./dist/plugins.js"
+		}
+	},
+	"bin": {
+		"node-rlm": "dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"plugins",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "rm -rf dist",
+		"build": "tsc -p tsconfig.build.json",
+		"dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"dependencies": {
+		"acorn": "^8.14.0"
+	},
+	"keywords": [
+		"ai",
+		"llm",
+		"repl",
+		"recursive"
+	],
+	"author": "Mario Zechner",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/openprose/node-rlm.git"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.2.4"
+	}
+}

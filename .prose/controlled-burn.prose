@@ -1,0 +1,160 @@
+# controlled-burn.prose
+# Periodic controlled burn to remove AI coding agent cruft.
+#
+# Run: prose run .prose/controlled-burn.prose
+
+input project_path: "Absolute path to the project root"
+
+agent scanner:
+  model: opus
+  prompt: """
+    You find AI coding agent tells in source code. You catalogue but never
+    change files. You write findings to TMP_AI_WARTS.md at the top of the
+    directory you are scanning.
+
+    What to look for:
+    - Redundant comments that restate what the code does
+    - AI-voice prose (flowery, hedging, promotional)
+    - Backward-compat shims or dual-path code in new code
+    - Unnecessary complexity, nesting, premature abstractions
+    - Features that look tacked on instead of designed in
+    - Defensive coding for impossible cases
+
+    Each entry must include: file, line numbers, what the tell is, how to fix it.
+
+    If fixing an entry might change exports, behavior, or semantics, put it
+    in a CLOSE REVIEW section at the bottom instead.
+
+    Think: how should this code look if it were written this way from the start?
+  """
+
+agent fixer:
+  model: opus
+  prompt: """
+    You fix catalogued AI warts from a TMP_AI_WARTS.md file.
+
+    For each entry:
+    1. Read the source file and confirm the issue
+    2. If obviously safe (no behavior change, no export change): fix it
+    3. Remove the entry from TMP_AI_WARTS.md
+    4. If uncertain: leave the entry untouched
+
+    Do not touch CLOSE REVIEW entries.
+    Preserve exact indentation conventions. Run tests after all fixes.
+  """
+
+agent analyst:
+  model: opus
+  prompt: """
+    You classify and cluster code issues by safety and relatedness.
+
+    For each entry, assign:
+    - SAFE: fixable with zero functional impact
+    - BORDERLINE: judgment call, might affect behavior subtly
+    - NOT_SAFE: definitely changes behavior, needs human decision
+
+    Group related entries into named clusters with a recommended fix path.
+  """
+
+
+# --- Discover ---
+
+let directories = session "Discover scan targets"
+  model: sonnet
+  prompt: """
+    List the major authored source directories in {project_path}.
+    Exclude node_modules, dist, generated files, vendored code, and data.
+    Return a JSON array of {{ path, file_count, description }}.
+  """
+
+input confirm_dirs: **Review directories to scan. Remove any you want to skip.**
+
+
+# --- Scan ---
+
+directories | pmap:
+  session: scanner
+    prompt: "Scan every file in {item.path}. Write findings to {item.path}/TMP_AI_WARTS.md."
+
+input review_catalogues: **Catalogues written. Edit them now -- remove any entries you disagree with.**
+
+
+# --- Safe pass ---
+
+directories | pmap:
+  session: fixer
+    prompt: "Work through {item.path}/TMP_AI_WARTS.md. Fix safe entries, skip uncertain ones."
+
+let remaining = session "Collect what's left"
+  model: sonnet
+  prompt: """
+    Read every TMP_AI_WARTS.md in {project_path}.
+    Return all remaining entries as JSON: [{{ file, lines, description, section }}]
+  """
+
+
+# --- Triage ---
+
+let triaged = session: analyst
+  prompt: """
+    Classify each remaining entry. Cluster related items.
+    Return JSON with three groups:
+    {{ safe: [{{ cluster, entries, fix }}], borderline: [{{ cluster, entries, fix }}], not_safe: [{{ cluster, entries, risk }}] }}
+  """
+  context: remaining
+
+input triage_review: ***
+  Remaining items, classified:
+
+  {triaged}
+
+  Adjust any classifications before continuing.
+***
+
+
+# --- Fix safe remainders ---
+
+triaged.safe
+  | pmap:
+      session: fixer
+        prompt: "Fix this cluster: {item.entries}. Remove from warts files. Run tests."
+
+
+# --- Borderline review ---
+
+input borderline_decisions: ***
+  These clusters need your judgment:
+
+  {triaged.borderline}
+
+  For each: fix, skip, or discuss.
+***
+
+triaged.borderline
+  | filter:
+      **the user approved this cluster**
+  | pmap:
+      session: fixer
+        prompt: "Fix this cluster per recommended path: {item.fix}. Update warts files. Run tests."
+
+
+# --- Cleanup ---
+
+session "Final verification"
+  model: sonnet
+  prompt: """
+    1. Delete all TMP_AI_WARTS.md files in {project_path}
+    2. Run full test suite and type-check
+    3. Report pass/fail
+  """
+
+output report = session "Summarize the burn"
+  model: sonnet
+  prompt: """
+    Write a concise summary:
+    - Total warts found, fixed, skipped
+    - Files modified
+    - Test results
+    - Items intentionally left, with reasons
+    Format as markdown.
+  """

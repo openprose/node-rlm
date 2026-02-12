@@ -1,0 +1,148 @@
+# true-form.prose
+# What would this codebase look like if built from scratch with hindsight?
+#
+# Strips the archaeological layers. Makes the code look like it was
+# always meant to be this way. Tracks drift reduction over time.
+#
+# Run: prose run .prose/true-form.prose
+
+input project_path: "Absolute path to the project root"
+
+agent form_tracker:
+  model: opus
+  persist: project
+  prompt: """
+    You track the evolving true form of this codebase across runs.
+    You maintain a model of what the ideal architecture looks like
+    vs. what exists, and how the gap shrinks over time.
+  """
+
+
+# --- Assess ---
+
+let directories = session "Discover directories"
+  model: sonnet
+  prompt: """
+    List major authored source directories in {project_path}.
+    Exclude generated, vendored, and data directories.
+    Return JSON: [{{ path, description }}]
+  """
+
+let assessments = directories
+  | pmap:
+      session "Assess {item.path}"
+        model: sonnet
+        prompt: """
+          You're building {item.path} from scratch, knowing everything
+          it currently does. What would be different?
+
+          Look for:
+          - Tack-ons that should be first-class
+          - Abstractions that outlived their purpose
+          - Structure that reveals its history instead of its intent
+          - Code that fights the framework instead of using it
+          - Naming that reflects old concepts, not current reality
+
+          Classify each finding:
+          - SAFE DO: simple, no risk
+          - FENCE DO: needs review, moderate risk
+          - RISKY DO: deep change, high blast radius
+          - DON'T: not worth the churn
+
+          Be specific: file, lines, what, why.
+        """
+
+resume: form_tracker
+  prompt: "Update with these findings. Note what changed since last run."
+  context: assessments
+
+
+# --- Approve ---
+
+input approval: ***
+  Assessment complete:
+
+  {assessments}
+
+  Approve items to proceed. Reject or defer the rest.
+***
+
+
+# --- Safe fixes ---
+
+assessments
+  | filter: **SAFE DO and user approved**
+  | pmap:
+      session "Fix"
+        model: opus
+        prompt: "Implement: {item}. Run tests."
+
+
+# --- Fence: deeper research, then fix ---
+
+let fence_research = assessments
+  | filter: **FENCE DO and user approved**
+  | pmap:
+      session "Research"
+        model: opus
+        prompt: """
+          Investigate deeply:
+          {item}
+          What breaks? What's the migration path? Is it worth it?
+          Give a concrete plan.
+        """
+
+input fence_decisions: ***
+  Fence items researched:
+
+  {fence_research}
+
+  For each: proceed, defer, or reject.
+***
+
+fence_research
+  | filter: **user approved**
+  | pmap:
+      session "Implement"
+        model: opus
+        prompt: "Implement: {item}. Run tests."
+
+
+# --- Risky: deepest research, then fix ---
+
+let risky_research = assessments
+  | filter: **RISKY DO and user approved**
+  | pmap:
+      session "Deep analysis"
+        model: opus
+        prompt: """
+          Map every file affected by:
+          {item}
+          Identify all downstream consequences.
+          Write a step-by-step plan with rollback points.
+        """
+
+input risky_decisions: ***
+  Risky items analyzed:
+
+  {risky_research}
+
+  Proceed with any?
+***
+
+risky_research
+  | filter: **user approved**
+  | pmap:
+      session "Implement carefully"
+        model: opus
+        prompt: "Implement with care: {item}. Run tests after every step."
+
+
+# --- Final ---
+
+session "Verify"
+  model: sonnet
+  prompt: "Run full test suite and type-check on {project_path}. Report results."
+
+output report = resume: form_tracker
+  prompt: "Summarize: what improved, what's still drifted, how the gap changed."

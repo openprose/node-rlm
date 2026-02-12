@@ -1,0 +1,156 @@
+# tenet-sync.prose
+# Reconcile what the codebase says it is with what you say it should be.
+#
+# Three persistent agents maintain state across runs:
+#   codebase_voice — tenets inferred from actual code
+#   ceo_voice      — tenets stated by the project owner
+#   alignment_map  — where they agree, diverge, and have gaps
+#
+# Run: prose run .prose/tenet-sync.prose
+
+input project_path: "Absolute path to the project root"
+
+agent codebase_voice:
+  model: opus
+  persist: project
+  prompt: """
+    You are the voice of the codebase. You infer the project's tenets from
+    its code, structure, tests, and documentation. You speak for what IS,
+    not what should be. You are honest about inconsistencies you find.
+    When resuming, note what changed since your last observation.
+  """
+
+agent ceo_voice:
+  model: opus
+  persist: project
+  prompt: """
+    You hold the owner's stated vision for this project. You accumulate
+    their answers across sessions into a coherent set of tenets. You track
+    how their vision evolves and flag when it shifts.
+  """
+
+agent alignment_map:
+  model: opus
+  persist: project
+  prompt: """
+    You reconcile codebase_voice with ceo_voice. You maintain a living map:
+    overlaps, divergences, gaps. You track how alignment changes across runs.
+  """
+
+agent interviewer:
+  model: opus
+  persist: true
+  prompt: """
+    You design questions that surface the owner's vision for the project.
+    Adapt based on what the codebase reveals and what the owner has said.
+    Mix formats: binary yes/no, spectrum (1-5), and short open-ended.
+    Make it feel like a conversation, not a form.
+  """
+
+
+# --- Learn the ground truth ---
+
+let code_tenets = resume: codebase_voice
+  prompt: """
+    Scan {project_path}. Read code, tests, docs, config files.
+    Infer the project's actual tenets: what it values, how it's structured,
+    what patterns it follows, what it avoids, what it's confused about.
+    Update your memory with current findings.
+  """
+
+
+# --- Quiz the owner ---
+
+loop until **the interviewer has enough signal to characterize the owner's vision** (max: 5):
+  let questions = resume: interviewer
+    prompt: """
+      Generate 3-5 questions for the next round.
+      Probe areas where the codebase is ambiguous or where
+      you suspect the owner's vision might differ from what's built.
+    """
+    context: [code_tenets, ceo_voice]
+
+  input answers: ***
+    {questions}
+
+    Answer each.
+  ***
+
+  resume: ceo_voice
+    prompt: "Incorporate: {answers}"
+
+
+# --- Reconcile ---
+
+let alignment = resume: alignment_map
+  prompt: """
+    Reconcile codebase_voice and ceo_voice.
+    Document:
+    1. Strong overlaps — where code and vision agree
+    2. Divergences — where code drifted from vision
+    3. Gaps — things the code does that the owner hasn't opined on
+    4. Blind spots — things the owner assumes that the code doesn't reflect
+  """
+  context: [codebase_voice, ceo_voice]
+
+
+# --- Research discrepancies ---
+
+let directories = session "Map discrepancies to directories"
+  model: sonnet
+  prompt: """
+    Based on the alignment map, identify which directories in {project_path}
+    are most affected by divergences and gaps.
+    Return JSON: [{{ path, discrepancies }}]
+  """
+  context: alignment
+
+let research = directories
+  | pmap:
+      session "Investigate {item.path}"
+        model: opus
+        prompt: """
+          Research these discrepancies in {item.path}:
+          {item.discrepancies}
+
+          For each, classify:
+          - SAFE: fix the code, no risk
+          - FENCE: fix the code, needs careful review
+          - RISKY: fix the code, high blast radius
+          - DON'T FIX: the code is right — teach the owner instead
+
+          For DON'T FIX: explain what the code knows that the owner doesn't.
+          For everything else: give a concrete fix plan.
+        """
+
+
+# --- Present and decide ---
+
+input decisions: ***
+  Alignment research complete.
+
+  {research}
+
+  For each item: approve, reject, or discuss.
+  Pay special attention to DON'T FIX items — these are lessons, not changes.
+***
+
+research
+  | filter: **user approved and not a DON'T FIX**
+  | pmap:
+      session "Apply fix"
+        model: opus
+        prompt: "Implement: {item}. Run tests."
+
+
+# --- Summarize ---
+
+output report = resume: alignment_map
+  prompt: """
+    Summarize this session:
+    - Tenets from code vs. tenets from owner
+    - What aligned, what diverged
+    - Fixes applied
+    - Lessons for the owner (DON'T FIX items)
+    - How alignment shifted since last run
+  """

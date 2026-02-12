@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Environment
+.env
+.env.*
+
+# Eval data
+eval/data/
+eval/results/
+eval/analyses/
+
+# OpenProse runtime state
+.prose/runs/
+.prose/agents/
+.prose/.env
+
+# Archive
+.archive/
