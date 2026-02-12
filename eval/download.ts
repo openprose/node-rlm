@@ -55,7 +55,7 @@ async function fetchWithRetry(url: string, retries = 3, delayMs = 2000): Promise
 	throw new Error("Unreachable");
 }
 
-async function downloadOolong(): Promise<void> {
+async function downloadOolong(maxRows: number): Promise<void> {
 	console.log("Downloading OOLONG dataset from HuggingFace...");
 	console.log(`  Dataset: ${OOLONG_DATASET}`);
 	console.log(`  Split: ${OOLONG_SPLIT}`);
@@ -89,7 +89,7 @@ async function downloadOolong(): Promise<void> {
 	console.log("  Fetching dataset info...");
 	const infoResponse = await fetchWithRetry(infoUrl);
 	const infoData = (await infoResponse.json()) as HFRowsResponse;
-	const totalRows = Math.min(infoData.num_rows_total, MAX_ROWS);
+	const totalRows = Math.min(infoData.num_rows_total, maxRows);
 	console.log(`  Total rows in split: ${infoData.num_rows_total}`);
 	console.log(`  Downloading up to: ${totalRows}`);
 	console.log();
@@ -163,7 +163,7 @@ function summarizeData(filePath: string): void {
 	);
 }
 
-function parseArgs(argv: string[]): { dataset: string } {
+function parseArgs(argv: string[]): { dataset: string; maxRows: number } {
 	const args: Record<string, string> = {};
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -174,6 +174,7 @@ function parseArgs(argv: string[]): { dataset: string } {
 	}
 	return {
 		dataset: args.dataset ?? "oolong",
+		maxRows: args["max-rows"] ? parseInt(args["max-rows"], 10) : MAX_ROWS,
 	};
 }
 
@@ -186,7 +187,7 @@ async function main(): Promise<void> {
 
 	switch (args.dataset) {
 		case "oolong":
-			await downloadOolong();
+			await downloadOolong(args.maxRows);
 			break;
 		case "s-niah":
 			console.log("S-NIAH is a synthetic benchmark — no download needed.");

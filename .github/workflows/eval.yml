@@ -44,7 +44,12 @@ jobs:
 
       - name: Download dataset
         if: inputs.benchmark == 'oolong'
-        run: npx tsx eval/download.ts
+        run: |
+          DOWNLOAD_ARGS=""
+          if [ -n "${{ inputs.max-tasks }}" ]; then
+            DOWNLOAD_ARGS="--max-rows 500"
+          fi
+          npx tsx eval/download.ts $DOWNLOAD_ARGS
 
       - name: Run eval
         env:
