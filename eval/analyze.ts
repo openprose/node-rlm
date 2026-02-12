@@ -1,7 +1,7 @@
 // Post-hoc trace analysis for RLM eval results.
 // Usage: npx tsx eval/analyze.ts [result-file.json ...]
 
-import { readdirSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BenchmarkResult, EvalResult } from "./types.js";
 
@@ -237,6 +237,94 @@ function analyzeFile(filePath: string) {
 	}
 
 	console.log();
+
+	// Write GitHub Actions Job Summary if running in CI
+	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+	if (summaryPath) {
+		const md = buildMarkdownSummary(data, analyses);
+		appendFileSync(summaryPath, md);
+	}
+}
+
+function formatDuration(ms: number): string {
+	if (ms < 1000) return `${ms}ms`;
+	if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+	const minutes = Math.floor(ms / 60_000);
+	const seconds = Math.floor((ms % 60_000) / 1000);
+	return `${minutes}m ${seconds}s`;
+}
+
+function buildMarkdownSummary(data: BenchmarkResult, analyses: TaskAnalysis[]): string {
+	const { aggregate: agg } = data;
+	const n = analyses.length;
+	const score = round(agg.meanScore * 100, 1);
+	const cfg = data.config;
+
+	const lines: string[] = [];
+
+	// Header
+	lines.push(`## ${data.benchmark.toUpperCase()} — ${score}%`);
+	lines.push("");
+	lines.push(`**${data.model}** | maxDepth=${cfg.maxDepth} maxIter=${cfg.maxIterations} concurrency=${cfg.concurrency}${cfg.filter ? ` filter=${cfg.filter}` : ""}`);
+	lines.push(`${agg.completedTasks} completed, ${agg.failedTasks} failed | ${formatDuration(agg.totalWallTimeMs)} | ~$${agg.costEstimateUsd.toFixed(2)}`);
+	lines.push("");
+
+	// Score stats
+	lines.push("### Scores");
+	lines.push("");
+	lines.push(`| Mean | Median | Std | P25 | P75 |`);
+	lines.push(`|------|--------|-----|-----|-----|`);
+	lines.push(`| ${round(agg.meanScore * 100, 1)}% | ${round(agg.medianScore * 100, 1)}% | ${round(agg.stdScore * 100, 1)}% | ${round(agg.p25Score * 100, 1)}% | ${round(agg.p75Score * 100, 1)}% |`);
+	lines.push("");
+
+	// Per-task results
+	lines.push("### Tasks");
+	lines.push("");
+	lines.push("| Task | Score | Iters | Time | Answer | Expected |");
+	lines.push("|------|-------|-------|------|--------|----------|");
+	for (const result of data.results) {
+		const scoreStr = result.score === 1 ? "1.00" : result.score === 0 ? "0" : result.score.toFixed(2);
+		const answer = truncate(result.answer, 40);
+		const expected = truncate(String(result.expected), 40);
+		const errTag = result.error ? " **ERR**" : "";
+		lines.push(`| ${result.taskId} | ${scoreStr} | ${result.iterations} | ${formatDuration(result.wallTimeMs)} | ${escapemd(answer)}${errTag} | ${escapemd(expected)} |`);
+	}
+	lines.push("");
+
+	// Behavioral patterns
+	const eagerCount = analyses.filter((a) => a.eagerReturn).length;
+	const selfCorrected = analyses.filter((a) => a.selfCorrected).length;
+	const rlmUsers = analyses.filter((a) => a.hasRlmCall).length;
+	const withErrors = analyses.filter((a) => a.errorCount > 0).length;
+
+	lines.push("<details><summary>Behavioral patterns</summary>");
+	lines.push("");
+	lines.push("| Pattern | Count | Rate |");
+	lines.push("|---------|-------|------|");
+	lines.push(`| Eager return (iter 1) | ${eagerCount} | ${pct(eagerCount, n)} |`);
+	lines.push(`| Self-corrected | ${selfCorrected} | ${pct(selfCorrected, n)} |`);
+	lines.push(`| Used rlm() | ${rlmUsers} | ${pct(rlmUsers, n)} |`);
+	lines.push(`| Had errors | ${withErrors} | ${pct(withErrors, n)} |`);
+	lines.push("");
+
+	// Iteration distribution
+	lines.push("**Iterations:**");
+	lines.push(`Mean ${round(agg.meanIterations, 1)} | Median ${round(agg.medianIterations, 1)}`);
+	lines.push("");
+	lines.push("</details>");
+	lines.push("");
+
+	return lines.join("\n");
+}
+
+function truncate(s: string, max: number): string {
+	const oneline = s.replace(/\n/g, " ");
+	if (oneline.length <= max) return oneline;
+	return oneline.slice(0, max - 1) + "\u2026";
+}
+
+function escapemd(s: string): string {
+	return s.replace(/\|/g, "\\|");
 }
 
 const RESULTS_DIR = join(new URL(".", import.meta.url).pathname, "results");
