@@ -15,4 +15,4 @@ Review the current pull request.
    - Correctness: logic errors, off-by-one mistakes, missing error handling at boundaries.
    - Style: consistency with the existing codebase conventions.
    - Security: injection risks, leaked secrets, unsafe input handling.
-3. Summarise findings as a PR review comment. If everything looks good, say so briefly.
+3. Post your findings as a comment on the PR using `gh pr comment`. If everything looks good, say so briefly.
