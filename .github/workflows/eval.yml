@@ -13,7 +13,7 @@ on:
       model:
         description: "Model (provider/id, e.g. google/gemini-2.5-flash)"
         required: true
-        default: google/gemini-2.5-flash
+        default: google/gemini-3-flash-preview
       max-tasks:
         description: Max tasks (blank = all)
         required: false
