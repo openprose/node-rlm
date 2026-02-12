@@ -1,0 +1,71 @@
+name: Eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: Benchmark to run
+        required: true
+        type: choice
+        options:
+          - oolong
+          - s-niah
+      model:
+        description: "Model (provider/id, e.g. google/gemini-2.5-flash)"
+        required: true
+        default: google/gemini-2.5-flash
+      max-tasks:
+        description: Max tasks (blank = all)
+        required: false
+      max-iterations:
+        description: Max REPL iterations per task
+        required: false
+        default: "15"
+      max-depth:
+        description: Max recursion depth
+        required: false
+        default: "1"
+      concurrency:
+        description: Parallel tasks
+        required: false
+        default: "5"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Download dataset
+        if: inputs.benchmark == 'oolong'
+        run: npx tsx eval/download.ts
+
+      - name: Run eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          ARGS="--benchmark ${{ inputs.benchmark }} --model ${{ inputs.model }}"
+          ARGS="$ARGS --max-iterations ${{ inputs.max-iterations }}"
+          ARGS="$ARGS --max-depth ${{ inputs.max-depth }}"
+          ARGS="$ARGS --concurrency ${{ inputs.concurrency }}"
+          if [ -n "${{ inputs.max-tasks }}" ]; then
+            ARGS="$ARGS --max-tasks ${{ inputs.max-tasks }}"
+          fi
+          npx tsx eval/run.ts $ARGS
+
+      - name: Analyze results
+        run: npx tsx eval/analyze.ts
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-${{ inputs.benchmark }}-${{ github.run_number }}
+          path: eval/results/
+          retention-days: 90
