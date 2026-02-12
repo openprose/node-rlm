@@ -29,6 +29,10 @@ on:
         description: Parallel tasks
         required: false
         default: "5"
+      analyze:
+        description: Run trajectory analysis after eval
+        type: boolean
+        default: true
 
 jobs:
   run:
@@ -77,4 +81,31 @@ jobs:
         with:
           name: eval-${{ inputs.benchmark }}-${{ github.run_number }}
           path: eval/results/
+          retention-days: 90
+
+      - name: Install OpenProse skill
+        if: inputs.analyze == true
+        run: |
+          git clone --depth 1 https://github.com/openprose/prose.git /tmp/prose
+          mkdir -p ~/.claude/skills
+          cp -r /tmp/prose/skills/open-prose ~/.claude/skills/open-prose
+
+      - name: Trajectory analysis
+        if: inputs.analyze == true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-5-20250929
+          prompt: |
+            RESULT_FILE=$(ls -t eval/results/*.json | head -1)
+            prose run .prose/analyze-trajectories.prose
+            Input results_path: $RESULT_FILE
+            Input output_dir: eval/trajectory-analysis
+
+      - name: Upload trajectory analysis
+        if: inputs.analyze == true && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trajectory-analysis-${{ inputs.benchmark }}-${{ github.run_number }}
+          path: eval/trajectory-analysis/
           retention-days: 90

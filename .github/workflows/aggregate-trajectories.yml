@@ -1,0 +1,159 @@
+name: Aggregate Trajectories
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Trailing window in days
+        required: false
+        default: "30"
+      benchmark:
+        description: Filter by benchmark (blank = all)
+        required: false
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect trajectory artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          DAYS="${{ inputs.days }}"
+          BENCHMARK="${{ inputs.benchmark }}"
+          SINCE=$(date -u -d "${DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+              || date -u -v-${DAYS}d +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "Collecting trajectory artifacts since $SINCE"
+
+          OUTDIR="aggregated"
+          mkdir -p "$OUTDIR"
+
+          # List workflow runs from the Eval workflow within the time window
+          RUNS=$(gh run list \
+            --workflow eval.yml \
+            --status completed \
+            --created ">=$SINCE" \
+            --json databaseId,conclusion,createdAt,displayTitle,headBranch \
+            --limit 100)
+
+          echo "$RUNS" | jq -r '.[] | "\(.databaseId)\t\(.conclusion)\t\(.createdAt)\t\(.displayTitle)"'
+
+          RUN_COUNT=0
+          SKIP_COUNT=0
+
+          for RUN_ID in $(echo "$RUNS" | jq -r '.[].databaseId'); do
+            # List artifacts for this run, filter for trajectory-analysis-*
+            ARTIFACTS=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
+              --jq '.artifacts[] | select(.name | startswith("trajectory-analysis-")) | .name')
+
+            if [ -z "$ARTIFACTS" ]; then
+              SKIP_COUNT=$((SKIP_COUNT + 1))
+              continue
+            fi
+
+            for ARTIFACT_NAME in $ARTIFACTS; do
+              # Apply benchmark filter if specified
+              if [ -n "$BENCHMARK" ] && ! echo "$ARTIFACT_NAME" | grep -q "$BENCHMARK"; then
+                continue
+              fi
+
+              echo "Downloading: $ARTIFACT_NAME (run $RUN_ID)"
+              DEST="$OUTDIR/runs/$RUN_ID"
+              mkdir -p "$DEST"
+
+              gh run download "$RUN_ID" \
+                --name "$ARTIFACT_NAME" \
+                --dir "$DEST" || {
+                  echo "  Warning: failed to download $ARTIFACT_NAME, skipping"
+                  continue
+                }
+
+              RUN_COUNT=$((RUN_COUNT + 1))
+            done
+          done
+
+          echo ""
+          echo "Downloaded $RUN_COUNT trajectory analyses ($SKIP_COUNT runs had no analysis)"
+
+      - name: Build manifest
+        run: |
+          set -euo pipefail
+
+          OUTDIR="aggregated"
+
+          # Collect all meta.json files into a single manifest
+          echo '{"aggregatedAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","window":"${{ inputs.days }} days","runs":[' > "$OUTDIR/manifest.json"
+
+          FIRST=true
+          for META in $(find "$OUTDIR/runs" -name "meta.json" 2>/dev/null | sort); do
+            RUN_DIR=$(dirname "$META")
+            RUN_ID=$(basename "$RUN_DIR")
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              echo ',' >> "$OUTDIR/manifest.json"
+            fi
+            # Wrap each meta.json with its run ID
+            echo -n "{\"runId\":\"$RUN_ID\",\"meta\":" >> "$OUTDIR/manifest.json"
+            cat "$META" >> "$OUTDIR/manifest.json"
+            echo -n "}" >> "$OUTDIR/manifest.json"
+          done
+
+          echo ']}' >> "$OUTDIR/manifest.json"
+
+          echo "Manifest written to $OUTDIR/manifest.json"
+          cat "$OUTDIR/manifest.json" | jq '.runs | length' | xargs -I{} echo "Total runs in bundle: {}"
+
+      - name: Build summary
+        run: |
+          set -euo pipefail
+
+          OUTDIR="aggregated"
+          SUMMARY="$OUTDIR/SUMMARY.md"
+
+          echo "# Trajectory Analysis — Aggregated Bundle" > "$SUMMARY"
+          echo "" >> "$SUMMARY"
+          echo "Window: last ${{ inputs.days }} days | Generated: $(date -u +%Y-%m-%d)" >> "$SUMMARY"
+          echo "" >> "$SUMMARY"
+          echo "## Runs" >> "$SUMMARY"
+          echo "" >> "$SUMMARY"
+          echo "| Run ID | Benchmark | Model | Score | Tasks Analyzed | Date |" >> "$SUMMARY"
+          echo "|--------|-----------|-------|-------|----------------|------|" >> "$SUMMARY"
+
+          for META in $(find "$OUTDIR/runs" -name "meta.json" 2>/dev/null | sort); do
+            RUN_DIR=$(dirname "$META")
+            RUN_ID=$(basename "$RUN_DIR")
+            BENCHMARK=$(jq -r '.benchmark // "—"' "$META")
+            MODEL=$(jq -r '.model // "—"' "$META")
+            SCORE=$(jq -r 'if .meanScore then (.meanScore * 100 | tostring | split(".")[0] + "%") else "—" end' "$META")
+            SAMPLE=$(jq -r '.sampleSize // "—"' "$META")
+            DATE=$(jq -r '.timestamp // "—" | split("T")[0]' "$META")
+            echo "| $RUN_ID | $BENCHMARK | $MODEL | $SCORE | $SAMPLE | $DATE |" >> "$SUMMARY"
+          done
+
+          echo "" >> "$SUMMARY"
+          echo "## Contents" >> "$SUMMARY"
+          echo "" >> "$SUMMARY"
+          echo '```' >> "$SUMMARY"
+          find "$OUTDIR/runs" -type f | sort | sed "s|$OUTDIR/||" >> "$SUMMARY"
+          echo '```' >> "$SUMMARY"
+
+          cat "$SUMMARY"
+
+          # Also write to step summary
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload aggregated bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: trajectory-bundle-${{ inputs.days }}d-${{ github.run_number }}
+          path: aggregated/
+          retention-days: 90
