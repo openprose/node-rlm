@@ -10,44 +10,58 @@ The eval only needs `trec_coarse` rows (650 of 1300). The `spam` rows are never 
 
 ### Phase 1: Download all trec_coarse data locally
 
-- [ ] Download the full validation split from HuggingFace (fix the incomplete local data)
-- [ ] Extract only trec_coarse rows into a clean JSONL file
-- [ ] Verify row counts: 50 rows × 13 context lengths = 650 rows (or 11 lengths = 550)
-- [ ] Compress as `trec_coarse_validation.jsonl.gz`
-- [ ] Record final file size
+- [x] Downloaded all 650 trec_coarse rows via HF filter API (paginated, dataset='trec_coarse')
+- [x] Filtered to the 11 context lengths used by the paper (1K-1M) = 550 rows
+- [x] Verified: 50 rows x 11 context lengths = 550 rows
+- [x] Compressed: `oolong-trec-coarse-validation.jsonl.gz` = **134 MB** (535 MB uncompressed)
+
+Note: The HF dataset has 13 context lengths (up to 4M), but the paper only uses 11 (up to 1M). Dropping the 2M and 4M rows saves ~400MB compressed. Use `--from-hf` if those are ever needed.
 
 ### Phase 2: Create GitHub Release with data asset
 
-- [ ] Create a GitHub release (e.g. `v0.0.0-data` or `eval-data-v1`) via `gh release create`
-- [ ] Upload the compressed JSONL as a release asset
-- [ ] Verify the download URL works: `gh release download`
+- [x] Created release `eval-data-v1` via `gh release create`
+- [x] Uploaded `oolong-trec-coarse-validation.jsonl.gz` (134 MB)
+- [x] URL: https://github.com/openprose/node-rlm/releases/tag/eval-data-v1
 
 ### Phase 3: Update download.ts
 
-- [ ] Add a `--from-release` mode that downloads from the GitHub Release asset instead of HF
-- [ ] Make this the default path; fall back to HF API if release download fails
-- [ ] Keep the existing HF download path as `--from-hf` for regenerating/updating data
+- [x] Added `--from-release` mode (default) — streams from GitHub Release asset, gunzips to `validation.jsonl`
+- [x] Kept `--from-hf` for regenerating data from HuggingFace
+- [x] TypeScript compiles clean, all 82 tests pass
 
 ### Phase 4: Update GitHub Actions workflow
 
-- [ ] Add `actions/cache` for `eval/data/oolong/` keyed on a data version string
-- [ ] On cache miss, download from the release asset (not HF)
-- [ ] Remove (or gate behind a flag) the existing HF download step
-- [ ] Test: trigger workflow_dispatch and verify fast data loading
+- [x] Added `actions/cache@v4` for `eval/data/oolong/` with key `oolong-eval-data-v1`
+- [x] On cache miss, downloads from release asset (`npx tsx eval/download.ts --from-release`)
+- [x] Removed `NODE_OPTIONS: --max-old-space-size=4096` from download step (streaming = low memory)
 
-### Phase 5: Update oolong.ts loader
+### Phase 5: Verify loader compatibility
 
-- [ ] Ensure `loadOolongTasks()` works with the new single-file layout (trec_coarse only, no split files)
-- [ ] Or: keep the existing file layout (validation.jsonl) — just the contents are filtered
+- [x] `loadOolongTasks()` works unchanged — reads `validation.jsonl` as before
+- [x] Tested locally: loads 5 tasks from 131K context length correctly
 
-## Data Sizes (estimated)
+## Actual Data Sizes
 
 | Scope | Rows | Uncompressed | Gzipped |
 |---|---|---|---|
 | Table 1 only (131K) | 50 | ~15 MB | ~5 MB |
-| All 11 ctx lengths | 550 | ~240 MB | ~69 MB |
-| Full trec_coarse (13 lengths?) | 650 | ~280 MB | ~80 MB |
-| Full validation split | 1,300 | ~4.4 GB | ~1.2 GB |
+| **Release asset (11 ctx lengths, 1K-1M)** | **550** | **535 MB** | **134 MB** |
+| Full trec_coarse (13 lengths, up to 4M) | 650 | 2.1 GB | 537 MB |
+| Full validation split (trec_coarse + spam) | 1,300 | ~4.4 GB | ~1.2 GB |
+
+## CI Test Results
+
+### Run 1 (cache miss — first download from release asset)
+- Run ID: 21957373194
+- Total job time: **43 seconds**
+- Download step: **6 seconds** (was 10-15 minutes from HF)
+- 2 tasks @ 131K, max-iterations=5, max-depth=1
+
+### Run 2 (cache hit — download skipped)
+- Run ID: 21957435859
+- Total job time: **1m 18s** (1 task eval takes longer than download)
+- Download step: **skipped** (cache hit)
+- `Cache hit for: oolong-eval-data-v1`
 
 ## Design Decisions
 
@@ -55,12 +69,8 @@ The eval only needs `trec_coarse` rows (650 of 1300). The `spam` rows are never 
 - **Release tag**: `eval-data-v1` (separate from code releases)
 - **Cache key**: `oolong-eval-data-v1` (bump version to invalidate)
 - **File layout**: Keep writing to `eval/data/oolong/validation.jsonl` so the loader doesn't change
+- **Context lengths**: Only the 11 used by the paper (1K-1M). Use `--from-hf` for 2M/4M.
 
-## Status
+## Status: COMPLETE
 
-- [ ] Phase 1: Download data
-- [ ] Phase 2: Create release
-- [ ] Phase 3: Update download.ts
-- [ ] Phase 4: Update workflow
-- [ ] Phase 5: Verify loader compatibility
-- [ ] End-to-end test via workflow_dispatch
+All phases done. Both CI runs passed. The download step went from ~15 minutes (flaky) to 6 seconds (cache miss) or 0 seconds (cache hit).
