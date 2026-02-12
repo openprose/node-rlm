@@ -153,7 +153,7 @@ function parseArgs(argv: string[]): CliArgs {
 		model: args.model,
 		concurrency: parseInt(args.concurrency ?? "5", 10),
 		maxIterations: parseInt(args["max-iterations"] ?? "15", 10),
-		maxDepth: parseInt(args["max-depth"] ?? "2", 10),
+		maxDepth: parseInt(args["max-depth"] ?? "1", 10),
 		maxTasks: args["max-tasks"] ? parseInt(args["max-tasks"], 10) : null,
 		datasetFilter: args["dataset-filter"] ?? "trec_coarse",
 		contextLen: args["context-len"] !== undefined ? parseInt(args["context-len"], 10) : 131072,

@@ -13,7 +13,7 @@ on:
       model:
         description: "Model (provider/id, e.g. google/gemini-2.5-flash)"
         required: true
-        default: google/gemini-3-flash-preview
+        default: qwen/qwen3-coder
       max-tasks:
         description: Max tasks (blank = all)
         required: false
@@ -29,6 +29,10 @@ on:
         description: Parallel tasks
         required: false
         default: "5"
+      analyze:
+        description: Run trajectory analysis after eval
+        type: boolean
+        default: true
 
 jobs:
   run:
@@ -42,11 +46,17 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - name: Download dataset
+      - name: Cache OOLONG eval data
         if: inputs.benchmark == 'oolong'
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-        run: npx tsx eval/download.ts
+        id: cache-oolong
+        uses: actions/cache@v4
+        with:
+          path: eval/data/oolong
+          key: oolong-eval-data-v1
+
+      - name: Download dataset
+        if: inputs.benchmark == 'oolong' && steps.cache-oolong.outputs.cache-hit != 'true'
+        run: npx tsx eval/download.ts --from-release
 
       - name: Run eval
         env:
@@ -71,4 +81,31 @@ jobs:
         with:
           name: eval-${{ inputs.benchmark }}-${{ github.run_number }}
           path: eval/results/
+          retention-days: 90
+
+      - name: Install OpenProse skill
+        if: inputs.analyze == true
+        run: |
+          git clone --depth 1 https://github.com/openprose/prose.git /tmp/prose
+          mkdir -p ~/.claude/skills
+          cp -r /tmp/prose/skills/open-prose ~/.claude/skills/open-prose
+
+      - name: Trajectory analysis
+        if: inputs.analyze == true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-sonnet-4-5-20250929
+          prompt: |
+            Find the most recent .json file in eval/results/ and run:
+            prose run .prose/analyze-trajectories.prose
+            Input results_path: <that file>
+            Input output_dir: eval/trajectory-analysis
+
+      - name: Upload trajectory analysis
+        if: inputs.analyze == true && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trajectory-analysis-${{ inputs.benchmark }}-${{ github.run_number }}
+          path: eval/trajectory-analysis/
           retention-days: 90

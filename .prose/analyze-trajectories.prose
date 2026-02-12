@@ -1,0 +1,331 @@
+# analyze-trajectories.prose
+# Post-hoc analysis of RLM eval trajectories.
+#
+# Takes a result JSON file from the eval harness and produces:
+# 1. Annotated trajectory documents for a stratified sample of tasks
+# 2. Adversarial review of each annotation
+# 3. Cross-cutting synthesis with failure mode taxonomy and recommendations
+# 4. Structured artifact output for downstream consumption
+# 5. Human-readable GitHub Actions Step Summary
+#
+# Run locally:  prose run .prose/analyze-trajectories.prose
+# Run in CI:    (as post-step in eval workflow, see eval.yml)
+#
+# Output directory structure (written to {output_dir}/):
+#
+#   meta.json                      — run metadata, config, timestamp
+#   sample.json                    — stratified sample selection + matrix
+#   trajectories/
+#     {taskId}.md                  — annotated trajectory per task (YAML frontmatter + markdown)
+#   reviews/
+#     {taskId}.md                  — adversarial review per task
+#   synthesis.md                   — cross-cutting analysis + recommendations
+#   summary.md                     — condensed summary (written to $GITHUB_STEP_SUMMARY in CI)
+
+input results_path: "Path to the eval result JSON file (e.g. eval/results/oolong_*.json)"
+input output_dir: "Output directory for artifacts (e.g. eval/trajectory-analysis)"
+
+
+# --- Agents ---
+
+agent sampler:
+  model: sonnet
+  prompt: """
+    You select a stratified sample of tasks from an eval result set.
+
+    Given the full results JSON, you:
+    1. Parse the results array
+    2. Classify each task by answer_type (from metadata) and outcome (perfect/partial/wrong/timeout/error)
+    3. Build a cross-tabulation matrix: answer_type x outcome
+    4. Select up to 2 tasks per cell, preferring:
+       - Tasks with interesting iteration counts (not trivially short or max)
+       - Tasks with diverse scores within their cell
+       - At least one task that used rlm()/llm() delegation if available
+    5. Return a JSON array of selected task IDs with their cell classification
+
+    Target: 20-30 tasks total. Enough for statistical coverage, cheap enough to analyze.
+    We're aiming for represenativeness, but only to a degree if you know what I mean.
+    Use your judgement, considering that future versions are training on the trajectories you select.
+
+    IMPORTANT: Also write the selection to {output_dir}/sample.json.
+  """
+
+agent annotator:
+  model: opus
+  prompt: """
+    You are an RLM trajectory analyst. You read raw trace data from an eval
+    result and produce an annotated trajectory document in a specific format.
+
+    Always read the TRAJECTORY_FORMAT.md file to understand the format before doing your research, so you know what you're looking for.
+
+    Your job:
+    1. Read the raw trace (array of {reasoning, code[], output, error} per iteration)
+    2. Classify each iteration into a PHASE: EXPLORE, PLAN, FILTER, EXTRACT, DELEGATE, VERIFY, ERROR, RETURN
+    3. Identify behavioral patterns (filtering, chunking, delegation-llm, delegation-rlm, verification, error-recovery, jq-on-plaintext, etc.)
+    4. Identify the failure mode if score < 1.0
+    5. Write a "Control Flow" summary (one line per iteration)
+    6. Write a "Phase Analysis" section grouping iterations into logical phases
+    7. Write "Root Cause" (for failures) or "Success Factors" (for perfect scores)
+    8. Write "What Would Have Helped" — actionable suggestions
+
+    Output format: a single markdown file following the trajectory annotation format.
+    Use YAML frontmatter with structured metadata.
+
+    Be precise. Quote actual code and output from the trace. Don't speculate
+    beyond what the trace evidence shows.
+
+    IMPORTANT: Write the annotated trajectory to {output_dir}/trajectories/{taskId}.md
+  """
+
+agent reviewer:
+  model: sonnet
+  prompt: """
+    You are an adversarial reviewer of RLM trajectory annotations.
+
+    Given an annotated trajectory and the raw trace data, check:
+    1. Are iteration phase classifications correct? (e.g., is something labeled VERIFY actually verification?)
+    2. Are identified patterns actually present in the trace?
+    3. Is the failure mode diagnosis accurate?
+    4. Is the root cause analysis supported by trace evidence?
+    5. Are there patterns the annotator missed?
+    6. Is the "What Would Have Helped" section actionable and realistic?
+
+    Be specific. If you disagree, quote the trace evidence.
+
+    Output: a short review (2-5 bullet points) with corrections or confirmations.
+    If the annotation is accurate, say so briefly.
+
+    IMPORTANT: Write the review to {output_dir}/reviews/{taskId}.md
+  """
+
+agent synthesizer:
+  model: sonnet
+  prompt: """
+    You synthesize RLM trajectory analyses into actionable findings.
+    Review the ARCHITECTURE.md file before diving in to get an understanding of the architecture.
+
+    Given a set of annotated trajectories (with reviews), produce:
+
+    1. **Failure Mode Taxonomy** — What are the distinct ways tasks fail?
+       Group by category, count occurrences, give representative examples.
+
+    2. **Pattern Effectiveness** — Which behavioral patterns correlate with
+       success vs. failure? (e.g., "verification present in 90% of perfect
+       scores, only 30% of failures")
+
+    3. **Iteration Efficiency** — How many iterations are "useful work" vs.
+       "wasted" (jq-on-plaintext, abandoned approaches, redundant verification)?
+
+    4. **Task Type Analysis** — Which task types are structurally hard vs. easy?
+       What makes NUMERIC harder than COMPARISON?
+
+    5. **Plugin Impact Hypothesis** — Based on the failure modes observed, which
+       plugins would have prevented which failures? Estimate the score improvement.
+
+    6. **Recommendations** — Keeping in mind the ARCHITECTURE.md file, propose concrete, prioritized changes (labeled SAFE, FENCE, RISKY, DON'T DO) to:
+       - System prompt
+       - Plugins (new or modified)
+       - Eval harness (e.g., trace instrumentation gaps)
+       - Architecture (e.g., should llm() calls be captured in trace?)
+
+    Write for an audience that knows the RLM architecture intimately.
+    Support every claim with task IDs and trace evidence.
+
+    IMPORTANT: Write the full synthesis to {output_dir}/synthesis.md
+  """
+
+
+# --- Phase 0: Setup ---
+
+session "Initialize output directory"
+  model: haiku
+  prompt: """
+    Create the following directory structure:
+      {output_dir}/
+      {output_dir}/trajectories/
+      {output_dir}/reviews/
+
+    Then write {output_dir}/meta.json with:
+    {{
+      "resultsPath": "{results_path}",
+      "outputDir": "{output_dir}",
+      "timestamp": "<current ISO timestamp>",
+      "status": "in-progress"
+    }}
+  """
+
+
+# --- Phase 1: Sample Selection ---
+
+let selected = session: sampler
+  prompt: """
+    Read the eval results file and select a stratified sample of tasks.
+
+    Results file: {results_path}
+    Output directory: {output_dir}
+
+    Write the selection to {output_dir}/sample.json AND return a JSON object:
+    {{
+      "benchmark": "<from results>",
+      "model": "<from results>",
+      "meanScore": <from results aggregate>,
+      "totalTasks": N,
+      "sampleSize": N,
+      "matrix": {{ "COMPARISON|perfect": ["oolong-X", "oolong-Y"], ... }},
+      "selected": [
+        {{ "taskId": "oolong-X", "answerType": "...", "outcome": "...", "score": N, "iterations": N, "reason": "..." }}
+      ]
+    }}
+  """
+
+
+# --- Phase 2: Trajectory Annotation (batched fan-out, max 8 concurrent) ---
+
+let format_spec = session "Load trajectory format spec"
+  model: haiku
+  prompt: """
+    Read the file docs/TRAJECTORY_FORMAT.md
+    and return its full contents. This will be used as a reference
+    for trajectory annotators.
+  """
+
+block annotate_batch(tasks):
+  tasks | pmap:
+    let task_data = session "Extract task {item.taskId}"
+      model: haiku
+      prompt: """
+        Read {results_path} and extract the full result object for task {item.taskId}.
+        Return the complete JSON for this task (including trace array).
+      """
+    session: annotator
+      prompt: """
+        Annotate this RLM trajectory.
+
+        Task classification: {item.answerType} / {item.outcome}
+        Output file: {output_dir}/trajectories/{item.taskId}.md
+
+        Raw task data:
+        {task_data}
+
+        Follow this format specification exactly:
+        {format_spec}
+
+        Write the annotated trajectory to {output_dir}/trajectories/{item.taskId}.md
+      """
+
+let annotations = []
+for batch in selected.selected | chunks(8):
+  let batch_result = do annotate_batch(batch)
+  annotations = annotations + batch_result
+
+
+# --- Phase 3: Adversarial Review (batched fan-out, max 8 concurrent) ---
+
+block review_batch(items):
+  items | pmap:
+    session: reviewer
+      prompt: """
+        Review this trajectory annotation.
+
+        Read the annotation from: {output_dir}/trajectories/{item.taskId}.md
+        Write your review to: {output_dir}/reviews/{item.taskId}.md
+
+        Also read the raw trace from {results_path} for task {item.taskId}
+        to verify the annotation against source data.
+      """
+
+let reviews = []
+for batch in selected.selected | chunks(8):
+  let batch_result = do review_batch(batch)
+  reviews = reviews + batch_result
+
+
+# --- Phase 4: Synthesis (fan-in) ---
+
+output analysis = session: synthesizer
+  prompt: """
+    Synthesize findings across all analyzed trajectories.
+
+    Run overview:
+      Benchmark: {selected.benchmark}
+      Model: {selected.model}
+      Mean score: {selected.meanScore}
+      Total tasks: {selected.totalTasks}, sample analyzed: {selected.sampleSize}
+      Selection matrix: {selected.matrix}
+
+    Read the annotated trajectories from: {output_dir}/trajectories/
+    Read the reviews from: {output_dir}/reviews/
+
+    Write the full synthesis to: {output_dir}/synthesis.md
+  """
+  context: [selected]
+
+
+# --- Phase 5: Summary + Finalize ---
+
+session "Write GitHub Actions summary and finalize"
+  model: sonnet
+  prompt: """
+    You produce two things:
+
+    1. A condensed human-readable summary at {output_dir}/summary.md
+    2. Update {output_dir}/meta.json with status: "complete" and final stats
+
+    Read {output_dir}/synthesis.md for the full analysis.
+    Read {output_dir}/sample.json for the sample selection.
+
+    The summary.md should be suitable for a GitHub Actions Step Summary — concise
+    markdown that renders well in the GitHub UI. Structure it as:
+
+    ## Trajectory Analysis — <BENCHMARK> <SCORE>%
+
+    **<model>** | <N> tasks analyzed (of <total>) | <timestamp>
+
+    ### Sample Distribution
+    A small table showing the answer_type x outcome matrix with task counts per cell.
+
+    ### Failure Modes
+    A table of failure modes found, with counts and example task IDs.
+    Sort by frequency descending.
+
+    ### Key Patterns
+    A table of behavioral patterns and their correlation with success/failure.
+    Include: pattern name, count in perfect-score tasks, count in failed tasks.
+
+    ### Top Recommendations
+    The top 3-5 recommendations from the synthesis, with their SAFE/FENCE/RISKY labels.
+    One sentence each — link to synthesis.md for details.
+
+    <details><summary>Per-task results</summary>
+
+    A table with one row per analyzed task:
+    | Task | Type | Verdict | Patterns | Failure Mode | Iters |
+
+    </details>
+
+    ---
+
+    Then, if the environment variable GITHUB_STEP_SUMMARY is set, append the
+    contents of summary.md to that file path.
+
+    Finally, update meta.json:
+    {{
+      "resultsPath": "{results_path}",
+      "outputDir": "{output_dir}",
+      "timestamp": "<original>",
+      "completedAt": "<now>",
+      "status": "complete",
+      "benchmark": "{selected.benchmark}",
+      "model": "{selected.model}",
+      "meanScore": {selected.meanScore},
+      "totalTasks": {selected.totalTasks},
+      "sampleSize": {selected.sampleSize},
+      "artifactFiles": {{
+        "sample": "sample.json",
+        "synthesis": "synthesis.md",
+        "summary": "summary.md",
+        "trajectories": "trajectories/",
+        "reviews": "reviews/"
+      }}
+    }}
+  """
