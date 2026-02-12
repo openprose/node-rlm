@@ -44,6 +44,8 @@ jobs:
 
       - name: Download dataset
         if: inputs.benchmark == 'oolong'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npx tsx eval/download.ts
 
       - name: Run eval

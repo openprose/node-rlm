@@ -18,8 +18,8 @@ const OOLONG_DATASET = "oolongbench/oolong-synth";
 // Both splits are needed: test has metaphors/negation, validation has trec_coarse/spam
 const OOLONG_SPLITS = ["test", "validation"] as const;
 
-// We fetch rows in pages of this size (smaller = more reliable with HF API)
-const PAGE_SIZE = 50;
+// We fetch rows in pages of this size (smaller = more reliable with HF API and lower memory pressure)
+const PAGE_SIZE = 20;
 
 // Maximum rows to download per split (0 = all)
 const MAX_ROWS = 11000;
