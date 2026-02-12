@@ -97,9 +97,9 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           model: claude-sonnet-4-5-20250929
           prompt: |
-            RESULT_FILE=$(ls -t eval/results/*.json | head -1)
+            Find the most recent .json file in eval/results/ and run:
             prose run .prose/analyze-trajectories.prose
-            Input results_path: $RESULT_FILE
+            Input results_path: <that file>
             Input output_dir: eval/trajectory-analysis
 
       - name: Upload trajectory analysis
