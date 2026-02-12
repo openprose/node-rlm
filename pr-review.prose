@@ -1,24 +1,14 @@
 # PR Review
 #
-# Multi-agent review pipeline. A haiku triages changes, sonnets do deep
-# contextual review, an opus judges integration quality, and a sonnet
-# scans for critical bugs. Results are posted as PR comments.
+# Multi-agent review pipeline. Sonnets do deep contextual review, an opus
+# judges integration quality, and a sonnet scans for critical bugs.
+# Results are posted as PR comments.
+#
+# Optimized to 3 stages with maximum parallelism:
+#   Stage 1: pr_info + housekeeping (parallel)
+#   Stage 2: pmap(context-reviewers) → integration-judge + bug-scanner (parallel)
 #
 # Usage: prose run pr-review.prose
-
-agent triage:
-  model: haiku
-  prompt: """
-    You catalogue pull request changes. For each changed file, note:
-    - What changed (added, modified, deleted)
-    - Whether the change is trivial (formatting, comments, renames) or
-      substantive (new logic, changed behavior, new APIs, deleted code)
-
-    Return a JSON array of objects:
-    [{ "file": "path", "summary": "...", "needs_deep_review": true/false }]
-
-    Mark needs_deep_review: true for anything substantive.
-  """
 
 agent context-reviewer:
   model: sonnet
@@ -99,9 +89,9 @@ agent housekeeping:
   """
 
 
-# --- Gather context ---
+# --- Stage 1: Gather context + housekeeping (parallel) ---
 
-let pr_info = session "Fetch PR metadata and diff"
+let pr_info = session "Fetch PR metadata, diff, and changed file list"
   prompt: """
     Gather everything about the current PR:
     1. Run: gh pr view --json number,title,body,files
@@ -110,12 +100,11 @@ let pr_info = session "Fetch PR metadata and diff"
     4. Check if .prose/agents/ceo_voice/ or .prose/agents/codebase_voice/
        exist. If so, read their latest state for project tenets.
        If not, note that no tenets are available.
+    5. From the files list, return every changed file path as a JSON array:
+       [{ "file": "path" }]
 
-    Return all of this as structured context.
+    Return all of this as structured context, including the changed files array.
   """
-
-
-# --- Phase 0: Housekeeping ---
 
 let housekeeping_result = session: housekeeping
   prompt: """
@@ -131,35 +120,20 @@ let housekeeping_result = session: housekeeping
 
     Return your findings as structured context.
   """
-  context: pr_info
 
 
-# --- Phase 1: Triage ---
+# --- Stage 2: Deep review + bug scan (parallel) ---
 
-let triage_result = session: triage
-  prompt: "Catalogue all changes in this PR. Decide which need deep review."
-  context: [pr_info, housekeeping_result]
-
-
-# --- Phase 2: Deep contextual review (parallel) ---
-
-let files_for_review = triage_result
-  | filter: **item has needs_deep_review: true**
-
-let contextual_findings = files_for_review
+let contextual_findings = pr_info.changed_files
   | pmap:
       session: context-reviewer
         prompt: """
           Deep review this change: {item.file}
-          Summary: {item.summary}
 
           Read the full file and its surroundings, then write your findings
           to .prose/runs/current/review-{item.file | slugify}.md
         """
-        context: pr_info
-
-
-# --- Phase 3: Integration judgment (opus) ---
+        context: [pr_info, housekeeping_result]
 
 let integration_review = session: integration-judge
   prompt: """
@@ -177,10 +151,7 @@ let integration_review = session: integration-judge
 
     Be direct. No filler.
   """
-  context: [pr_info, contextual_findings]
-
-
-# --- Phase 4: Bug scan (parallel with phase 3 is fine, but sequential is safer) ---
+  context: [pr_info, contextual_findings, housekeeping_result]
 
 let bug_findings = session: bug-scanner
   prompt: """
@@ -199,4 +170,4 @@ let bug_findings = session: bug-scanner
     If you find nothing critical, post a single brief PR comment:
       gh pr comment --body "No critical issues found."
   """
-  context: pr_info
+  context: [pr_info, housekeeping_result]
