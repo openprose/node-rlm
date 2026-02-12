@@ -38,6 +38,9 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -95,7 +98,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-sonnet-4-5-20250929
           prompt: |
             Find the most recent .json file in eval/results/ and run:
             prose run .prose/analyze-trajectories.prose
