@@ -51,6 +51,7 @@ jobs:
       - name: Run eval
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           ARGS="--benchmark ${{ inputs.benchmark }} --model ${{ inputs.model }}"
           ARGS="$ARGS --max-iterations ${{ inputs.max-iterations }}"

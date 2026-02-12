@@ -1,7 +1,8 @@
 // OOLONG dataset loader (oolongbench/oolong-synth from HuggingFace).
 // Data is downloaded by eval/download.ts into eval/data/oolong/.
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { createReadStream, readdirSync, existsSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { join } from "node:path";
 import type { EvalTask } from "../types.js";
 
@@ -37,37 +38,8 @@ export async function loadOolongTasks(
 		);
 	}
 
-	const rows = loadRows();
-
-	// Filter to the requested dataset split
-	let filtered = rows.filter((r) => r.dataset === datasetFilter);
-
-	if (filtered.length === 0) {
-		// List available datasets for debugging
-		const datasets = [...new Set(rows.map((r) => r.dataset))];
-		console.warn(
-			`Warning: No rows found with dataset="${datasetFilter}". ` +
-			`Available datasets: ${datasets.join(", ")}. ` +
-			`Falling back to all rows.`,
-		);
-		filtered = rows;
-	}
-
-	// Filter by context length if specified
-	if (contextLen !== null) {
-		const lenFiltered = filtered.filter((r) => r.context_len === contextLen);
-		if (lenFiltered.length > 0) {
-			filtered = lenFiltered;
-		} else {
-			// Fall back to the largest context_len available
-			const maxLen = Math.max(...filtered.map((r) => r.context_len));
-			console.warn(
-				`Warning: No rows with context_len=${contextLen}. ` +
-				`Using largest available: ${maxLen}`,
-			);
-			filtered = filtered.filter((r) => r.context_len === maxLen);
-		}
-	}
+	// Load with early filtering to avoid holding unneeded rows in memory
+	let filtered = await loadRows(datasetFilter, contextLen);
 
 	// Apply additional field filters (--filter flag)
 	if (filter) {
@@ -156,11 +128,13 @@ function normalizeAnswer(raw: string): string | string[] {
 }
 
 /**
- * Load all rows from the downloaded JSONL files.
+ * Load rows from the downloaded JSONL files with optional early filtering.
+ * Uses streaming to avoid Node.js string length limits on large files.
+ * Early filtering avoids holding all rows (with massive context text) in memory.
  */
-function loadRows(): OolongRow[] {
+async function loadRows(datasetFilter?: string, contextLen?: number | null): Promise<OolongRow[]> {
 	const files = readdirSync(DATA_DIR).filter(
-		(f) => f.endsWith(".jsonl") || f.endsWith(".json"),
+		(f) => f.endsWith(".jsonl"),
 	);
 
 	if (files.length === 0) {
@@ -170,30 +144,30 @@ function loadRows(): OolongRow[] {
 	}
 
 	const rows: OolongRow[] = [];
+	const allDatasets = new Set<string>();
 
 	for (const file of files) {
-		const content = readFileSync(join(DATA_DIR, file), "utf-8");
-
-		if (file.endsWith(".jsonl")) {
-			// JSONL: one JSON object per line
-			for (const line of content.split("\n")) {
-				const trimmed = line.trim();
-				if (!trimmed) continue;
-				try {
-					rows.push(JSON.parse(trimmed) as OolongRow);
-				} catch {}
-			}
-		} else {
-			// JSON: could be an array or single object
+		const filePath = join(DATA_DIR, file);
+		const rl = createInterface({ input: createReadStream(filePath, "utf-8"), crlfDelay: Infinity });
+		for await (const line of rl) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
 			try {
-				const parsed = JSON.parse(content);
-				if (Array.isArray(parsed)) {
-					rows.push(...(parsed as OolongRow[]));
-				} else {
-					rows.push(parsed as OolongRow);
-				}
+				const row = JSON.parse(trimmed) as OolongRow;
+				allDatasets.add(row.dataset);
+				// Early filter: skip rows that don't match dataset or context_len
+				if (datasetFilter && row.dataset !== datasetFilter) continue;
+				if (contextLen !== undefined && contextLen !== null && row.context_len !== contextLen) continue;
+				rows.push(row);
 			} catch {}
 		}
+	}
+
+	if (rows.length === 0 && datasetFilter) {
+		console.warn(
+			`Warning: No rows found with dataset="${datasetFilter}"${contextLen ? ` and context_len=${contextLen}` : ""}. ` +
+			`Available datasets: ${[...allDatasets].join(", ")}.`,
+		);
 	}
 
 	return rows;
