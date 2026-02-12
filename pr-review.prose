@@ -77,6 +77,28 @@ agent bug-scanner:
   """
 
 
+agent housekeeping:
+  model: sonnet
+  prompt: """
+    You prepare a PR for a fresh review pass. Before any new review begins,
+    you clean up stale state from previous reviews on this same PR.
+
+    Your tasks:
+    1. List all existing review comments on this PR
+    2. For comments left by previous automated reviews (from the bot or
+       github-actions user): if the code they reference has since changed,
+       mark them as resolved/outdated
+    3. Determine whether this is the first review or a re-review after
+       new commits. If re-review, note what changed since the last review
+       comment so downstream agents can focus on the delta.
+
+    Return:
+    - is_re_review: true/false
+    - delta_summary: what changed since last review (if re-review)
+    - resolved_count: how many stale comments you resolved
+  """
+
+
 # --- Gather context ---
 
 let pr_info = session "Fetch PR metadata and diff"
@@ -93,11 +115,30 @@ let pr_info = session "Fetch PR metadata and diff"
   """
 
 
+# --- Phase 0: Housekeeping ---
+
+let housekeeping_result = session: housekeeping
+  prompt: """
+    Clean up this PR before we start a fresh review.
+
+    1. Run: gh api repos/{owner}/{repo}/issues/{pr_number}/comments
+       to list existing comments. Resolve any from previous automated
+       reviews where the referenced code has since changed.
+    2. Check git log to see if there are commits after the last review
+       comment timestamp. If so, this is a re-review.
+    3. If re-review, run: gh api repos/{owner}/{repo}/compare/{base}...{head}
+       to summarize what changed since the last review.
+
+    Return your findings as structured context.
+  """
+  context: pr_info
+
+
 # --- Phase 1: Triage ---
 
 let triage_result = session: triage
   prompt: "Catalogue all changes in this PR. Decide which need deep review."
-  context: pr_info
+  context: [pr_info, housekeeping_result]
 
 
 # --- Phase 2: Deep contextual review (parallel) ---
