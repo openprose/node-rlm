@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-// Downloads the OOLONG dataset (oolongbench/oolong-synth) from HuggingFace into eval/data/oolong/.
-// Downloads both test and validation splits (trec_coarse lives in validation).
-// Usage: npx tsx eval/download.ts [--dataset oolong] [--max-rows N]
+// Downloads the OOLONG dataset into eval/data/oolong/.
+// Default mode (--from-release): downloads pre-built asset from GitHub Release.
+// HuggingFace mode (--from-hf): downloads from oolongbench/oolong-synth via HF API.
+// Usage: npx tsx eval/download.ts [--from-release | --from-hf] [--dataset oolong] [--max-rows N]
 
-import { createReadStream, existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, unlinkSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
+import { createGunzip } from "node:zlib";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 
 const EVAL_DIR = new URL(".", import.meta.url).pathname;
 const DATA_DIR = join(EVAL_DIR, "data");
@@ -24,6 +28,11 @@ const PAGE_SIZE = 20;
 
 // Maximum rows to download per split (0 = all)
 const MAX_ROWS = 11000;
+
+// GitHub Release asset download
+const GITHUB_REPO = "openprose/node-rlm";
+const RELEASE_TAG = "eval-data-v1";
+const RELEASE_ASSET = "oolong-trec-coarse-validation.jsonl.gz";
 
 interface HFRowsResponse {
 	features: Array<{ name: string; type: { dtype?: string; _type?: string } }>;
@@ -206,19 +215,59 @@ async function summarizeData(requestedSplits: string[]): Promise<void> {
 	);
 }
 
-function parseArgs(argv: string[]): { dataset: string; maxRows: number; splits: string[] } {
+async function downloadFromRelease(): Promise<void> {
+	const assetUrl = `https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${RELEASE_ASSET}`;
+	const outputFile = join(OOLONG_DIR, "validation.jsonl");
+
+	console.log("Downloading OOLONG dataset from GitHub Release...");
+	console.log(`  Asset: ${RELEASE_ASSET}`);
+	console.log(`  URL: ${assetUrl}`);
+	console.log(`  Target: ${outputFile}`);
+
+	mkdirSync(OOLONG_DIR, { recursive: true });
+
+	const response = await fetch(assetUrl, { signal: AbortSignal.timeout(120_000) });
+	if (!response.ok) {
+		throw new Error(`Failed to download release asset: HTTP ${response.status} ${response.statusText}`);
+	}
+	if (!response.body) {
+		throw new Error("Response body is empty");
+	}
+
+	await pipeline(
+		Readable.fromWeb(response.body as import("node:stream/web").ReadableStream),
+		createGunzip(),
+		createWriteStream(outputFile),
+	);
+
+	console.log(`  Downloaded and decompressed to ${outputFile}`);
+
+	await summarizeData(["validation"]);
+}
+
+function parseArgs(argv: string[]): { dataset: string; maxRows: number; splits: string[]; source: "release" | "hf" } {
 	const args: Record<string, string> = {};
+	const flags = new Set<string>();
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
-		if (arg.startsWith("--") && i + 1 < argv.length) {
+		if (arg === "--from-release" || arg === "--from-hf") {
+			flags.add(arg.slice(2));
+		} else if (arg.startsWith("--") && i + 1 < argv.length) {
 			args[arg.slice(2)] = argv[i + 1];
 			i++;
 		}
 	}
+
+	let source: "release" | "hf" = "release";
+	if (flags.has("from-hf")) {
+		source = "hf";
+	}
+
 	return {
 		dataset: args.dataset ?? "oolong",
 		maxRows: args["max-rows"] ? parseInt(args["max-rows"], 10) : MAX_ROWS,
 		splits: args.splits ? args.splits.split(",") : DEFAULT_SPLITS,
+		source,
 	};
 }
 
@@ -231,7 +280,11 @@ async function main(): Promise<void> {
 
 	switch (args.dataset) {
 		case "oolong":
-			await downloadOolong(args.maxRows, args.splits);
+			if (args.source === "release") {
+				await downloadFromRelease();
+			} else {
+				await downloadOolong(args.maxRows, args.splits);
+			}
 			break;
 		case "s-niah":
 			console.log("S-NIAH is a synthetic benchmark — no download needed.");
