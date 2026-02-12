@@ -15,8 +15,9 @@ const OOLONG_DIR = join(DATA_DIR, "oolong");
 const HF_API_BASE = "https://datasets-server.huggingface.co";
 const OOLONG_DATASET = "oolongbench/oolong-synth";
 
-// Both splits are needed: test has metaphors/negation, validation has trec_coarse/spam
-const OOLONG_SPLITS = ["test", "validation"] as const;
+// Default split: validation has trec_coarse (the paper's eval split) + spam
+// Test split has metaphors/negation (not needed for standard OOLONG eval)
+const DEFAULT_SPLITS = ["validation"];
 
 // We fetch rows in pages of this size (smaller = more reliable with HF API and lower memory pressure)
 const PAGE_SIZE = 20;
@@ -148,26 +149,26 @@ async function downloadSplit(split: string, maxRows: number): Promise<number> {
 	return downloaded;
 }
 
-async function downloadOolong(maxRows: number): Promise<void> {
+async function downloadOolong(maxRows: number, requestedSplits: string[]): Promise<void> {
 	console.log("Downloading OOLONG dataset from HuggingFace...");
 	console.log(`  Dataset: ${OOLONG_DATASET}`);
-	console.log(`  Splits: ${OOLONG_SPLITS.join(", ")}`);
+	console.log(`  Splits: ${requestedSplits.join(", ")}`);
 	console.log(`  Target directory: ${OOLONG_DIR}`);
 
 	mkdirSync(OOLONG_DIR, { recursive: true });
 
 	let totalDownloaded = 0;
-	for (const split of OOLONG_SPLITS) {
+	for (const split of requestedSplits) {
 		totalDownloaded += await downloadSplit(split, maxRows);
 	}
 
 	console.log(`\n  Total rows downloaded across all splits: ${totalDownloaded}`);
 
 	// Summarize all data files
-	await summarizeData();
+	await summarizeData(requestedSplits);
 }
 
-async function summarizeData(): Promise<void> {
+async function summarizeData(requestedSplits: string[]): Promise<void> {
 	console.log();
 	console.log("Dataset summary:");
 
@@ -175,7 +176,7 @@ async function summarizeData(): Promise<void> {
 	const contextLens = new Map<number, number>();
 	let totalRows = 0;
 
-	for (const split of OOLONG_SPLITS) {
+	for (const split of requestedSplits) {
 		const filePath = join(OOLONG_DIR, `${split}.jsonl`);
 		if (!existsSync(filePath)) continue;
 
@@ -205,7 +206,7 @@ async function summarizeData(): Promise<void> {
 	);
 }
 
-function parseArgs(argv: string[]): { dataset: string; maxRows: number } {
+function parseArgs(argv: string[]): { dataset: string; maxRows: number; splits: string[] } {
 	const args: Record<string, string> = {};
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
@@ -217,6 +218,7 @@ function parseArgs(argv: string[]): { dataset: string; maxRows: number } {
 	return {
 		dataset: args.dataset ?? "oolong",
 		maxRows: args["max-rows"] ? parseInt(args["max-rows"], 10) : MAX_ROWS,
+		splits: args.splits ? args.splits.split(",") : DEFAULT_SPLITS,
 	};
 }
 
@@ -229,7 +231,7 @@ async function main(): Promise<void> {
 
 	switch (args.dataset) {
 		case "oolong":
-			await downloadOolong(args.maxRows);
+			await downloadOolong(args.maxRows, args.splits);
 			break;
 		case "s-niah":
 			console.log("S-NIAH is a synthetic benchmark — no download needed.");
