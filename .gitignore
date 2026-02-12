@@ -6,6 +6,7 @@ dist/
 # Environment
 .env
 .env.*
+!.env.example
 
 # Eval data
 eval/data/

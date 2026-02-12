@@ -12,6 +12,42 @@ npm install node-rlm
 
 Requires Node.js >= 20.
 
+## Quick Start
+
+Clone the repo and install dependencies:
+
+```bash
+git clone https://github.com/openprose/node-rlm.git
+cd node-rlm
+npm install
+```
+
+Copy the example env file and add your API key:
+
+```bash
+cp .env.example .env
+# Edit .env and set OPENROUTER_API_KEY
+```
+
+Run a query:
+
+```bash
+npx tsx src/cli.ts --query "What is the capital of France?"
+```
+
+Run a quick eval:
+
+```bash
+# S-NIAH (synthetic, no download needed)
+npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-20250514 --max-tasks 5
+
+# OOLONG (requires one-time dataset download)
+npx tsx eval/download.ts
+npx tsx eval/run.ts --benchmark oolong --model anthropic/claude-sonnet-4-20250514 --max-tasks 5
+```
+
+See [eval/README.md](eval/README.md) for the full set of eval options, plugin configuration, and result analysis.
+
 ## CLI
 
 ```bash
@@ -128,6 +164,16 @@ plugins/
 eval/                 Benchmark harness (OOLONG, S-NIAH) -- see eval/README.md
 test/                 Vitest tests
 ```
+
+## Testing
+
+Unit tests (no API key needed):
+
+```bash
+npm test
+```
+
+End-to-end tests run automatically when `OPENROUTER_API_KEY` is set, and are skipped otherwise.
 
 ## License
 
