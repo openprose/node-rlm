@@ -24,3 +24,4 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "prose run pr-review.prose"
+          claude_args: "--allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill"
