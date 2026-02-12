@@ -87,8 +87,8 @@ jobs:
         if: inputs.analyze == true
         run: |
           git clone --depth 1 https://github.com/openprose/prose.git /tmp/prose
-          mkdir -p ~/.claude/skills
-          cp -r /tmp/prose/skills/open-prose ~/.claude/skills/open-prose
+          mkdir -p .claude/skills
+          cp -r /tmp/prose/skills/open-prose .claude/skills/open-prose
 
       - name: Trajectory analysis
         if: inputs.analyze == true
