@@ -32,10 +32,10 @@ interface HFRowsResponse {
 	partial: boolean;
 }
 
-async function fetchWithRetry(url: string, retries = 5, delayMs = 3000): Promise<Response | null> {
+async function fetchJson<T>(url: string, retries = 5, delayMs = 3000): Promise<T | null> {
 	for (let attempt = 1; attempt <= retries; attempt++) {
 		try {
-			const response = await fetch(url);
+			const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
 			if (response.status === 429) {
 				const retryAfter = response.headers.get("retry-after");
 				const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : delayMs * attempt;
@@ -44,21 +44,20 @@ async function fetchWithRetry(url: string, retries = 5, delayMs = 3000): Promise
 				continue;
 			}
 			if (response.status >= 500) {
-				// Server error — retry with backoff, but don't crash
 				const waitMs = delayMs * attempt;
 				if (attempt < retries) {
 					console.log(`  Server error ${response.status}, retrying in ${waitMs}ms (${attempt}/${retries})...`);
 					await new Promise((r) => setTimeout(r, waitMs));
 					continue;
 				}
-				// Final attempt failed — return null to let caller skip this page
 				console.log(`  Server error ${response.status} after ${retries} attempts, skipping page.`);
 				return null;
 			}
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
-			return response;
+			// Parse JSON inside retry loop so connection drops during body read are retried
+			return (await response.json()) as T;
 		} catch (err) {
 			if (attempt === retries) {
 				console.log(`  Request failed after ${retries} attempts: ${err}. Skipping page.`);
@@ -96,12 +95,11 @@ async function downloadSplit(split: string, maxRows: number): Promise<number> {
 	// Get total row count
 	const infoUrl = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${split}&offset=0&length=1`;
 	console.log("  Fetching dataset info...");
-	const infoResponse = await fetchWithRetry(infoUrl);
-	if (!infoResponse) {
+	const infoData = await fetchJson<HFRowsResponse>(infoUrl);
+	if (!infoData) {
 		console.log(`  Could not fetch info for split ${split}, skipping.`);
 		return 0;
 	}
-	const infoData = (await infoResponse.json()) as HFRowsResponse;
 	const totalRows = maxRows > 0 ? Math.min(infoData.num_rows_total, maxRows) : infoData.num_rows_total;
 	console.log(`  Total rows in split: ${infoData.num_rows_total}`);
 	console.log(`  Downloading up to: ${totalRows}`);
@@ -113,15 +111,13 @@ async function downloadSplit(split: string, maxRows: number): Promise<number> {
 		const length = Math.min(PAGE_SIZE, totalRows - downloaded);
 		const url = `${HF_API_BASE}/rows?dataset=${encodeURIComponent(OOLONG_DATASET)}&config=default&split=${split}&offset=${downloaded}&length=${length}`;
 
-		const response = await fetchWithRetry(url);
-		if (!response) {
+		const data = await fetchJson<HFRowsResponse>(url);
+		if (!data) {
 			// Skip this page but keep going
 			skippedPages++;
 			downloaded += length;
 			continue;
 		}
-
-		const data = (await response.json()) as HFRowsResponse;
 
 		if (!data.rows || data.rows.length === 0) {
 			console.log("  No more rows returned, stopping.");
