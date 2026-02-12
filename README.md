@@ -1,16 +1,8 @@
 # node-rlm
 
-An LLM in a REPL loop. The model writes JavaScript that runs in a persistent Node.js sandbox; the loop continues until it calls `return()`. Any invocation can spawn a child via `await rlm(query, context?)` -- same sandbox, separate message history and iteration budget.
+An LLM in a Node.js REPL loop that can call anything, including itself. The model writes JavaScript that runs in a persistent Node.js sandbox; the loop continues until it calls `return()`. Any invocation can spawn a child via `await rlm(query, context?)` -- same sandbox, separate message history and iteration budget.
 
-Only runtime dependency is `acorn` (JS parser). Any OpenAI-compatible API works.
-
-## Install
-
-```bash
-npm install node-rlm
-```
-
-Requires Node.js >= 20.
+Only runtime dependency is `acorn` (JS parser). Currently supported with OpenRouter. Open to PRs for other APIs.
 
 ## Quick Start
 
@@ -58,15 +50,15 @@ npx node-rlm --query "Analyze this data" --model openai/gpt-4o
 npx node-rlm --query "Hello" --model custom/my-model --base-url http://localhost:11434/v1
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--query <text>` | (required) | The question or task |
-| `--context-file <path>` | -- | Load context from a file |
-| `--context-dir <path>` | -- | Load context from a directory (concatenates all files) |
-| `--model <provider/id>` | `openrouter/google/gemini-3-flash-preview` | Model in `provider/model-id` format |
-| `--base-url <url>` | -- | Custom API base URL (for Ollama, vLLM, etc.) |
-| `--max-iterations <n>` | 15 | Maximum REPL loop iterations (root) |
-| `--max-depth <n>` | 3 | Maximum recursion depth; beyond this, `rlm()` is one-shot |
+| Flag                    | Default                                    | Description                                               |
+| ----------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| `--query <text>`        | (required)                                 | The question or task                                      |
+| `--context-file <path>` | --                                         | Load context from a file                                  |
+| `--context-dir <path>`  | --                                         | Load context from a directory (concatenates all files)    |
+| `--model <provider/id>` | `openrouter/google/gemini-3-flash-preview` | Model in `provider/model-id` format                       |
+| `--base-url <url>`      | --                                         | Custom API base URL (for Ollama, vLLM, etc.)              |
+| `--max-iterations <n>`  | 15                                         | Maximum REPL loop iterations (root)                       |
+| `--max-depth <n>`       | 3                                          | Maximum recursion depth; beyond this, `rlm()` is one-shot |
 
 ### Providers
 
@@ -89,9 +81,9 @@ const result = await rlm("What is 2 + 2?", undefined, {
   maxDepth: 3,
 });
 
-console.log(result.answer);     // "4"
+console.log(result.answer); // "4"
 console.log(result.iterations); // number of REPL turns used
-console.log(result.trace);      // { reasoning, code, output, error } per turn
+console.log(result.trace); // { reasoning, code, output, error } per turn
 ```
 
 ### `rlm(query, context?, options)`
@@ -102,29 +94,29 @@ Throws `RlmMaxIterationsError` if the iteration budget is exhausted (carries par
 
 ### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `callLLM` | `CallLLM` | (required) | `(messages, systemPrompt) => Promise<string>` |
-| `maxIterations` | `number` | 15 | REPL loop budget for the root agent |
-| `maxDepth` | `number` | 3 | Recursion depth limit |
-| `pluginBodies` | `string` | -- | Extra prompt text appended to the root agent's system prompt |
+| Option          | Type      | Default    | Description                                                  |
+| --------------- | --------- | ---------- | ------------------------------------------------------------ |
+| `callLLM`       | `CallLLM` | (required) | `(messages, systemPrompt) => Promise<string>`                |
+| `maxIterations` | `number`  | 15         | REPL loop budget for the root agent                          |
+| `maxDepth`      | `number`  | 3          | Recursion depth limit                                        |
+| `pluginBodies`  | `string`  | --         | Extra prompt text appended to the root agent's system prompt |
 
 ### Sandbox globals
 
 These are available to the model inside the REPL:
 
-| Symbol | Description |
-|--------|-------------|
-| `context` | Task data (reads `__ctx.local.context`, falling back to `__ctx.shared.data`). |
-| `console.log()` | Output visible to the model between iterations. |
-| `return(value)` | Ends the loop and sets the final answer. First-iteration returns are intercepted for verification. |
-| `await rlm(query, context?, { systemPrompt? })` | Spawn a child RLM. Shared sandbox, own message history. Must be awaited. |
-| `await llm(query, context?)` | One-shot LLM call. No REPL, no iteration. |
-| `__rlm` | Read-only delegation context: `depth`, `maxDepth`, `iteration`, `maxIterations`, `lineage`, `invocationId`, `parentId`. |
-| `__ctx.shared.data` | Root context (frozen, readable by all depths). |
-| `__ctx.local` | This invocation's writable workspace. |
-| `__ctx.readLocal(id)` | Read-only view of another invocation's local store. |
-| `require()` | Node.js built-in modules only. |
+| Symbol                                          | Description                                                                                                             |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `context`                                       | Task data (reads `__ctx.local.context`, falling back to `__ctx.shared.data`).                                           |
+| `console.log()`                                 | Output visible to the model between iterations.                                                                         |
+| `return(value)`                                 | Ends the loop and sets the final answer. First-iteration returns are intercepted for verification.                      |
+| `await rlm(query, context?, { systemPrompt? })` | Spawn a child RLM. Shared sandbox, own message history. Must be awaited.                                                |
+| `await llm(query, context?)`                    | One-shot LLM call. No REPL, no iteration.                                                                               |
+| `__rlm`                                         | Read-only delegation context: `depth`, `maxDepth`, `iteration`, `maxIterations`, `lineage`, `invocationId`, `parentId`. |
+| `__ctx.shared.data`                             | Root context (frozen, readable by all depths).                                                                          |
+| `__ctx.local`                                   | This invocation's writable workspace.                                                                                   |
+| `__ctx.readLocal(id)`                           | Read-only view of another invocation's local store.                                                                     |
+| `require()`                                     | Node.js built-in modules only.                                                                                          |
 
 The sandbox is shared across depths. Iteration budget decays with depth: root gets `maxIterations`, children are capped at 7, 4, 3.
 
