@@ -1,8 +1,8 @@
 ---
 name: verify-all-examples
 kind: driver
-version: 0.1.0
-description: Always test hypotheses against ALL training examples, never just one
+version: 0.2.0
+description: Test against ALL examples during development, and re-verify as a hard gate before return()
 author: sl
 tags: [strategy, verification, arc]
 requires: []
@@ -54,6 +54,19 @@ This prevents you from abandoning a 3/4 hypothesis for an untested one.
 - Believing a hypothesis works because it matches one example
 - Cycling through hypotheses without knowing which one scored best
 - Losing track of your best candidate when exploring alternatives
+
+### Verification gate before return()
+
+**NEVER call `return()` unless your solution scores N/N on all training examples** — or you have explicitly accepted the failures you cannot fix.
+
+In the iteration immediately before returning, re-run the full verification loop above on your final implementation. Do not trust an earlier pass — late-iteration refactors, variable renames, and off-by-one fixes can silently break a previously-passing solution.
+
+The sequence is:
+1. Run the full verification loop. See `Score: N/N` in the output.
+2. If any example fails, fix it. Do NOT return a solution with known training failures unless you are in deadline mode and out of iterations.
+3. Only after seeing N/N (or consciously accepting a known gap at the deadline), call `return()`.
+
+This gate is the single strongest predictor of success. Solutions verified against all ground truth before returning succeed at 4x the rate of unverified returns.
 
 ### The rule
 

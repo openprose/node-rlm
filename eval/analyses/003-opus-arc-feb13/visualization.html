@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC-AGI-2 Eval Analysis: Opus 4.6 Matched-Pair Study</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #1c2333;
+    --bg-card: #21262d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-green: #3fb950;
+    --accent-green-dim: #238636;
+    --accent-red: #f85149;
+    --accent-red-dim: #da3633;
+    --accent-amber: #d29922;
+    --accent-amber-dim: #9e6a03;
+    --accent-blue: #58a6ff;
+    --accent-purple: #bc8cff;
+    --accent-cyan: #56d4dd;
+    --accent-pink: #f778ba;
+    --gradient-green: linear-gradient(135deg, #238636, #3fb950);
+    --gradient-red: linear-gradient(135deg, #da3633, #f85149);
+    --gradient-amber: linear-gradient(135deg, #9e6a03, #d29922);
+    --gradient-blue: linear-gradient(135deg, #1f6feb, #58a6ff);
+    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    min-width: 1200px;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+  /* Header */
+  .hero {
+    text-align: center;
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .hero .subtitle { color: var(--text-secondary); font-size: 16px; margin-bottom: 24px; }
+  .hero .date { color: var(--text-muted); font-size: 13px; }
+
+  /* Hero Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+  .stat-card.green::before { background: var(--gradient-green); }
+  .stat-card.red::before { background: var(--gradient-red); }
+  .stat-card.amber::before { background: var(--gradient-amber); }
+  .stat-card.blue::before { background: var(--gradient-blue); }
+
+  .stat-card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; }
+  .stat-card .values { display: flex; justify-content: center; align-items: baseline; gap: 16px; }
+  .stat-card .value { font-size: 36px; font-weight: 700; }
+  .stat-card .value.green { color: var(--accent-green); }
+  .stat-card .value.red { color: var(--accent-red); }
+  .stat-card .value.amber { color: var(--accent-amber); }
+  .stat-card .value.blue { color: var(--accent-blue); }
+  .stat-card .run-label { font-size: 11px; color: var(--text-muted); }
+  .stat-card .vs { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+  .stat-card .delta { font-size: 13px; margin-top: 6px; font-weight: 600; }
+  .stat-card .delta.positive { color: var(--accent-green); }
+  .stat-card .delta.negative { color: var(--accent-red); }
+  .stat-card .delta.neutral { color: var(--text-muted); }
+
+  /* Comparison Bar */
+  .comparison-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin-bottom: 32px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .comparison-bar .side {
+    padding: 16px 24px;
+    text-align: center;
+    position: relative;
+  }
+  .comparison-bar .side.left { background: rgba(56, 132, 244, 0.08); border-right: 1px solid var(--border); }
+  .comparison-bar .side.right { background: rgba(188, 140, 255, 0.08); }
+  .comparison-bar .side .run-name { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+  .comparison-bar .side.left .run-name { color: var(--accent-blue); }
+  .comparison-bar .side.right .run-name { color: var(--accent-purple); }
+  .comparison-bar .side .run-desc { font-size: 13px; color: var(--text-secondary); }
+
+  /* Section headers */
+  .section {
+    margin-bottom: 40px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .section-header .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.insight { background: rgba(86, 212, 221, 0.15); color: var(--accent-cyan); }
+  .badge.data { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+  .badge.critical { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+
+  /* Matched Pair Grid */
+  .task-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+    background: var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .task-row {
+    display: grid;
+    grid-template-columns: 140px 90px 50px 50px 90px 50px 50px 120px 100px 1fr;
+    align-items: center;
+    background: var(--bg-card);
+    padding: 8px 12px;
+    font-size: 13px;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .task-row:hover { background: var(--bg-tertiary); }
+  .task-row.header {
+    background: var(--bg-secondary);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    cursor: default;
+  }
+  .task-row.header:hover { background: var(--bg-secondary); }
+  .task-row .task-id { font-family: 'SF Mono', SFMono-Regular, Consolas, monospace; font-size: 12px; color: var(--accent-blue); }
+  .task-row .score { font-weight: 700; text-align: center; }
+  .task-row .score.pass { color: var(--accent-green); }
+  .task-row .score.fail { color: var(--accent-red); }
+  .task-row .score.unknown { color: var(--text-muted); }
+  .task-row .iter { text-align: center; color: var(--text-secondary); font-family: monospace; }
+  .task-row .strategy { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); color: var(--text-secondary); display: inline-block; }
+  .task-row .outcome {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-align: center;
+    display: inline-block;
+  }
+  .outcome.both-solved { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+  .outcome.r022-only { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+  .outcome.r023-only { background: rgba(188, 140, 255, 0.15); color: var(--accent-purple); }
+  .outcome.neither { background: rgba(139, 148, 158, 0.1); color: var(--text-muted); }
+
+  /* Iteration bars */
+  .iter-bar-container { display: flex; align-items: center; gap: 4px; }
+  .iter-bar {
+    height: 8px;
+    border-radius: 4px;
+    min-width: 2px;
+  }
+  .iter-bar.r022 { background: var(--accent-blue); opacity: 0.7; }
+  .iter-bar.r023 { background: var(--accent-purple); opacity: 0.7; }
+
+  /* Charts */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .chart-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+  }
+  .chart-card canvas {
+    width: 100%;
+  }
+
+  /* Verification Insight */
+  .insight-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  .insight-card h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+  .verification-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+  .verification-box {
+    text-align: center;
+    padding: 24px;
+    border-radius: 10px;
+    position: relative;
+  }
+  .verification-box.with { background: rgba(63, 185, 80, 0.08); border: 1px solid rgba(63, 185, 80, 0.2); }
+  .verification-box.without { background: rgba(248, 81, 73, 0.08); border: 1px solid rgba(248, 81, 73, 0.2); }
+  .verification-box .pct { font-size: 56px; font-weight: 800; line-height: 1; }
+  .verification-box.with .pct { color: var(--accent-green); }
+  .verification-box.without .pct { color: var(--accent-red); }
+  .verification-box .pct-label { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+  .verification-box .detail { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+  /* Failure Modes */
+  .failure-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .failure-column { }
+  .failure-column h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .failure-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .failure-item .bar {
+    height: 6px;
+    border-radius: 3px;
+    min-width: 4px;
+  }
+  .failure-item .bar.r022 { background: var(--accent-blue); }
+  .failure-item .bar.r023 { background: var(--accent-purple); }
+  .failure-item .count { font-weight: 700; min-width: 20px; text-align: right; }
+  .failure-item .name { color: var(--text-secondary); font-size: 12px; }
+  .failure-category {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 0 4px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+  .failure-category:first-child { border-top: none; margin-top: 0; }
+
+  /* Recommendations */
+  .rec-list { display: flex; flex-direction: column; gap: 10px; }
+  .rec-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 12px;
+    align-items: start;
+    box-shadow: var(--shadow);
+  }
+  .rec-item .priority {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 4px;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .rec-item .priority.p0 { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+  .rec-item .priority.p1 { background: rgba(210, 153, 34, 0.15); color: var(--accent-amber); }
+  .rec-item .priority.p2 { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+  .rec-item .rec-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .rec-item .rec-body { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .rec-item .rec-evidence { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
+
+  /* Eager Return */
+  .eager-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+  .eager-box {
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+  }
+  .eager-box .big-num { font-size: 48px; font-weight: 800; line-height: 1; }
+  .eager-box .big-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .eager-box .sub { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+  /* Iteration Efficiency Donut */
+  .donut-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .donut-card {
+    text-align: center;
+  }
+  .donut-card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  /* Cost Breakdown */
+  .cost-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .cost-card {
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .cost-card .cost-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+  .cost-card .cost-value { font-size: 28px; font-weight: 700; margin: 4px 0; }
+  .cost-card .cost-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* Plugin Effect Summary */
+  .effect-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .effect-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .effect-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+  }
+  .effect-table tr:hover { background: var(--bg-tertiary); }
+  .effect-positive { color: var(--accent-green); font-weight: 600; }
+  .effect-negative { color: var(--accent-red); font-weight: 600; }
+  .effect-neutral { color: var(--text-muted); }
+
+  /* Task detail tooltip */
+  .task-detail {
+    display: none;
+    grid-column: 1 / -1;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .task-detail.active { display: block; }
+  .task-detail strong { color: var(--text-primary); }
+
+  /* Hypothesis Churn SVG */
+  .hyp-track {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 4px 0;
+  }
+  .hyp-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .hyp-dot.explore { background: var(--accent-blue); opacity: 0.5; }
+  .hyp-dot.extract { background: var(--accent-amber); opacity: 0.7; }
+  .hyp-dot.verify { background: var(--accent-green); opacity: 0.7; }
+  .hyp-dot.return-ok { background: var(--accent-green); }
+  .hyp-dot.return-fail { background: var(--accent-red); }
+  .hyp-dot.panic { background: var(--accent-red); opacity: 0.5; }
+  .hyp-dot.timeout { background: var(--text-muted); opacity: 0.5; }
+  .hyp-dot.abort { background: var(--accent-red); opacity: 0.3; }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Iteration Sweet Spot Chart */
+  .sweet-spot {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 120px;
+    padding: 0 4px;
+  }
+  .sweet-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    min-width: 20px;
+    position: relative;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .sweet-bar:hover { opacity: 0.85; }
+  .sweet-bar .bar-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .sweet-bar .bar-value {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 40px;
+  }
+
+  /* Scrollable table wrapper */
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  /* Jointly solved comparison */
+  .joint-compare {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .joint-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+  }
+  .joint-card .jc-task { font-family: monospace; color: var(--accent-cyan); font-size: 11px; margin-bottom: 6px; }
+  .joint-card .jc-bars { display: flex; justify-content: center; gap: 4px; align-items: flex-end; height: 40px; margin-bottom: 4px; }
+  .joint-card .jc-bar { width: 20px; border-radius: 3px 3px 0 0; }
+  .joint-card .jc-bar.b022 { background: var(--accent-blue); }
+  .joint-card .jc-bar.b023 { background: var(--accent-purple); }
+  .joint-card .jc-label { font-size: 10px; color: var(--text-muted); }
+  .joint-card .jc-winner { font-size: 11px; font-weight: 700; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- HERO -->
+<div class="hero">
+  <h1>ARC-AGI-2 Matched-Pair Evaluation</h1>
+  <div class="subtitle">Opus 4.6 &mdash; With vs Without <code>arc-solver.md</code> Plugin &mdash; 20 Identical Tasks</div>
+  <div class="date">2026-02-13 &middot; Batch 003 &middot; Runs 022 &amp; 023</div>
+</div>
+
+<!-- Run Comparison Bar -->
+<div class="comparison-bar">
+  <div class="side left">
+    <div class="run-name">Run-022</div>
+    <div class="run-desc">WITH arc-solver.md plugin v0.3.0</div>
+  </div>
+  <div class="side right">
+    <div class="run-name">Run-023</div>
+    <div class="run-desc">WITHOUT plugin (baseline)</div>
+  </div>
+</div>
+
+<!-- HERO STATS -->
+<div class="stats-grid">
+  <div class="stat-card amber">
+    <div class="label">Score (correct / 20)</div>
+    <div class="values">
+      <div>
+        <div class="value" style="color: var(--accent-blue);">9</div>
+        <div class="run-label">Run-022</div>
+      </div>
+      <div class="vs">vs</div>
+      <div>
+        <div class="value" style="color: var(--accent-purple);">10</div>
+        <div class="run-label">Run-023</div>
+      </div>
+    </div>
+    <div class="delta negative">Plugin: -5pp (45% vs 50%)</div>
+  </div>
+
+  <div class="stat-card red">
+    <div class="label">Total Cost</div>
+    <div class="values">
+      <div>
+        <div class="value" style="color: var(--accent-blue); font-size: 28px;">$13.38</div>
+        <div class="run-label">Run-022</div>
+      </div>
+      <div class="vs">vs</div>
+      <div>
+        <div class="value" style="color: var(--accent-purple); font-size: 28px;">$10.98</div>
+        <div class="run-label">Run-023</div>
+      </div>
+    </div>
+    <div class="delta negative">Plugin: +22% cost</div>
+  </div>
+
+  <div class="stat-card blue">
+    <div class="label">Mean Iterations</div>
+    <div class="values">
+      <div>
+        <div class="value" style="color: var(--accent-blue); font-size: 28px;">15.8</div>
+        <div class="run-label">Run-022</div>
+      </div>
+      <div class="vs">vs</div>
+      <div>
+        <div class="value" style="color: var(--accent-purple); font-size: 28px;">14.1</div>
+        <div class="run-label">Run-023</div>
+      </div>
+    </div>
+    <div class="delta negative">Plugin: +1.7 iters avg</div>
+  </div>
+
+  <div class="stat-card green">
+    <div class="label">Both Solved / Only One / Neither</div>
+    <div class="values">
+      <div>
+        <div class="value green" style="font-size: 28px;">6</div>
+        <div class="run-label">Both</div>
+      </div>
+      <div style="color: var(--text-muted);">/</div>
+      <div>
+        <div class="value amber" style="font-size: 28px;">6</div>
+        <div class="run-label">Flipped</div>
+      </div>
+      <div style="color: var(--text-muted);">/</div>
+      <div>
+        <div class="value" style="font-size: 28px; color: var(--text-muted);">8</div>
+        <div class="run-label">Neither</div>
+      </div>
+    </div>
+    <div class="delta neutral">2 R022-only, 4 R023-only</div>
+  </div>
+</div>
+
+<!-- MATCHED PAIR GRID -->
+<div class="section">
+  <div class="section-header">
+    <h2>Matched-Pair Task Comparison</h2>
+    <span class="badge data">20 Tasks</span>
+  </div>
+  <div class="table-scroll">
+    <div class="task-grid" id="taskGrid">
+      <div class="task-row header">
+        <div>Task ID</div>
+        <div style="text-align:center">R022 Score</div>
+        <div style="text-align:center">Iter</div>
+        <div></div>
+        <div style="text-align:center">R023 Score</div>
+        <div style="text-align:center">Iter</div>
+        <div></div>
+        <div style="text-align:center">Outcome</div>
+        <div>Strategy</div>
+        <div>Iteration Bars (blue=R022, purple=R023)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JOINTLY SOLVED: ITERATION EFFICIENCY -->
+<div class="section">
+  <div class="section-header">
+    <h2>Jointly Solved Tasks: Iteration Efficiency</h2>
+    <span class="badge insight">Key Finding</span>
+  </div>
+  <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+    Among the 6 tasks solved by both runs, Run-023 (no plugin) was faster on 4 of 6.
+    Mean iterations: <strong style="color:var(--accent-blue)">13.8</strong> (plugin) vs <strong style="color:var(--accent-purple)">12.0</strong> (no plugin).
+    The plugin added ~1.8 iterations of overhead on average.
+  </p>
+  <div class="joint-compare" id="jointCompare"></div>
+</div>
+
+<!-- VERIFICATION INSIGHT -->
+<div class="section">
+  <div class="section-header">
+    <h2>The Verification Gate: Strongest Success Predictor</h2>
+    <span class="badge critical">76% vs 17%</span>
+  </div>
+  <div class="insight-card">
+    <div class="verification-comparison">
+      <div class="verification-box with">
+        <div class="pct">76%</div>
+        <div class="pct-label">Success Rate</div>
+        <div class="detail">WITH exhaustive training verification</div>
+        <div class="detail">16 of 21 tasks scored 1.0</div>
+      </div>
+      <div class="verification-box without">
+        <div class="pct">17%</div>
+        <div class="pct-label">Success Rate</div>
+        <div class="detail">WITHOUT exhaustive verification</div>
+        <div class="detail">3 of 18 tasks scored 1.0</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">
+      The single strongest predictor of success across both runs is <strong style="color:var(--text-primary)">exhaustive training verification</strong> &mdash;
+      testing the candidate solution against ALL training examples before calling <code>return()</code>.
+      This eclipses all other factors including plugin presence, iteration count, and strategy type.
+      <strong style="color:var(--accent-amber)">Recommendation:</strong> REQUIRE exhaustive verification as a hard gate before any return() call.
+    </p>
+  </div>
+</div>
+
+<!-- EAGER RETURN PHENOMENON -->
+<div class="section">
+  <div class="section-header">
+    <h2>The Eager Return Phenomenon</h2>
+    <span class="badge critical">Plugin Behavior</span>
+  </div>
+  <div class="insight-card">
+    <div class="eager-grid">
+      <div class="eager-box">
+        <div class="big-num" style="color: var(--accent-blue);">85%</div>
+        <div class="big-label">Run-022 tasks attempted return in iteration 1</div>
+        <div class="sub">17 of 20 tasks &mdash; 9 succeeded, 8 failed (47% failure rate)</div>
+      </div>
+      <div class="eager-box">
+        <div class="big-num" style="color: var(--accent-purple);">0%</div>
+        <div class="big-label">Run-023 tasks attempted return in iteration 1</div>
+        <div class="sub">0 of 20 tasks &mdash; no eager returns without the plugin</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">
+      The plugin's instruction to "Copy the helper library" and "Run testAllSymmetries" in early iterations
+      encourages the model to attempt an immediate return after the first batch test.
+      For simple symmetry tasks this enables fast solutions (arc-db695cfb at 7 iterations),
+      but for tasks requiring deeper analysis, the failed early return wastes an iteration and
+      anchors the agent to a wrong hypothesis.
+      <strong style="color:var(--accent-amber)">The 47% failure rate of eager returns suggests this pattern is not reliably discriminative.</strong>
+    </p>
+  </div>
+</div>
+
+<!-- ITERATION SWEET SPOT -->
+<div class="section">
+  <div class="section-header">
+    <h2>Iteration Budget as Triage Signal</h2>
+    <span class="badge data">Both Runs Combined</span>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Success Rate by Iteration Range</h3>
+      <canvas id="sweetSpotChart" width="500" height="220"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Iteration Distribution: Plugin vs No Plugin</h3>
+      <canvas id="iterDistChart" width="500" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- FAILURE MODE BREAKDOWN -->
+<div class="section">
+  <div class="section-header">
+    <h2>Failure Mode Taxonomy</h2>
+    <span class="badge data">20 Failed Tasks</span>
+  </div>
+  <div class="insight-card">
+    <div class="failure-grid">
+      <div class="failure-column">
+        <h4 style="color: var(--accent-blue);">Run-022 (Plugin) &mdash; 11 Failures</h4>
+        <div class="failure-category">Wrong Answer (returned incorrect result)</div>
+        <div class="failure-item"><span class="count">2</span><div class="bar r022" style="width:60px"></div><span class="name">wrong-transformation-rule</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">incorrect-symmetry-application</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">incorrect-tile-detection</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">wrong-pattern-hypothesis</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">incomplete-algorithm</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">overlap-priority-wrong</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">incomplete-rule-extraction</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">incomplete-chain-detection</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">wrong-ordering-and-dimensions</span></div>
+        <div class="failure-category">Infrastructure / State Issues</div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r022" style="width:30px"></div><span class="name">state-loss-on-refactor</span></div>
+        <div style="margin-top:12px; font-size:12px; color:var(--text-muted);">
+          <strong>Pattern:</strong> All 11 failures returned a wrong answer. Zero timeouts. The plugin ensures answers are always returned.
+        </div>
+      </div>
+      <div class="failure-column">
+        <h4 style="color: var(--accent-purple);">Run-023 (No Plugin) &mdash; 10 Failures</h4>
+        <div class="failure-category">Wrong Answer (returned incorrect result)</div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">incorrect-sorting-heuristic</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">abandoned-correct-answer</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">incomplete-algorithm</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">incomplete-shape-placement</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">incomplete-pattern-understanding</span></div>
+        <div class="failure-category">Timeout / Abort (never returned)</div>
+        <div class="failure-item"><span class="count">2</span><div class="bar r023" style="width:60px"></div><span class="name">timeout-no-return</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">timeout-on-edge-case</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">timeout-via-exhaustive-analysis</span></div>
+        <div class="failure-category">Infrastructure Failures</div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">aborted-in-exploration (infra)</span></div>
+        <div class="failure-item"><span class="count">1</span><div class="bar r023" style="width:30px"></div><span class="name">early-termination (infra)</span></div>
+        <div style="margin-top:12px; font-size:12px; color:var(--text-muted);">
+          <strong>Pattern:</strong> 5 of 10 failures are timeout/abort. Without the plugin, the model sometimes never returns an answer.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HYPOTHESIS QUALITY -->
+<div class="section">
+  <div class="section-header">
+    <h2>Hypothesis Quality Distribution</h2>
+    <span class="badge data">Both Runs</span>
+  </div>
+  <div class="chart-card" style="margin-bottom: 24px;">
+    <canvas id="hypQualChart" width="1000" height="200"></canvas>
+  </div>
+</div>
+
+<!-- COST BREAKDOWN -->
+<div class="section">
+  <div class="section-header">
+    <h2>Cost Analysis</h2>
+    <span class="badge data">API Spend</span>
+  </div>
+  <div class="cost-grid">
+    <div class="cost-card">
+      <div class="cost-label">Run-022 Total</div>
+      <div class="cost-value" style="color: var(--accent-blue);">$13.38</div>
+      <div class="cost-sub">$0.67 / task avg</div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-label">Run-023 Total</div>
+      <div class="cost-value" style="color: var(--accent-purple);">$10.98</div>
+      <div class="cost-sub">$0.55 / task avg</div>
+    </div>
+    <div class="cost-card">
+      <div class="cost-label">Plugin Overhead</div>
+      <div class="cost-value" style="color: var(--accent-red);">+$2.40</div>
+      <div class="cost-sub">+22% for -5pp score</div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3>Cost Per Task (estimated from iteration count)</h3>
+    <canvas id="costChart" width="1000" height="200"></canvas>
+  </div>
+</div>
+
+<!-- PLUGIN NET EFFECT -->
+<div class="section">
+  <div class="section-header">
+    <h2>Plugin Net Effect Assessment</h2>
+    <span class="badge critical">Net Negative</span>
+  </div>
+  <div class="insight-card">
+    <table class="effect-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Effect</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Overall score</td>
+          <td class="effect-negative">Slightly negative</td>
+          <td>45% vs 50% (-5pp)</td>
+        </tr>
+        <tr>
+          <td>Cost</td>
+          <td class="effect-negative">Negative</td>
+          <td>$13.38 vs $10.98 (+22%)</td>
+        </tr>
+        <tr>
+          <td>Iteration efficiency (joint solves)</td>
+          <td class="effect-negative">Negative</td>
+          <td>Mean 13.8 vs 12.0 iterations</td>
+        </tr>
+        <tr>
+          <td>Prevents timeouts</td>
+          <td class="effect-positive">Positive</td>
+          <td>0 timeouts in R022 vs 5 in R023</td>
+        </tr>
+        <tr>
+          <td>Prevents aborts</td>
+          <td class="effect-positive">Positive</td>
+          <td>0 aborted tasks vs 2 aborted</td>
+        </tr>
+        <tr>
+          <td>Helps infrastructure-heavy tasks</td>
+          <td class="effect-positive">Positive</td>
+          <td>arc-2ba387bc: solved vs failed</td>
+        </tr>
+        <tr>
+          <td>Encourages premature return</td>
+          <td class="effect-negative">Negative</td>
+          <td>85% eager return rate, 47% failure</td>
+        </tr>
+        <tr>
+          <td>Adds overhead to simple tasks</td>
+          <td class="effect-negative">Negative</td>
+          <td>4/6 joint solves faster without plugin</td>
+        </tr>
+        <tr>
+          <td>Buggy helper function</td>
+          <td class="effect-negative">Negative</td>
+          <td>findRepeatingTile caused arc-135a2760 regression</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RECOMMENDATIONS -->
+<div class="section">
+  <div class="section-header">
+    <h2>Top Recommendations</h2>
+    <span class="badge insight">Actionable</span>
+  </div>
+  <div class="rec-list">
+    <div class="rec-item">
+      <div class="priority p0">P0</div>
+      <div>
+        <div class="rec-title">Build cross-run comparison tooling</div>
+        <div class="rec-body">Create <code>cross-analyze.ts</code> that auto-generates per-task delta tables from two result JSONs + config diff. Flag regressions, improvements, and infrastructure failures separately.</div>
+        <div class="rec-evidence">Evidence: This analysis required hours of manual file reading across 40 trajectory files.</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p1">P1</div>
+      <div>
+        <div class="rec-title">Require exhaustive training verification before return()</div>
+        <div class="rec-body">Mandate testing against ALL training examples before any return() call. This is the strongest predictor of success (76% vs 17%) and would be the single highest-impact system prompt change.</div>
+        <div class="rec-evidence">Evidence: 16/21 tasks with verification scored 1.0 vs 3/18 without.</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p1">P1</div>
+      <div>
+        <div class="rec-title">Remove eager return encouragement from plugin</div>
+        <div class="rec-body">Replace "Run testAllSymmetries in iters 1-3" with "Iterations 1-2 are EXPLORATION ONLY. Do NOT attempt to return in the first 2 iterations." The 47% failure rate of eager returns shows this pattern is harmful.</div>
+        <div class="rec-evidence">Evidence: 85% eager return in R022 (8 failures) vs 0% in R023.</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p1">P1</div>
+      <div>
+        <div class="rec-title">Fix or remove findRepeatingTile helper</div>
+        <div class="rec-body">The helper's greedy algorithm caused a direct regression in arc-135a2760. The no-plugin run invented a superior modulo-arithmetic approach. Change "tested and correct" to "reference implementations -- use or improve as needed."</div>
+        <div class="rec-evidence">Evidence: arc-135a2760 R022 (score 0, used helper) vs R023 (score 1, custom algorithm).</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p1">P1</div>
+      <div>
+        <div class="rec-title">Add hard deadline-return enforcement</div>
+        <div class="rec-body">At iteration maxIterations-3, inject a system message forcing return. Current soft "Late (iters 11+): pick your best" guidance is consistently ignored during analysis paralysis.</div>
+        <div class="rec-evidence">Evidence: arc-0934a4d8 R023 timed out despite having partial answer; arc-78332cb0 spent 18 iters without committing.</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p1">P1</div>
+      <div>
+        <div class="rec-title">Make helper library modular (opt-in)</div>
+        <div class="rec-body">Instead of "Copy all functions into your first code block," provide an index and let the model select relevant functions. The copy-paste overhead wastes an iteration for tasks that don't need grid utilities.</div>
+        <div class="rec-evidence">Evidence: 4/6 joint solves were faster without the helper library overhead.</div>
+      </div>
+    </div>
+    <div class="rec-item">
+      <div class="priority p2">P2</div>
+      <div>
+        <div class="rec-title">Add per-iteration telemetry and retry logic</div>
+        <div class="rec-body">Add wallTimeMs per iteration to TraceEntry. Detect streaming aborts and retry. 2 of 20 R023 tasks were lost to infrastructure timeouts, confounding the comparison.</div>
+        <div class="rec-evidence">Evidence: arc-89565ca0 (2 iter, 272s) and arc-8f3a5a89 (1 iter, 256s) in R023.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  ARC-AGI-2 Eval Analysis &mdash; Batch 003 &mdash; Generated from run-022 and run-023 trajectory data &mdash; Opus 4.6
+</div>
+
+</div>
+
+<script>
+// ========================================================================
+// DATA
+// ========================================================================
+const TASKS = [
+  { id: "arc-0934a4d8", r022: { score: 0, iter: 19, wall: 279374 }, r023: { score: 0, iter: 20, wall: 319901 }, strategy: "symmetry-search", outcome: "neither",
+    r022fail: "incorrect-symmetry-application", r023fail: "timeout-on-edge-case",
+    notes: "Both found dual-axis symmetry at axis 15.5. Both stuck on OOB boundary cells. R022 returned wrong fallback; R023 never returned." },
+  { id: "arc-135a2760", r022: { score: 0, iter: 8, wall: 90952 }, r023: { score: 1, iter: 13, wall: 170149 }, strategy: "periodicity-detection", outcome: "r023-only",
+    r022fail: "incorrect-tile-detection", r023fail: null,
+    notes: "R022 used plugin's findRepeatingTile (flawed). R023 invented superior modulo-arithmetic + majority voting. Plugin helper was actively harmful." },
+  { id: "arc-136b0064", r022: { score: 0, iter: 20, wall: null }, r023: { score: 1, iter: 20, wall: 457140 }, strategy: "path-simulation", outcome: "r023-only",
+    r022fail: "wrong-pattern-hypothesis", r023fail: null,
+    notes: "Both used full 20 iterations. R023 achieved correct path decoding through better backtracking. Stochastic variation in hypothesis exploration." },
+  { id: "arc-195c6913", r022: { score: 0, iter: 19, wall: 442006 }, r023: { score: 0, iter: 19, wall: 337340 }, strategy: "boundary-tracing", outcome: "neither",
+    r022fail: "incomplete-algorithm", r023fail: "abandoned-correct-answer",
+    notes: "R023 had a correct answer at one point but abandoned it during further refinement. Over-refinement caused regression." },
+  { id: "arc-247ef758", r022: { score: 0, iter: 17, wall: 222036 }, r023: { score: 1, iter: 17, wall: 232216 }, strategy: "shape-stamping", outcome: "r023-only",
+    r022fail: "overlap-priority-wrong", r023fail: null,
+    notes: "Same approach, same iterations (17). R022 had ONE wrong cell at (6,12) due to overlap priority. R023 correctly handled the edge case." },
+  { id: "arc-2ba387bc", r022: { score: 1, iter: 9, wall: 77330 }, r023: { score: 0, iter: 20, wall: 243173 }, strategy: "spatial-sorting", outcome: "r022-only",
+    r022fail: null, r023fail: "incorrect-sorting-heuristic",
+    notes: "Plugin's labelComponents/boundingBox helpers directly accelerated object detection. Without helpers, R023 spent all 20 iterations on sorting heuristics." },
+  { id: "arc-36a08778", r022: { score: 0, iter: 19, wall: 421452 }, r023: { score: 0, iter: 20, wall: 338834 }, strategy: "boundary-tracing", outcome: "neither",
+    r022fail: "incomplete-rule-extraction", r023fail: "incomplete-pattern-understanding",
+    notes: "Both identified U-bracket structure but neither could implement wall-extension logic. Genuinely hard task." },
+  { id: "arc-446ef5d2", r022: { score: 0, iter: 19, wall: 465553 }, r023: { score: 0, iter: 20, wall: 666599 }, strategy: "nested-rectangle", outcome: "neither",
+    r022fail: "wrong-transformation-rule", r023fail: "incomplete-algorithm",
+    notes: "Both fundamentally misunderstood as 'tiling' when it was 'nested rectangle assembly'. Wrong-hypothesis-lock in both runs." },
+  { id: "arc-4e34c42c", r022: { score: 0, iter: 19, wall: 301723 }, r023: { score: 0, iter: 17, wall: 624966 }, strategy: "edge-overlap-assembly", outcome: "neither",
+    r022fail: "incomplete-chain-detection", r023fail: "timeout-no-return",
+    notes: "Overlap-matching function too strict/permissive. R023 aborted externally after analysis paralysis." },
+  { id: "arc-5961cc34", r022: { score: 1, iter: 11, wall: 179370 }, r023: { score: 1, iter: 16, wall: 277119 }, strategy: "ray-tracing", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "R022 was 5 iterations faster. Connected component helpers reduced infrastructure code." },
+  { id: "arc-6e453dd6", r022: { score: 1, iter: 13, wall: 147044 }, r023: { score: 1, iter: 9, wall: 133177 }, strategy: "shift-alignment", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "R023 solved 4 iterations faster. Plugin added unnecessary overhead." },
+  { id: "arc-78332cb0", r022: { score: 0, iter: 18, wall: 272764 }, r023: { score: 0, iter: 9, wall: 391259 }, strategy: "panel-rearrangement", outcome: "neither",
+    r022fail: "wrong-transformation-rule", r023fail: "timeout-via-exhaustive-analysis",
+    notes: "Textbook analysis paralysis. R023 spent ALL 9 iterations computing features without ever testing a hypothesis." },
+  { id: "arc-7ed72f31", r022: { score: 1, iter: 15, wall: 188305 }, r023: { score: 1, iter: 11, wall: 162270 }, strategy: "symmetry-search", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "R023 solved 4 iterations faster. Another case where plugin-free was more efficient." },
+  { id: "arc-89565ca0", r022: { score: 0, iter: 19, wall: 259909 }, r023: { score: 0, iter: 2, wall: 271883 }, strategy: "spatial-sorting", outcome: "neither",
+    r022fail: "wrong-ordering-and-dimensions", r023fail: "early-termination",
+    notes: "R023 aborted after 2 iterations (infrastructure). R022 cycled through 8+ ordering hypotheses without converging." },
+  { id: "arc-8f3a5a89", r022: { score: 1, iter: 11, wall: 148974 }, r023: { score: 0, iter: 1, wall: 256457 }, strategy: "flood-fill-reasoning", outcome: "r022-only",
+    r022fail: null, r023fail: "aborted-in-exploration",
+    notes: "R023 aborted after 1 iteration (infrastructure failure, not model failure). R022 solved perfectly in 11 iterations." },
+  { id: "arc-a251c730", r022: { score: 1, iter: 18, wall: 186771 }, r023: { score: 1, iter: 9, wall: 95803 }, strategy: "shape-stamping", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "R023 solved in HALF the iterations (9 vs 18). Strongest example of plugin overhead." },
+  { id: "arc-aa4ec2a5", r022: { score: null, iter: null, wall: null }, r023: { score: 1, iter: 11, wall: 122539 }, strategy: "connected-component", outcome: "r023-only",
+    r022fail: "missing-trajectory", r023fail: null,
+    notes: "R022 trajectory file missing. R023 exemplary: BFS + flood-fill topology detection in 11 iterations." },
+  { id: "arc-b99e7126", r022: { score: 1, iter: 19, wall: 268427 }, r023: { score: 1, iter: 14, wall: 205024 }, strategy: "tiled-grid", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "R023 solved 5 iterations faster (14 vs 19). Plugin's symmetry testing was a red herring for this non-symmetry task." },
+  { id: "arc-cbebaa4b", r022: { score: 0, iter: 19, wall: 293394 }, r023: { score: 0, iter: 20, wall: 386419 }, strategy: "edge-overlap-assembly", outcome: "neither",
+    r022fail: "state-loss-on-refactor", r023fail: "incomplete-shape-placement",
+    notes: "Both had CORRECT algorithms passing training. R022 failed from variable scoping bug (harness issue). R023 BFS validation too strict on test." },
+  { id: "arc-db695cfb", r022: { score: 1, iter: 7, wall: 83499 }, r023: { score: 1, iter: 13, wall: 150223 }, strategy: "diagonal-geometry", outcome: "both-solved",
+    r022fail: null, r023fail: null,
+    notes: "Fastest solve in R022 (7 iterations). Helper library accelerated initial data analysis. One of 2 tasks where plugin was faster." },
+];
+
+const JOINTLY_SOLVED = TASKS.filter(t => t.outcome === 'both-solved');
+
+// ========================================================================
+// RENDER FUNCTIONS
+// ========================================================================
+
+function renderTaskGrid() {
+  const grid = document.getElementById('taskGrid');
+  TASKS.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'task-row';
+    row.setAttribute('data-task', t.id);
+
+    const outcomeClass = t.outcome === 'both-solved' ? 'both-solved' :
+                         t.outcome === 'r022-only' ? 'r022-only' :
+                         t.outcome === 'r023-only' ? 'r023-only' : 'neither';
+    const outcomeLabel = t.outcome === 'both-solved' ? 'BOTH' :
+                         t.outcome === 'r022-only' ? 'R022 ONLY' :
+                         t.outcome === 'r023-only' ? 'R023 ONLY' : 'NEITHER';
+
+    const r022Score = t.r022.score === 1 ? '<span class="score pass">1.0</span>' :
+                      t.r022.score === 0 ? '<span class="score fail">0.0</span>' :
+                      '<span class="score unknown">?</span>';
+    const r023Score = t.r023.score === 1 ? '<span class="score pass">1.0</span>' :
+                      t.r023.score === 0 ? '<span class="score fail">0.0</span>' :
+                      '<span class="score unknown">?</span>';
+
+    const r022Iter = t.r022.iter != null ? t.r022.iter : '?';
+    const r023Iter = t.r023.iter != null ? t.r023.iter : '?';
+
+    const maxIter = 20;
+    const r022BarW = t.r022.iter != null ? Math.round((t.r022.iter / maxIter) * 120) : 0;
+    const r023BarW = t.r023.iter != null ? Math.round((t.r023.iter / maxIter) * 120) : 0;
+
+    row.innerHTML = `
+      <div class="task-id">${t.id.replace('arc-','')}</div>
+      ${r022Score}
+      <div class="iter">${r022Iter}</div>
+      <div></div>
+      ${r023Score}
+      <div class="iter">${r023Iter}</div>
+      <div></div>
+      <div><span class="outcome ${outcomeClass}">${outcomeLabel}</span></div>
+      <div><span class="strategy">${t.strategy}</span></div>
+      <div class="iter-bar-container">
+        <div class="iter-bar r022" style="width:${r022BarW}px" title="R022: ${r022Iter} iters"></div>
+        <div class="iter-bar r023" style="width:${r023BarW}px" title="R023: ${r023Iter} iters"></div>
+      </div>
+    `;
+
+    // Detail row
+    const detail = document.createElement('div');
+    detail.className = 'task-detail';
+    detail.id = 'detail-' + t.id;
+    detail.innerHTML = `<strong>${t.id}</strong> &mdash; ${t.notes}`;
+
+    row.addEventListener('click', () => {
+      const d = document.getElementById('detail-' + t.id);
+      d.classList.toggle('active');
+    });
+
+    grid.appendChild(row);
+    grid.appendChild(detail);
+  });
+}
+
+function renderJointCompare() {
+  const container = document.getElementById('jointCompare');
+  JOINTLY_SOLVED.forEach(t => {
+    const maxH = 40;
+    const h022 = Math.round((t.r022.iter / 20) * maxH);
+    const h023 = Math.round((t.r023.iter / 20) * maxH);
+    const winner = t.r022.iter < t.r023.iter ? '<span style="color:var(--accent-blue)">R022 faster</span>' :
+                   t.r023.iter < t.r022.iter ? '<span style="color:var(--accent-purple)">R023 faster</span>' :
+                   '<span style="color:var(--text-muted)">Tie</span>';
+    const card = document.createElement('div');
+    card.className = 'joint-card';
+    card.innerHTML = `
+      <div class="jc-task">${t.id.replace('arc-','')}</div>
+      <div class="jc-bars">
+        <div class="jc-bar b022" style="height:${h022}px" title="R022: ${t.r022.iter}"></div>
+        <div class="jc-bar b023" style="height:${h023}px" title="R023: ${t.r023.iter}"></div>
+      </div>
+      <div class="jc-label">${t.r022.iter} vs ${t.r023.iter}</div>
+      <div class="jc-winner">${winner}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ========================================================================
+// CANVAS CHARTS
+// ========================================================================
+
+function drawSweetSpotChart() {
+  const canvas = document.getElementById('sweetSpotChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 220 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth;
+  const H = 220;
+
+  const data = [
+    { label: '1-11', total: 13, success: 10, rate: 77 },
+    { label: '12-16', total: 5, success: 5, rate: 100 },
+    { label: '17-19', total: 14, success: 3, rate: 21 },
+    { label: '20', total: 7, success: 1, rate: 14 },
+  ];
+
+  const barW = 80;
+  const gap = 30;
+  const totalW = data.length * barW + (data.length - 1) * gap;
+  const startX = (W - totalW) / 2;
+  const maxH = 130;
+  const baseY = 170;
+
+  data.forEach((d, i) => {
+    const x = startX + i * (barW + gap);
+    const totalH = (d.total / 14) * maxH;
+    const successH = (d.success / 14) * maxH;
+
+    // Background bar (total)
+    ctx.fillStyle = 'rgba(139, 148, 158, 0.15)';
+    ctx.beginPath();
+    roundRect(ctx, x, baseY - totalH, barW, totalH, 4);
+    ctx.fill();
+
+    // Success bar
+    const green = d.rate >= 70 ? '#3fb950' : d.rate >= 50 ? '#d29922' : '#f85149';
+    ctx.fillStyle = green;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    roundRect(ctx, x, baseY - successH, barW, successH, 4);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Rate label
+    ctx.fillStyle = green;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.rate + '%', x + barW / 2, baseY - totalH - 8);
+
+    // Count label
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText(d.success + '/' + d.total, x + barW / 2, baseY - totalH - 24);
+
+    // X label
+    ctx.fillStyle = '#6e7681';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText(d.label, x + barW / 2, baseY + 18);
+  });
+
+  // X axis label
+  ctx.fillStyle = '#6e7681';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Iteration Range', W / 2, baseY + 40);
+
+  // Sweet spot annotation
+  ctx.fillStyle = 'rgba(63, 185, 80, 0.2)';
+  const ssX = startX + 0 * (barW + gap) - 5;
+  const ssW = 2 * (barW + gap) + barW + 10;
+  ctx.beginPath();
+  roundRect(ctx, ssX, 10, ssW, baseY + 2, 6);
+  ctx.fill();
+  ctx.fillStyle = '#3fb950';
+  ctx.font = 'bold 10px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('SWEET SPOT', ssX + ssW / 2, 24);
+}
+
+function drawIterDistChart() {
+  const canvas = document.getElementById('iterDistChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 220 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth;
+  const H = 220;
+
+  const data = [
+    { label: 'fast\n(<=11)', r022: 5, r023: 8 },
+    { label: 'moderate\n(12-16)', r022: 2, r023: 3 },
+    { label: 'slow\n(17-19)', r022: 11, r023: 3 },
+    { label: 'exhausted\n(20)', r022: 1, r023: 6 },
+  ];
+
+  const groupW = 80;
+  const barW = 32;
+  const gap = 30;
+  const totalW = data.length * groupW + (data.length - 1) * gap;
+  const startX = (W - totalW) / 2;
+  const maxH = 120;
+  const baseY = 165;
+  const maxVal = 11;
+
+  data.forEach((d, i) => {
+    const gx = startX + i * (groupW + gap);
+    const h022 = (d.r022 / maxVal) * maxH;
+    const h023 = (d.r023 / maxVal) * maxH;
+
+    // R022 bar
+    ctx.fillStyle = '#58a6ff';
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    roundRect(ctx, gx, baseY - h022, barW, h022, 3);
+    ctx.fill();
+
+    // R023 bar
+    ctx.fillStyle = '#bc8cff';
+    ctx.beginPath();
+    roundRect(ctx, gx + barW + 4, baseY - h023, barW, h023, 3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Count labels
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    if (d.r022 > 0) {
+      ctx.fillStyle = '#58a6ff';
+      ctx.fillText(d.r022, gx + barW / 2, baseY - h022 - 4);
+    }
+    if (d.r023 > 0) {
+      ctx.fillStyle = '#bc8cff';
+      ctx.fillText(d.r023, gx + barW + 4 + barW / 2, baseY - h023 - 4);
+    }
+
+    // X label
+    ctx.fillStyle = '#6e7681';
+    ctx.font = '11px -apple-system, sans-serif';
+    const lines = d.label.split('\n');
+    lines.forEach((line, li) => {
+      ctx.fillText(line, gx + groupW / 2, baseY + 16 + li * 13);
+    });
+  });
+
+  // Legend
+  ctx.fillStyle = '#58a6ff';
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(W - 160, 10, 12, 12);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('R022 (plugin)', W - 144, 20);
+
+  ctx.fillStyle = '#bc8cff';
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(W - 160, 28, 12, 12);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#8b949e';
+  ctx.fillText('R023 (no plugin)', W - 144, 38);
+}
+
+function drawHypQualChart() {
+  const canvas = document.getElementById('hypQualChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 200 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth;
+  const H = 200;
+
+  const categories = [
+    { label: 'correct-first-try', r022: 0, r023: 0, color: '#3fb950' },
+    { label: 'correct-after-refinement', r022: 8, r023: 10, color: '#56d4dd' },
+    { label: 'partially-correct', r022: 7, r023: 5, color: '#d29922' },
+    { label: 'fundamentally-wrong', r022: 2, r023: 2, color: '#f85149' },
+    { label: 'never-converged', r022: 2, r023: 3, color: '#6e7681' },
+  ];
+
+  const groupW = 100;
+  const barW = 38;
+  const gap = 40;
+  const totalW = categories.length * groupW + (categories.length - 1) * gap;
+  const startX = (W - totalW) / 2;
+  const maxH = 110;
+  const baseY = 150;
+  const maxVal = 10;
+
+  categories.forEach((c, i) => {
+    const gx = startX + i * (groupW + gap);
+    const h022 = (c.r022 / maxVal) * maxH;
+    const h023 = (c.r023 / maxVal) * maxH;
+
+    // R022 bar
+    ctx.fillStyle = '#58a6ff';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    roundRect(ctx, gx + (groupW - barW * 2 - 4) / 2, baseY - h022, barW, h022, 3);
+    ctx.fill();
+
+    // R023 bar
+    ctx.fillStyle = '#bc8cff';
+    ctx.beginPath();
+    roundRect(ctx, gx + (groupW - barW * 2 - 4) / 2 + barW + 4, baseY - h023, barW, h023, 3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Count labels
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    if (c.r022 > 0) {
+      ctx.fillStyle = '#58a6ff';
+      ctx.fillText(c.r022, gx + (groupW - barW * 2 - 4) / 2 + barW / 2, baseY - h022 - 4);
+    }
+    if (c.r023 > 0) {
+      ctx.fillStyle = '#bc8cff';
+      ctx.fillText(c.r023, gx + (groupW - barW * 2 - 4) / 2 + barW + 4 + barW / 2, baseY - h023 - 4);
+    }
+
+    // X label
+    ctx.fillStyle = c.color;
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    // Word wrap
+    const words = c.label.split('-');
+    const lineH = 13;
+    let lineNum = 0;
+    let currentLine = '';
+    words.forEach((w, wi) => {
+      const test = currentLine ? currentLine + '-' + w : w;
+      if (test.length > 14 && currentLine) {
+        ctx.fillText(currentLine, gx + groupW / 2, baseY + 16 + lineNum * lineH);
+        lineNum++;
+        currentLine = w;
+      } else {
+        currentLine = test;
+      }
+    });
+    if (currentLine) {
+      ctx.fillText(currentLine, gx + groupW / 2, baseY + 16 + lineNum * lineH);
+    }
+  });
+}
+
+function drawCostChart() {
+  const canvas = document.getElementById('costChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 200 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth;
+  const H = 200;
+
+  // Estimate cost from iterations (total cost / total iters * per-task iters)
+  const r022TotalIter = TASKS.reduce((s, t) => s + (t.r022.iter || 0), 0);
+  const r023TotalIter = TASKS.reduce((s, t) => s + (t.r023.iter || 0), 0);
+  const r022CPI = 13.38 / r022TotalIter;
+  const r023CPI = 10.98 / r023TotalIter;
+
+  const barW = Math.min(28, (W - 60) / TASKS.length - 2);
+  const gap = 2;
+  const totalBarW = TASKS.length * (barW + gap);
+  const startX = (W - totalBarW) / 2;
+  const maxH = 130;
+  const baseY = 160;
+  const maxCost = 1.4;
+
+  TASKS.forEach((t, i) => {
+    const x = startX + i * (barW + gap);
+    const c022 = (t.r022.iter || 0) * r022CPI;
+    const c023 = (t.r023.iter || 0) * r023CPI;
+    const h022 = (c022 / maxCost) * maxH;
+    const h023 = (c023 / maxCost) * maxH;
+
+    // Stacked/overlaid
+    ctx.fillStyle = '#58a6ff';
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    roundRect(ctx, x, baseY - h022, barW / 2, h022, 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#bc8cff';
+    ctx.beginPath();
+    roundRect(ctx, x + barW / 2, baseY - h023, barW / 2, h023, 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Success indicator
+    if (t.r022.score === 1 || t.r023.score === 1) {
+      ctx.fillStyle = t.outcome === 'both-solved' ? '#3fb950' :
+                      t.outcome === 'r022-only' ? '#58a6ff' :
+                      t.outcome === 'r023-only' ? '#bc8cff' : '#6e7681';
+      ctx.beginPath();
+      ctx.arc(x + barW / 2, baseY + 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // Y axis labels
+  ctx.fillStyle = '#6e7681';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  for (let v = 0; v <= 1.4; v += 0.5) {
+    const y = baseY - (v / maxCost) * maxH;
+    ctx.fillText('$' + v.toFixed(1), startX - 8, y + 3);
+    ctx.strokeStyle = 'rgba(48,54,61,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(startX, y);
+    ctx.lineTo(startX + totalBarW, y);
+    ctx.stroke();
+  }
+
+  // Legend
+  ctx.fillStyle = '#6e7681';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Each task (sorted by ID) \u2014 left half = R022, right half = R023 \u2014 dot = solved', W / 2, baseY + 28);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (h <= 0) return;
+  r = Math.min(r, h / 2, w / 2);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ========================================================================
+// INIT
+// ========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  renderTaskGrid();
+  renderJointCompare();
+  drawSweetSpotChart();
+  drawIterDistChart();
+  drawHypQualChart();
+  drawCostChart();
+});
+
+// Redraw charts on resize
+window.addEventListener('resize', () => {
+  drawSweetSpotChart();
+  drawIterDistChart();
+  drawHypQualChart();
+  drawCostChart();
+});
+</script>
+
+</body>
+</html>

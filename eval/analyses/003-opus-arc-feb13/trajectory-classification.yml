@@ -1,0 +1,1092 @@
+# Trajectory Classification: Matched-Pair ARC Eval
+# Run-022: Opus 4.6 WITH arc-solver.md plugin
+# Run-023: Opus 4.6 WITHOUT arc-solver.md plugin
+# 20 matched task IDs, 39 trajectory files (run-022 missing arc-aa4ec2a5)
+# Generated: 2026-02-13
+
+taxonomy:
+  solvingStrategy:
+    description: Primary algorithmic approach used to discover the transformation rule
+    values:
+      - symmetry-search         # Testing reflection/rotation/transpose transforms
+      - connected-component     # BFS/flood-fill to decompose grid into objects
+      - ray-tracing             # Simulating beam/ray propagation through grid
+      - tiled-grid              # Macro/micro grid decomposition (e.g., 7x7 of 3x3 cells)
+      - periodicity-detection   # Modulo arithmetic, repeating tile discovery
+      - shape-stamping          # Template extraction and placement at markers
+      - edge-overlap-assembly   # Assembling pieces via shared connector/edge patterns
+      - boundary-tracing        # Following staircase/wall boundaries
+      - spatial-sorting         # Sorting objects by spatial properties (size, position, overlap)
+      - panel-rearrangement     # Rearranging sub-panels into a new layout
+      - nested-rectangle        # Recognizing nested/layered rectangular structures
+      - path-simulation         # Simulating movement along encoded paths
+      - shift-alignment         # Shifting objects to align with reference structures
+      - diagonal-geometry       # Diagonal line drawing, perpendicular extensions
+      - flood-fill-reasoning    # Using flood-fill reachability for transformation logic
+
+  hypothesisQuality:
+    description: How quickly and correctly the agent converged on the right rule
+    values:
+      - correct-first-try       # First substantive hypothesis was correct
+      - correct-after-refinement # Needed 2-4 hypothesis revisions to converge
+      - partially-correct       # Got the general idea but missed edge cases
+      - fundamentally-wrong     # Core hypothesis was incorrect, never recovered
+      - never-converged         # Cycled through hypotheses without settling
+
+  iterationEfficiency:
+    description: Categorization by iteration count relative to 20-iteration budget
+    values:
+      - fast                    # <= 11 iterations (solved with budget to spare)
+      - moderate                # 12-16 iterations
+      - slow                    # 17-19 iterations
+      - exhausted               # 20 iterations (hit budget limit)
+
+  explorationDepth:
+    description: Ratio of exploration iterations to total iterations
+    values:
+      - light                   # < 30% exploration before implementing
+      - balanced                # 30-60% exploration
+      - heavy                   # > 60% exploration before implementing
+
+  verificationBehavior:
+    description: How the agent validated its solution before returning
+    values:
+      - exhaustive-all-training # Tested against all training examples
+      - partial-training        # Tested against some but not all examples
+      - no-verification         # Returned without verification
+      - verification-after-fail # Verified only after initial implementation failed
+
+  errorRecovery:
+    description: How the agent handled errors and failed hypotheses
+    values:
+      - clean-recovery          # Recovered from errors without losing progress
+      - partial-recovery        # Recovered but lost some state/progress
+      - cascading-failure       # Errors compounded, leading to worse outcomes
+      - no-errors               # No significant errors encountered
+
+  deadlineBehavior:
+    description: How the agent managed its iteration budget near the end
+    values:
+      - comfortable-return      # Returned with iterations to spare, confident
+      - deadline-aware-return   # Returned with explicit awareness of budget pressure
+      - deadline-panic          # Rushed return under pressure, quality degraded
+      - timeout-no-return       # Hit iteration limit without returning an answer
+      - aborted-externally      # Task terminated by external process
+
+  pluginUsage:
+    description: How the agent used (or didn't use) the arc-solver.md helper library (run-022 only)
+    values:
+      - used-helpers            # Copied and used provided helper functions
+      - reimplemented           # Wrote equivalent functions from scratch
+      - mixed                   # Used some helpers, reimplemented others
+      - not-applicable          # Run-023 (no plugin available)
+
+  delegationUsage:
+    description: Whether the agent used rlm() or llm() sub-calls
+    values:
+      - none                    # No delegation
+      - rlm-used               # Used rlm() for sub-reasoning
+      - llm-used               # Used llm() for text reasoning
+
+  failureMode:
+    description: Primary reason for failure (null if succeeded)
+    values:
+      - incorrect-symmetry-application
+      - incorrect-tile-detection
+      - wrong-pattern-hypothesis
+      - incomplete-algorithm
+      - overlap-priority-wrong
+      - incomplete-rule-extraction
+      - wrong-transformation-rule
+      - incomplete-chain-detection
+      - wrong-ordering-and-dimensions
+      - state-loss-on-refactor
+      - incorrect-sorting-heuristic
+      - abandoned-correct-answer
+      - timeout-on-edge-case
+      - timeout-no-return
+      - timeout-via-exhaustive-analysis
+      - aborted-in-exploration
+      - early-termination
+      - incomplete-shape-placement
+      - incomplete-pattern-understanding
+
+  verdict:
+    description: Final outcome classification
+    values:
+      - perfect                 # Score 1.0, correct answer
+      - wrong-answer            # Score 0, returned an incorrect answer
+      - timeout                 # Hit iteration/time limit without answer
+      - error                   # External error or abort
+
+# ============================================================================
+# Per-task classifications
+# ============================================================================
+
+tasks:
+
+  # --------------------------------------------------------------------------
+  # arc-0934a4d8: Dual-axis symmetry reconstruction of masked region
+  # --------------------------------------------------------------------------
+  run-022--arc-0934a4d8:
+    taskId: arc-0934a4d8
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 279374
+    solvingStrategy: symmetry-search
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: incorrect-symmetry-application
+    verdict: wrong-answer
+    notes: >
+      Correctly identified dual-axis reflection symmetry and validated on all training examples.
+      Failed on test because masked region overlapped grid boundary (cols 0-1), and the
+      fallback heuristic for out-of-bounds mirror targets was wrong. Last 5 of 9 rows correct.
+
+  run-023--arc-0934a4d8:
+    taskId: arc-0934a4d8
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 20
+    wallTimeMs: 319901
+    solvingStrategy: symmetry-search
+    hypothesisQuality: partially-correct
+    iterationEfficiency: exhausted
+    explorationDepth: heavy
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: timeout-no-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: timeout-on-edge-case
+    verdict: timeout
+    notes: >
+      Same fundamental approach as run-022 (symmetry analysis). Also identified the correct
+      dual-axis symmetry but got stuck on the same boundary edge case. Unlike run-022,
+      never returned an answer -- spent all 20 iterations spinning on the edge case.
+
+  # --------------------------------------------------------------------------
+  # arc-135a2760: Repeating tile pattern correction within bordered regions
+  # --------------------------------------------------------------------------
+  run-022--arc-135a2760:
+    taskId: arc-135a2760
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 8
+    wallTimeMs: 90952
+    solvingStrategy: periodicity-detection
+    hypothesisQuality: partially-correct
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: partial-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: incorrect-tile-detection
+    verdict: wrong-answer
+    notes: >
+      Developed a row-wise repeating tile detection approach that passed training examples
+      but failed on the test case. The tile detection was too simplistic -- returned early
+      at iteration 8 with a wrong answer despite having 12 more iterations available.
+      Early return may have been encouraged by the plugin's "Late (iters 11+)" guidance.
+
+  run-023--arc-135a2760:
+    taskId: arc-135a2760
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 13
+    wallTimeMs: 170149
+    solvingStrategy: periodicity-detection
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Used modulo-arithmetic periodicity detection with majority voting to identify and
+      correct outlier cells. More sophisticated approach than run-022's simple tile matching.
+      Spent 13 iterations (vs 8 in run-022) but achieved a correct answer.
+
+  # --------------------------------------------------------------------------
+  # arc-136b0064: Snake-path drawing from shape-encoded instructions
+  # --------------------------------------------------------------------------
+  run-022--arc-136b0064:
+    taskId: arc-136b0064
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 20
+    wallTimeMs: null
+    solvingStrategy: path-simulation
+    hypothesisQuality: fundamentally-wrong
+    iterationEfficiency: exhausted
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: wrong-pattern-hypothesis
+    verdict: wrong-answer
+    notes: >
+      Spent all 20 iterations on this complex shape-decoding task. The core hypothesis
+      about how shapes encode path directions was off by a column offset. Manual
+      construction attempted under deadline pressure produced wrong answer.
+
+  run-023--arc-136b0064:
+    taskId: arc-136b0064
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 20
+    wallTimeMs: 457140
+    solvingStrategy: path-simulation
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: exhausted
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Also used all 20 iterations but with better hypothesis refinement. Successfully
+      decoded the shape-to-path mapping through backtracking and incremental correction.
+      The lack of plugin guidance may have allowed more flexible exploration.
+
+  # --------------------------------------------------------------------------
+  # arc-195c6913: Staircase boundary line drawing with repeating color key
+  # --------------------------------------------------------------------------
+  run-022--arc-195c6913:
+    taskId: arc-195c6913
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 442006
+    solvingStrategy: boundary-tracing
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: mixed
+    delegationUsage: none
+    failureMode: incomplete-algorithm
+    verdict: wrong-answer
+    notes: >
+      Correctly identified the high-level rule (staircase boundary lines with repeating
+      color key) but failed to implement the path-tracing algorithm correctly. The agent's
+      boundary-tracing code produced incorrect turn sequences.
+
+  run-023--arc-195c6913:
+    taskId: arc-195c6913
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 19
+    wallTimeMs: 337340
+    solvingStrategy: boundary-tracing
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: abandoned-correct-answer
+    verdict: wrong-answer
+    notes: >
+      The agent actually had a correct or near-correct answer at one point but abandoned
+      it during further refinement. The trajectory annotation explicitly flags
+      "abandoned-correct-answer" as the failure mode. This is a regression caused by
+      over-refinement.
+
+  # --------------------------------------------------------------------------
+  # arc-247ef758: Shape placement into bordered rectangle via color markers
+  # --------------------------------------------------------------------------
+  run-022--arc-247ef758:
+    taskId: arc-247ef758
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 17
+    wallTimeMs: 222036
+    solvingStrategy: shape-stamping
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: overlap-priority-wrong
+    verdict: wrong-answer
+    notes: >
+      Test 0 was perfect but test 1 had a single-cell error at (6,12) due to incorrect
+      overlap priority when two shapes occupied the same cell. ARC uses exact-match scoring
+      so one wrong cell across either test grid yields score 0.
+
+  run-023--arc-247ef758:
+    taskId: arc-247ef758
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 17
+    wallTimeMs: 232216
+    solvingStrategy: shape-stamping
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Same number of iterations (17) as run-022 and same general approach. The key
+      difference: run-023 correctly handled the overlap priority that run-022 got wrong.
+      Self-correction pattern was critical for fixing this edge case.
+
+  # --------------------------------------------------------------------------
+  # arc-2ba387bc: Block extraction, classification (hollow/solid), and sorting
+  # --------------------------------------------------------------------------
+  run-022--arc-2ba387bc:
+    taskId: arc-2ba387bc
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 9
+    wallTimeMs: 77330
+    solvingStrategy: spatial-sorting
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Efficient solve using helper library for block extraction. Quickly identified
+      hollow vs solid classification and row-sorted pairing. The helper library's
+      labelComponents and boundingBox functions directly applicable here.
+
+  run-023--arc-2ba387bc:
+    taskId: arc-2ba387bc
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 20
+    wallTimeMs: 243173
+    solvingStrategy: spatial-sorting
+    hypothesisQuality: partially-correct
+    iterationEfficiency: exhausted
+    explorationDepth: balanced
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: incorrect-sorting-heuristic
+    verdict: timeout
+    notes: >
+      Got the block extraction right but the sorting heuristic was wrong. Answer has
+      correct structure (hollow left, solid right) but wrong pairing of colors:
+      rows 5-8 have 1,1,1,1 / 8,8,8,8 instead of 7,7,7,7 / 1,1,1,1. Spent all 20
+      iterations trying different sorting approaches without converging.
+
+  # --------------------------------------------------------------------------
+  # arc-36a08778: U-bracket drawing around segments, connected 6-tree
+  # --------------------------------------------------------------------------
+  run-022--arc-36a08778:
+    taskId: arc-36a08778
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 421452
+    solvingStrategy: boundary-tracing
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: incomplete-rule-extraction
+    verdict: wrong-answer
+    notes: >
+      Correctly identified U-bracket structure and connected 6-tree but failed to
+      implement wall-extension logic correctly. 6 training examples provided more
+      signal but also more complexity. Walls extended too far past other brackets.
+
+  run-023--arc-36a08778:
+    taskId: arc-36a08778
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 20
+    wallTimeMs: 338834
+    solvingStrategy: boundary-tracing
+    hypothesisQuality: partially-correct
+    iterationEfficiency: exhausted
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: incomplete-pattern-understanding
+    verdict: wrong-answer
+    notes: >
+      Similar trajectory to run-022. Both runs identified the general structure but
+      neither could implement the bracket-drawing algorithm correctly. This appears to
+      be a genuinely hard task that exceeds the model's implementation capacity within
+      the iteration budget.
+
+  # --------------------------------------------------------------------------
+  # arc-446ef5d2: Nested rectangle assembly from scattered patches
+  # --------------------------------------------------------------------------
+  run-022--arc-446ef5d2:
+    taskId: arc-446ef5d2
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 465553
+    solvingStrategy: nested-rectangle
+    hypothesisQuality: fundamentally-wrong
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: cascading-failure
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: rlm-used
+    failureMode: wrong-transformation-rule
+    verdict: wrong-answer
+    notes: >
+      Fundamentally misunderstood the transformation as "tiling" when it was actually
+      "nested rectangle assembly." Used rlm() delegation (one of only 2 tasks in run-022
+      that did). The brute-force tiling approach failed entirely for test 0 (returned
+      all-background grid). The wrong-hypothesis-lock pattern is evident here.
+
+  run-023--arc-446ef5d2:
+    taskId: arc-446ef5d2
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 20
+    wallTimeMs: 666599
+    solvingStrategy: nested-rectangle
+    hypothesisQuality: fundamentally-wrong
+    iterationEfficiency: exhausted
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: incomplete-algorithm
+    verdict: wrong-answer
+    notes: >
+      Similar fundamental misunderstanding as run-022. Test 0 returned all-background
+      (all 8s), test 1 had a partially correct interior pattern but wrong position.
+      Longest wall time in the entire eval at 666s. Premature optimization pattern noted.
+
+  # --------------------------------------------------------------------------
+  # arc-4e34c42c: Chain assembly via shared edge patterns
+  # --------------------------------------------------------------------------
+  run-022--arc-4e34c42c:
+    taskId: arc-4e34c42c
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 301723
+    solvingStrategy: edge-overlap-assembly
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: incomplete-chain-detection
+    verdict: wrong-answer
+    notes: >
+      Correctly identified the overlapping-edge assembly mechanism for Train 0 but
+      overlap-matching function was too strict for the general case, missing connections
+      in Train 1 and test cases. Relaxed version was too permissive. Output dimensions
+      wrong (11x21 instead of 14x19 for test 0).
+
+  run-023--arc-4e34c42c:
+    taskId: arc-4e34c42c
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 17
+    wallTimeMs: 624966
+    solvingStrategy: edge-overlap-assembly
+    hypothesisQuality: partially-correct
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: no-verification
+    errorRecovery: cascading-failure
+    deadlineBehavior: timeout-no-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: timeout-no-return
+    verdict: timeout
+    notes: >
+      Aborted externally after 17 iterations. Analysis-paralysis pattern: spent too
+      many iterations on object segmentation and edge detection without implementing
+      the assembly algorithm. Never returned an answer.
+
+  # --------------------------------------------------------------------------
+  # arc-5961cc34: Ray deflection through diamond shapes
+  # --------------------------------------------------------------------------
+  run-022--arc-5961cc34:
+    taskId: arc-5961cc34
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 11
+    wallTimeMs: 179370
+    solvingStrategy: ray-tracing
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Clean ray-tracing implementation. Correctly identified diamond shapes with
+      directional markers (3s) and arrow indicators (4/2). Verified on all 4 training
+      examples before applying to test.
+
+  run-023--arc-5961cc34:
+    taskId: arc-5961cc34
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 16
+    wallTimeMs: 277119
+    solvingStrategy: ray-tracing
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Same approach and result as run-022 but took 5 more iterations (16 vs 11).
+      The additional iterations were spent on connected-component analysis that
+      run-022 handled more efficiently with the helper library.
+
+  # --------------------------------------------------------------------------
+  # arc-6e453dd6: Shape shift-alignment to vertical divider
+  # --------------------------------------------------------------------------
+  run-022--arc-6e453dd6:
+    taskId: arc-6e453dd6
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 13
+    wallTimeMs: 147044
+    solvingStrategy: shift-alignment
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Identified shape-shifting and hole-marking transformation. Self-correction
+      pattern helped refine the exact shift logic. Connected component analysis
+      used for object detection.
+
+  run-023--arc-6e453dd6:
+    taskId: arc-6e453dd6
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 9
+    wallTimeMs: 133177
+    solvingStrategy: shift-alignment
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Solved 4 iterations faster than run-022 (9 vs 13). More direct hypothesis
+      refinement without the overhead of copying and using the helper library.
+      This is a case where the plugin may have added unnecessary overhead.
+
+  # --------------------------------------------------------------------------
+  # arc-78332cb0: Panel rearrangement with ordering rule
+  # --------------------------------------------------------------------------
+  run-022--arc-78332cb0:
+    taskId: arc-78332cb0
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 18
+    wallTimeMs: 272764
+    solvingStrategy: panel-rearrangement
+    hypothesisQuality: never-converged
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: partial-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: wrong-transformation-rule
+    verdict: wrong-answer
+    notes: >
+      Cycled through multiple panel ordering hypotheses (nonBG count sorting, diagonal
+      reading, transpose, center-of-mass sorting) without converging. Both test outputs
+      wrong dimensions and wrong panel order.
+
+  run-023--arc-78332cb0:
+    taskId: arc-78332cb0
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 9
+    wallTimeMs: 391259
+    solvingStrategy: panel-rearrangement
+    hypothesisQuality: never-converged
+    iterationEfficiency: fast
+    explorationDepth: heavy
+    verificationBehavior: no-verification
+    errorRecovery: cascading-failure
+    deadlineBehavior: timeout-no-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: timeout-via-exhaustive-analysis
+    verdict: timeout
+    notes: >
+      Aborted after only 9 iterations (externally) but with 391s wall time, suggesting
+      very long individual iterations. Exhaustive feature computation without
+      hypothesis-and-test methodology. Analysis paralysis pattern.
+
+  # --------------------------------------------------------------------------
+  # arc-7ed72f31: Reflection-based grid transformation
+  # --------------------------------------------------------------------------
+  run-022--arc-7ed72f31:
+    taskId: arc-7ed72f31
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 15
+    wallTimeMs: 188305
+    solvingStrategy: symmetry-search
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Used connected component analysis plus reflection-based hypothesis testing.
+      The plugin's testAllSymmetries may have helped narrow down the transform type.
+
+  run-023--arc-7ed72f31:
+    taskId: arc-7ed72f31
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 11
+    wallTimeMs: 162270
+    solvingStrategy: symmetry-search
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Solved 4 iterations faster than run-022 (11 vs 15). Another case where
+      the plugin-free approach was more efficient on a both-solved task.
+
+  # --------------------------------------------------------------------------
+  # arc-89565ca0: Overlapping colored rectangles -> staircase output
+  # --------------------------------------------------------------------------
+  run-022--arc-89565ca0:
+    taskId: arc-89565ca0
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 259909
+    solvingStrategy: spatial-sorting
+    hypothesisQuality: fundamentally-wrong
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: no-verification
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-panic
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: wrong-ordering-and-dimensions
+    verdict: wrong-answer
+    notes: >
+      Cycled through hypothesis after hypothesis for the rectangle ordering rule.
+      Produced wrong dimensions (5x5 vs expected 5x6), wrong color ordering, and
+      wrong fill pattern. Graph analysis approach was reasonable but never converged
+      on the correct ordering criterion.
+
+  run-023--arc-89565ca0:
+    taskId: arc-89565ca0
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 2
+    wallTimeMs: 271883
+    solvingStrategy: spatial-sorting
+    hypothesisQuality: never-converged
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: no-verification
+    errorRecovery: cascading-failure
+    deadlineBehavior: aborted-externally
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: early-termination
+    verdict: error
+    notes: >
+      Aborted after only 2 iterations by external process. The agent barely started
+      exploring the task before being terminated. Wall time was 272s for just 2
+      iterations, suggesting extremely slow individual iterations.
+
+  # --------------------------------------------------------------------------
+  # arc-8f3a5a89: Flood-fill based border drawing with marker
+  # --------------------------------------------------------------------------
+  run-022--arc-8f3a5a89:
+    taskId: arc-8f3a5a89
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 11
+    wallTimeMs: 148974
+    solvingStrategy: flood-fill-reasoning
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Clean flood-fill based approach. Identified marker cell (color 6), used
+      reachability analysis to determine regions, and drew borders correctly.
+      Verified on all 3 training examples.
+
+  run-023--arc-8f3a5a89:
+    taskId: arc-8f3a5a89
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 1
+    wallTimeMs: 256457
+    solvingStrategy: flood-fill-reasoning
+    hypothesisQuality: never-converged
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: no-verification
+    errorRecovery: cascading-failure
+    deadlineBehavior: aborted-externally
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: aborted-in-exploration
+    verdict: timeout
+    notes: >
+      Aborted after just 1 iteration by external process. Never got past initial
+      exploration. Wall time was 256s for a single iteration. This is clearly an
+      infrastructure issue, not a model capability issue -- run-022 solved this
+      perfectly in 11 iterations.
+
+  # --------------------------------------------------------------------------
+  # arc-a251c730: Shape template extraction and stamping at marker positions
+  # --------------------------------------------------------------------------
+  run-022--arc-a251c730:
+    taskId: arc-a251c730
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 18
+    wallTimeMs: 186771
+    solvingStrategy: shape-stamping
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Solved correctly but took 18 iterations. The offset-based transformation
+      approach worked but required many iterations of exploration and cross-validation.
+
+  run-023--arc-a251c730:
+    taskId: arc-a251c730
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 9
+    wallTimeMs: 95803
+    solvingStrategy: shape-stamping
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: light
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Solved in half the iterations of run-022 (9 vs 18) with half the wall time.
+      Direct pattern-extraction-by-inspection approach was more efficient than
+      the plugin-guided exploration. Strong example of plugin overhead.
+
+  # --------------------------------------------------------------------------
+  # arc-aa4ec2a5: Topology-based component transformation (holes vs no holes)
+  # --------------------------------------------------------------------------
+  # NOTE: run-022 trajectory file is MISSING for this task
+  run-023--arc-aa4ec2a5:
+    taskId: arc-aa4ec2a5
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 11
+    wallTimeMs: 122539
+    solvingStrategy: connected-component
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Exemplary trajectory using BFS connected component analysis plus flood-fill
+      topology detection (enclosed holes vs edge gaps). Clean code architecture
+      with separated concerns. Verified on all 3 training examples.
+
+  # --------------------------------------------------------------------------
+  # arc-b99e7126: Macro/micro tiled grid pattern recognition
+  # --------------------------------------------------------------------------
+  run-022--arc-b99e7126:
+    taskId: arc-b99e7126
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 19
+    wallTimeMs: 268427
+    solvingStrategy: tiled-grid
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: slow
+    explorationDepth: heavy
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Self-similar transformation pattern. Recognized 7x7 macro-grid of 3x3 cells.
+      Took 19 iterations, nearly the full budget. Multiple hypothesis strategies tested
+      before converging on the correct anomaly-detection approach.
+
+  run-023--arc-b99e7126:
+    taskId: arc-b99e7126
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 14
+    wallTimeMs: 205024
+    solvingStrategy: tiled-grid
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: clean-recovery
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Solved 5 iterations faster than run-022 (14 vs 19). Grid decomposition approach
+      with EUREKA moment at iter 9 when kernel pattern was recognized. Cleaner
+      hypothesis progression than run-022.
+
+  # --------------------------------------------------------------------------
+  # arc-cbebaa4b: Jigsaw assembly via connector cells
+  # --------------------------------------------------------------------------
+  run-022--arc-cbebaa4b:
+    taskId: arc-cbebaa4b
+    run: "022"
+    plugin: true
+    score: 0
+    iterations: 19
+    wallTimeMs: 293394
+    solvingStrategy: edge-overlap-assembly
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: slow
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: cascading-failure
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: state-loss-on-refactor
+    verdict: wrong-answer
+    notes: >
+      The algorithm was actually CORRECT and passed both training examples. The failure
+      was caused by state-loss during a late refactor: the renderFinalSafe function in
+      iter 18 lost access to helper functions from earlier iterations. This is an RLM
+      harness issue (cross-iteration variable scoping), not a reasoning failure.
+
+  run-023--arc-cbebaa4b:
+    taskId: arc-cbebaa4b
+    run: "023"
+    plugin: false
+    score: 0
+    iterations: 20
+    wallTimeMs: 386419
+    solvingStrategy: edge-overlap-assembly
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: exhausted
+    explorationDepth: heavy
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: partial-recovery
+    deadlineBehavior: deadline-aware-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: incomplete-shape-placement
+    verdict: wrong-answer
+    notes: >
+      Also developed a correct BFS-based assembly algorithm that passed both training
+      examples. Failed on test inputs because the BFS placement validation was too strict,
+      rejecting valid placements for shape 3. Different failure mode than run-022 but
+      same fundamental task difficulty.
+
+  # --------------------------------------------------------------------------
+  # arc-db695cfb: Diagonal line drawing with perpendicular extensions
+  # --------------------------------------------------------------------------
+  run-022--arc-db695cfb:
+    taskId: arc-db695cfb
+    run: "022"
+    plugin: true
+    score: 1
+    iterations: 7
+    wallTimeMs: 83499
+    solvingStrategy: diagonal-geometry
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: fast
+    explorationDepth: balanced
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: used-helpers
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Fastest solve in run-022. Visual inspection pattern led to quick discovery of
+      diagonal 1-connections and perpendicular 6-extensions. Verified against all
+      5 training examples.
+
+  run-023--arc-db695cfb:
+    taskId: arc-db695cfb
+    run: "023"
+    plugin: false
+    score: 1
+    iterations: 13
+    wallTimeMs: 150223
+    solvingStrategy: diagonal-geometry
+    hypothesisQuality: correct-after-refinement
+    iterationEfficiency: moderate
+    explorationDepth: heavy
+    verificationBehavior: exhaustive-all-training
+    errorRecovery: no-errors
+    deadlineBehavior: comfortable-return
+    pluginUsage: not-applicable
+    delegationUsage: none
+    failureMode: null
+    verdict: perfect
+    notes: >
+      Took 6 more iterations than run-022 (13 vs 7). Spent 9 of 13 iterations (69%)
+      in exploration. The exemplary exploration was thorough but run-022 achieved the
+      same result more efficiently, possibly because the helper library accelerated
+      initial data analysis.

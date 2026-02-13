@@ -1,7 +1,7 @@
 ---
 name: arc-helper-library
 kind: driver
-version: 0.1.0
+version: 0.2.0
 description: Pre-built utility functions for common ARC grid operations
 author: sl
 tags: [arc, utilities, pattern-recognition]
@@ -10,7 +10,7 @@ requires: []
 
 ## ARC Helper Library
 
-These utility functions handle common ARC operations that are surprisingly hard to implement correctly under iteration pressure. Copy them into your first code block and use them freely.
+These utility functions handle common ARC operations that are surprisingly hard to implement correctly under iteration pressure. Copy only the functions you need — do not copy the entire library if you only need grid basics.
 
 ### Grid Basics
 
@@ -168,40 +168,6 @@ function boundingBox(grid, predicate) {
 }
 ```
 
-### Repeating Tile Detection
-
-```javascript
-function findRepeatingTile(seq, minLen = 2, maxLen) {
-  // Find the shortest repeating unit in a 1D sequence, tolerating errors.
-  // maxLen defaults to n/3 to prevent period-memorization (tile ≈ sequence length).
-  const n = seq.length;
-  maxLen = maxLen || Math.floor(n / 3);
-  let bestTile = null, bestErrors = Infinity;
-  for (let len = minLen; len <= Math.min(maxLen, Math.floor(n / 2)); len++) {
-    // Vote for each position in the tile across all repetitions
-    const tile = [];
-    for (let pos = 0; pos < len; pos++) {
-      const votes = {};
-      for (let i = pos; i < n; i += len) {
-        votes[seq[i]] = (votes[seq[i]] || 0) + 1;
-      }
-      tile.push(+Object.entries(votes).sort((a, b) => b[1] - a[1])[0][0]);
-    }
-    // Count errors
-    let errors = 0;
-    for (let i = 0; i < n; i++) {
-      if (seq[i] !== tile[i % len]) errors++;
-    }
-    if (errors < bestErrors) {
-      bestErrors = errors;
-      bestTile = tile;
-      if (errors === 0) break; // perfect match
-    }
-  }
-  return { tile: bestTile, errors: bestErrors };
-}
-```
-
 ### Concentric Rectangle Fill
 
 ```javascript
@@ -224,4 +190,4 @@ function fillConcentricRects(H, W, colors) {
 
 ### Usage
 
-Copy any functions you need into your first iteration. They are tested and correct — you do not need to re-derive them. Spend your iteration budget on understanding the transformation rule, not reimplementing grid utilities.
+Copy only the functions relevant to your task. They are tested and correct — you do not need to re-derive them. Spend your iteration budget on understanding the transformation rule, not reimplementing grid utilities. If a helper does not fit your task's needs, write your own — these are reference implementations, not mandates.
