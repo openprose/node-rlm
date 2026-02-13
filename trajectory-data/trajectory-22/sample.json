@@ -1,0 +1,30 @@
+[
+  {
+    "taskId": "arc-db695cfb",
+    "answerType": "generated",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 7
+  },
+  {
+    "taskId": "arc-b99e7126",
+    "answerType": "generated",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-135a2760",
+    "answerType": "generated",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 8
+  },
+  {
+    "taskId": "arc-136b0064",
+    "answerType": "generated",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 20
+  }
+]

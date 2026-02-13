@@ -1,0 +1,142 @@
+[
+  {
+    "taskId": "arc-135a2760",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 13
+  },
+  {
+    "taskId": "arc-136b0064",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-247ef758",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 17
+  },
+  {
+    "taskId": "arc-5961cc34",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 16
+  },
+  {
+    "taskId": "arc-6e453dd6",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 9
+  },
+  {
+    "taskId": "arc-7ed72f31",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 11
+  },
+  {
+    "taskId": "arc-a251c730",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 9
+  },
+  {
+    "taskId": "arc-aa4ec2a5",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 11
+  },
+  {
+    "taskId": "arc-b99e7126",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 14
+  },
+  {
+    "taskId": "arc-db695cfb",
+    "answerType": "unknown",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 13
+  },
+  {
+    "taskId": "arc-195c6913",
+    "answerType": "unknown",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-2ba387bc",
+    "answerType": "unknown",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-36a08778",
+    "answerType": "unknown",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-446ef5d2",
+    "answerType": "unknown",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-cbebaa4b",
+    "answerType": "unknown",
+    "outcome": "wrong",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-0934a4d8",
+    "answerType": "unknown",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-4e34c42c",
+    "answerType": "unknown",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 17
+  },
+  {
+    "taskId": "arc-78332cb0",
+    "answerType": "unknown",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 9
+  },
+  {
+    "taskId": "arc-89565ca0",
+    "answerType": "unknown",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 2
+  },
+  {
+    "taskId": "arc-8f3a5a89",
+    "answerType": "unknown",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 1
+  }
+]
