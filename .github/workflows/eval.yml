@@ -126,7 +126,7 @@ jobs:
     if: inputs.analyze == true
     needs: [eval]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -152,20 +152,19 @@ jobs:
             2. Read docs/TRAJECTORY_FORMAT.md — this is the canonical annotation format
             3. Run: mkdir -p eval/trajectory-analysis/trajectories
 
-            ## Step 1: Select representative tasks
-            Use the Task tool (model: haiku) to read the results JSON and select
-            up to 20 representative tasks. The agent should:
-            - Parse the results array and classify each task by outcome
-              (score==1 → perfect, 0<score<1 → partial, score==0 → wrong/timeout/error)
-            - Build an answer_type × outcome matrix
-            - Select up to 2 tasks per cell, preferring diverse iteration counts
-            - Return a JSON array: [{ taskId, answerType, outcome, score, iterations }]
-            Write the selection to eval/trajectory-analysis/sample.json.
+            ## Step 1: Enumerate all tasks
+            Read the results JSON and extract every task. For each task, record:
+            - taskId, answerType, score, iterations count
+            - Classify outcome: score==1 → "perfect", 0<score<1 → "partial", score==0 → "wrong/timeout/error"
+            Write the complete list (ALL tasks, no sampling or filtering) to
+            eval/trajectory-analysis/sample.json as a JSON array:
+            [{ taskId, answerType, outcome, score, iterations }, ...]
 
-            ## Step 2: Annotate trajectories
-            For each selected task, use the Task tool (model: sonnet) to annotate it.
-            Run up to 10 in parallel (run_in_background: true). Wait for each batch
-            to complete before starting the next.
+            ## Step 2: Annotate all trajectories
+            For every task in the list, use the Task tool (model: sonnet) to annotate it.
+            Launch up to 10 subagents at a time using run_in_background: true.
+            After launching a batch of up to 10, wait for all of them to complete
+            before launching the next batch. Continue until every task is annotated.
 
             Each sonnet agent needs:
             - The full raw trace data for its task (extract it from the results JSON
