@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC-AGI-2 Eval: Trajectory Analysis — Claude Sonnet 4.5</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-hover: #30363d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-orange: #d29922;
+    --accent-purple: #bc8cff;
+    --accent-teal: #39d2c0;
+    --accent-yellow: #e3b341;
+    --accent-pink: #f778ba;
+
+    --phase-explore: #4a7fb5;
+    --phase-extract: #3fb950;
+    --phase-verify: #39d2c0;
+    --phase-solve: #d29922;
+    --phase-return: #56d364;
+    --phase-error: #f85149;
+    --phase-stall: #6e7681;
+
+    /* ARC standard palette */
+    --arc-0: #000000;
+    --arc-1: #0074d9;
+    --arc-2: #ff4136;
+    --arc-3: #2ecc40;
+    --arc-4: #ffdc00;
+    --arc-5: #aaaaaa;
+    --arc-6: #f012be;
+    --arc-7: #ff851b;
+    --arc-8: #7fdbff;
+    --arc-9: #870c25;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: rgba(13, 17, 23, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .nav-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .nav-links a:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent-blue);
+  }
+
+  .content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  .viz-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .viz-section h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .viz-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .mono {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  }
+
+  /* Aggregate Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 0;
+  }
+
+  .stat-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+  }
+
+  .stat-detail {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+
+  .stat-red { color: var(--accent-red); }
+  .stat-orange { color: var(--accent-orange); }
+  .stat-blue { color: var(--accent-blue); }
+  .stat-green { color: var(--accent-green); }
+  .stat-teal { color: var(--accent-teal); }
+  .stat-purple { color: var(--accent-purple); }
+
+  /* Task table */
+  .task-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.25rem;
+    font-size: 0.82rem;
+  }
+
+  .task-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .task-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    vertical-align: middle;
+  }
+
+  .task-table tr:hover td {
+    background: rgba(48, 54, 61, 0.2);
+  }
+
+  .verdict-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .verdict-timeout {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--accent-orange);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+  }
+
+  .verdict-wrong {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+  }
+
+  /* Phase Legend */
+  .phase-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Timeline Heatmap */
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 10px;
+  }
+
+  .timeline-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    min-width: 110px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .timeline-phases {
+    display: flex;
+    gap: 2px;
+    flex-grow: 1;
+    align-items: center;
+  }
+
+  .phase-block {
+    height: 28px;
+    min-width: 28px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    cursor: default;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .phase-block:hover {
+    opacity: 0.85;
+    transform: scale(1.08);
+    z-index: 10;
+  }
+
+  .phase-block .tooltip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
+    color: var(--text-primary);
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .phase-block:hover .tooltip { display: block; }
+
+  .phase-EXPLORE { background: var(--phase-explore); }
+  .phase-EXTRACT { background: var(--phase-extract); }
+  .phase-VERIFY { background: var(--phase-verify); color: rgba(0,0,0,0.8); }
+  .phase-SOLVE { background: var(--phase-solve); color: rgba(0,0,0,0.8); }
+  .phase-RETURN { background: var(--phase-return); color: rgba(0,0,0,0.8); }
+  .phase-ERROR { background: var(--phase-error); }
+  .phase-STALL { background: var(--phase-stall); }
+
+  .timeline-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 160px;
+    justify-content: flex-end;
+  }
+
+  .score-badge {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .score-0 { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+
+  .verdict-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  /* Token burn chart */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  canvas {
+    display: block;
+  }
+
+  /* Return Problem */
+  .return-timeline {
+    position: relative;
+    margin: 1rem 0;
+  }
+
+  .return-task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+  }
+
+  .return-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--accent-blue);
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .return-track {
+    flex-grow: 1;
+    height: 32px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .return-marker {
+    position: absolute;
+    width: 3px;
+    height: 100%;
+    border-radius: 2px;
+    z-index: 5;
+  }
+
+  .return-marker-label {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+
+  .return-gap {
+    position: absolute;
+    height: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(248, 81, 73, 0.3) 0px,
+      rgba(248, 81, 73, 0.3) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+    border-radius: 2px;
+    z-index: 3;
+  }
+
+  .return-info {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    min-width: 220px;
+    flex-shrink: 0;
+    text-align: right;
+    line-height: 1.4;
+  }
+
+  .return-info strong {
+    color: var(--accent-red);
+    font-weight: 600;
+  }
+
+  .return-info .gap-label {
+    color: var(--accent-orange);
+    font-weight: 600;
+  }
+
+  /* Hypothesis Evolution */
+  .hypothesis-container {
+    margin-top: 0.5rem;
+  }
+
+  .hyp-task {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+  }
+
+  .hyp-task-header {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hyp-lane {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    min-height: 26px;
+  }
+
+  .hyp-name {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    min-width: 200px;
+    text-align: right;
+    flex-shrink: 0;
+    line-height: 1.3;
+  }
+
+  .hyp-track {
+    display: flex;
+    gap: 2px;
+    flex-grow: 1;
+  }
+
+  .hyp-cell {
+    width: 20px;
+    height: 20px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .hyp-cell.active {
+    background: var(--accent-blue);
+    opacity: 0.8;
+  }
+
+  .hyp-cell.active-verify {
+    background: var(--accent-teal);
+    opacity: 0.8;
+  }
+
+  .hyp-cell.active-fail {
+    background: var(--accent-red);
+    opacity: 0.7;
+  }
+
+  .hyp-cell.empty {
+    background: rgba(255,255,255,0.03);
+  }
+
+  .hyp-outcome {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    min-width: 90px;
+    text-align: center;
+  }
+
+  .hyp-outcome.abandoned {
+    background: rgba(110, 118, 129, 0.2);
+    color: var(--text-muted);
+  }
+
+  .hyp-outcome.failed {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--accent-red);
+  }
+
+  .hyp-outcome.partial {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--accent-orange);
+  }
+
+  .hyp-outcome.stuck {
+    background: rgba(188, 140, 255, 0.15);
+    color: var(--accent-purple);
+  }
+
+  .hyp-iter-labels {
+    display: flex;
+    gap: 2px;
+    margin-left: 208px;
+    margin-bottom: 4px;
+  }
+
+  .hyp-iter-label {
+    width: 20px;
+    text-align: center;
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* Detail Cards */
+  .detail-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .detail-header:hover {
+    background: rgba(48, 54, 61, 0.3);
+  }
+
+  .detail-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .detail-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+  }
+
+  .detail-header-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .detail-toggle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+
+  .detail-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(48, 54, 61, 0.4);
+  }
+
+  .detail-body.open { display: block; }
+  .detail-toggle.open { transform: rotate(180deg); }
+
+  .detail-grid-row {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .detail-grid-panel {
+    flex: 0 0 auto;
+  }
+
+  .detail-grid-panel h4 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .arc-grid {
+    display: inline-grid;
+    gap: 1px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    padding: 1px;
+  }
+
+  .arc-cell {
+    width: 18px;
+    height: 18px;
+    border-radius: 1px;
+  }
+
+  .detail-findings {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(13, 17, 23, 0.5);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent-orange);
+  }
+
+  .detail-findings h4 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent-orange);
+    margin-bottom: 0.4rem;
+  }
+
+  .detail-findings p {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .detail-findings ul {
+    margin: 0.25rem 0 0 1.25rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .detail-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .detail-meta-item {
+    text-align: center;
+    padding: 0.5rem;
+    background: rgba(13, 17, 23, 0.4);
+    border-radius: 6px;
+  }
+
+  .detail-meta-value {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  .detail-meta-label {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  /* Token chart styles */
+  .token-chart-area {
+    margin-top: 0.75rem;
+    overflow-x: auto;
+  }
+
+  .token-chart-svg {
+    display: block;
+  }
+
+  /* Callout box */
+  .callout {
+    background: rgba(248, 81, 73, 0.08);
+    border: 1px solid rgba(248, 81, 73, 0.25);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .callout-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-red);
+    margin-bottom: 0.4rem;
+  }
+
+  .callout p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .key-finding {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .key-finding .callout-title {
+    color: var(--accent-blue);
+  }
+
+  /* Budget burn bar chart */
+  .budget-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 0.75rem;
+  }
+
+  .budget-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .budget-label {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    min-width: 100px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .budget-bar-container {
+    flex-grow: 1;
+    display: flex;
+    height: 24px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .budget-bar-input {
+    height: 100%;
+    background: var(--accent-blue);
+    opacity: 0.7;
+    transition: width 0.4s;
+  }
+
+  .budget-bar-output {
+    height: 100%;
+    background: var(--accent-teal);
+    opacity: 0.7;
+    transition: width 0.4s;
+  }
+
+  .budget-value {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .budget-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 0.5rem;
+    padding-left: 112px;
+  }
+
+  .budget-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+  }
+
+  .budget-legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+  }
+
+  /* Cumulative token chart */
+  .cum-chart-container {
+    margin-top: 1rem;
+    overflow-x: auto;
+  }
+
+  @media (max-width: 800px) {
+    .content { padding: 1rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .timeline-task-id { min-width: 80px; font-size: 0.7rem; }
+    .hyp-name { min-width: 140px; font-size: 0.68rem; }
+    .hyp-iter-labels { margin-left: 148px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sticky-nav">
+  <div class="nav-title">ARC-AGI-2 Eval</div>
+  <div class="nav-links">
+    <a href="#summary">Summary</a>
+    <a href="#timeline">Timeline</a>
+    <a href="#tokens">Token Budget</a>
+    <a href="#return-problem">return() Problem</a>
+    <a href="#hypotheses">Hypotheses</a>
+    <a href="#details">Task Details</a>
+  </div>
+</nav>
+
+<div class="content">
+
+<h1>ARC-AGI-2 Trajectory Analysis</h1>
+<p class="page-subtitle">Claude Sonnet 4.5 &mdash; 5 tasks, 103 iterations, 0% accuracy &mdash; 2026-02-13</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: AGGREGATE SUMMARY -->
+<!-- ============================================================ -->
+<div class="viz-section" id="summary">
+  <h2>Aggregate Summary</h2>
+  <p class="viz-subtitle">High-level stats across all 5 ARC tasks in this eval run</p>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value stat-red">0 / 5</div>
+      <div class="stat-label">Tasks Correct</div>
+      <div class="stat-detail">1 wrong answer, 4 timeouts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-orange">103</div>
+      <div class="stat-label">Total Iterations</div>
+      <div class="stat-detail">Budget: 125 (25 x 5)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-blue">~20 min</div>
+      <div class="stat-label">Total Wall Time</div>
+      <div class="stat-detail">1,192 seconds</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-teal">7.5M</div>
+      <div class="stat-label">Total Input Chars</div>
+      <div class="stat-detail">~4.8M from one task</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-purple">227K</div>
+      <div class="stat-label">Total Output Chars</div>
+      <div class="stat-detail">93K from arc-13e47133</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-red">1 / 5</div>
+      <div class="stat-label">return() Call Rate</div>
+      <div class="stat-detail">...and that one was wrong</div>
+    </div>
+  </div>
+
+  <table class="task-table">
+    <thead>
+      <tr>
+        <th>Task ID</th>
+        <th>Verdict</th>
+        <th>Iterations</th>
+        <th>Wall Time</th>
+        <th>Input Chars</th>
+        <th>Output Chars</th>
+        <th>Return Attempts</th>
+        <th>Failure Mode</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-142ca369</td>
+        <td><span class="verdict-badge verdict-wrong">wrong-answer</span></td>
+        <td class="mono">3</td>
+        <td class="mono">70s</td>
+        <td class="mono">66K</td>
+        <td class="mono">16K</td>
+        <td class="mono">3 <span style="color:var(--text-muted)">(1 intercepted, 1 error, 1 accepted)</span></td>
+        <td style="color: var(--accent-red); font-size: 0.78rem">premature-commitment</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-0934a4d8</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">25</td>
+        <td class="mono">159s</td>
+        <td class="mono">762K</td>
+        <td class="mono">27K</td>
+        <td class="mono">0</td>
+        <td style="color: var(--accent-orange); font-size: 0.78rem">near-miss-abandonment</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-135a2760</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">25</td>
+        <td class="mono">224s</td>
+        <td class="mono">857K</td>
+        <td class="mono">43K</td>
+        <td class="mono">0</td>
+        <td style="color: var(--accent-orange); font-size: 0.78rem">algorithmic-struggle</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-136b0064</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">25</td>
+        <td class="mono">252s</td>
+        <td class="mono">1,017K</td>
+        <td class="mono">48K</td>
+        <td class="mono">0</td>
+        <td style="color: var(--accent-orange); font-size: 0.78rem">hypothesis-cycling</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-13e47133</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">25</td>
+        <td class="mono">487s</td>
+        <td class="mono">4,830K</td>
+        <td class="mono">93K</td>
+        <td class="mono">6 <span style="color:var(--text-muted)">(all failed verification)</span></td>
+        <td style="color: var(--accent-orange); font-size: 0.78rem">marker-detection-struggle</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: TIMELINE / ITERATION HEATMAP -->
+<!-- ============================================================ -->
+<div class="viz-section" id="timeline">
+  <h2>Iteration Timeline Heatmap</h2>
+  <p class="viz-subtitle">Each cell is one iteration, color-coded by phase. Hover for details.</p>
+
+  <div class="phase-legend">
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-explore)"></div>EXPLORE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-extract)"></div>EXTRACT</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-verify)"></div>VERIFY</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-solve)"></div>SOLVE / RETURN attempt</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-error)"></div>ERROR</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-stall)"></div>STALL</div>
+  </div>
+
+  <div id="timeline-chart"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: TOKEN BUDGET BURN -->
+<!-- ============================================================ -->
+<div class="viz-section" id="tokens">
+  <h2>Token Budget Burn</h2>
+  <p class="viz-subtitle">Total input and output characters consumed per task. arc-13e47133 alone consumed 64% of all input context.</p>
+
+  <div class="budget-chart" id="budget-chart"></div>
+  <div class="budget-legend">
+    <div class="budget-legend-item">
+      <div class="budget-legend-swatch" style="background: var(--accent-blue); opacity: 0.7"></div>
+      Input chars
+    </div>
+    <div class="budget-legend-item">
+      <div class="budget-legend-swatch" style="background: var(--accent-teal); opacity: 0.7"></div>
+      Output chars
+    </div>
+  </div>
+
+  <div class="key-finding" style="margin-top: 1.25rem">
+    <div class="callout-title">Context Budget Disparity</div>
+    <p>arc-13e47133 consumed nearly <strong style="color: var(--accent-blue)">5MB</strong> of input context &mdash; its iteration 1 alone produced 117KB of output by visualizing all training examples. This likely caused context window pressure in later iterations. Meanwhile, arc-142ca369 used only 66K total, completing in 3 iterations (but with a wrong answer).</p>
+  </div>
+
+  <div class="cum-chart-container" id="cum-chart-container">
+    <h3 style="font-size: 0.9rem; margin: 1.25rem 0 0.5rem; color: var(--text-secondary)">Cumulative Input Characters by Iteration</h3>
+    <svg id="cum-chart" class="token-chart-svg"></svg>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: THE RETURN() PROBLEM -->
+<!-- ============================================================ -->
+<div class="viz-section" id="return-problem">
+  <h2>The return() Problem</h2>
+  <p class="viz-subtitle">The gap between generating a plausible candidate and actually calling return(). The defining failure mode of this run.</p>
+
+  <div class="return-timeline" id="return-timeline"></div>
+
+  <div class="callout">
+    <div class="callout-title">Core Finding: return() as Declaration of Correctness</div>
+    <p>The model treats <code style="color: var(--accent-teal)">return()</code> as a declaration of correctness rather than a best-effort submission. When no hypothesis passes training verification, it continues exploring rather than submitting the best candidate. <strong>arc-13e47133</strong> is the most revealing: 6 return attempts, all failing verification due to a marker detection bug &mdash; correct algorithm, wrong parameters.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: HYPOTHESIS EVOLUTION -->
+<!-- ============================================================ -->
+<div class="viz-section" id="hypotheses">
+  <h2>Hypothesis Evolution</h2>
+  <p class="viz-subtitle">Each row is a hypothesis/strategy the model pursued. Colored cells show which iterations were spent on it. Outcome annotations on the right.</p>
+
+  <div class="hypothesis-container" id="hypothesis-container"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: PER-TASK DETAIL CARDS -->
+<!-- ============================================================ -->
+<div class="viz-section" id="details">
+  <h2>Per-Task Detail Cards</h2>
+  <p class="viz-subtitle">Click to expand. Includes expected/submitted answer grids and key failure analysis.</p>
+
+  <div id="detail-cards"></div>
+</div>
+
+</div> <!-- end .content -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+
+const ARC_COLORS = [
+  '#111111', // 0 = black (slightly lighter for visibility)
+  '#0074d9', // 1 = blue
+  '#ff4136', // 2 = red
+  '#2ecc40', // 3 = green
+  '#ffdc00', // 4 = yellow
+  '#aaaaaa', // 5 = gray
+  '#f012be', // 6 = magenta
+  '#ff851b', // 7 = orange
+  '#7fdbff', // 8 = cyan
+  '#870c25', // 9 = brown/maroon
+];
+
+const PHASE_COLORS = {
+  EXPLORE: '#4a7fb5',
+  EXTRACT: '#3fb950',
+  VERIFY:  '#39d2c0',
+  SOLVE:   '#d29922',
+  RETURN:  '#56d364',
+  ERROR:   '#f85149',
+  STALL:   '#6e7681',
+};
+
+const tasks = [
+  {
+    id: 'arc-142ca369',
+    score: 0,
+    iterations: 3,
+    wallTimeMs: 70286,
+    verdict: 'wrong-answer',
+    inputChars: 66237,
+    outputChars: 15670,
+    returnAttempts: 3,
+    failureMode: 'premature-commitment',
+    expected: [[0,1,0,2,0,7,0,5,0,0,2,0,8,0,6,0,4,0],[1,1,2,2,7,7,5,5,0,0,2,2,8,8,6,6,4,4],[0,2,1,0,2,0,7,0,5,2,0,8,0,6,0,4,6,0],[2,2,0,1,0,2,0,7,2,5,8,0,6,0,4,0,6,6],[0,7,2,0,1,0,2,2,7,8,5,6,0,4,0,6,8,0],[7,7,0,2,0,1,2,2,8,7,6,5,4,0,6,0,8,8],[0,5,7,0,2,2,1,8,2,6,7,4,5,6,0,8,2,0],[5,5,0,7,2,2,8,1,6,2,4,7,6,5,8,0,2,2],[0,0,5,2,7,8,2,6,1,4,2,6,7,8,5,2,0,0],[0,0,2,5,8,7,6,2,4,1,6,2,8,7,2,5,0,0],[0,2,0,8,5,6,7,4,2,6,1,8,2,2,7,0,5,0],[2,0,8,0,6,5,4,7,6,2,8,1,2,2,0,7,0,5],[0,8,0,6,0,4,5,6,7,8,2,2,1,0,2,0,7,0],[8,0,6,0,4,0,6,5,8,7,2,2,0,1,0,2,0,7],[0,6,0,4,0,6,0,8,5,2,7,0,2,0,1,0,2,0],[6,0,4,0,6,0,8,0,2,5,0,7,0,2,0,1,0,2],[0,4,0,6,0,8,0,2,0,0,5,0,7,0,2,0,1,0],[4,0,6,0,8,0,2,0,0,0,0,5,0,7,0,2,0,1]],
+    submitted: [[0,1,0,2,0,7,0,5,0,0,2,0,8,0,6,0,4,0],[1,1,2,2,7,7,5,5,0,0,2,2,8,8,6,6,4,4],[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,0],[2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,6],[0,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0],[7,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,8],[0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0],[5,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[8,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[6,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[4,4,6,6,8,8,2,2,0,0,0,0,0,0,0,0,0,0],[0,4,0,6,0,8,0,2,0,0,0,0,0,0,0,0,0,0]],
+    phases: [
+      { iter: 1, phase: 'EXTRACT', desc: '9 code blocks: explore, visualize, hypothesize, return (intercepted, Score 0/3)' },
+      { iter: 2, phase: 'EXTRACT', desc: '5 code blocks: compare rows, test diagonal reflection, return (TypeError)' },
+      { iter: 3, phase: 'SOLVE', desc: '7 code blocks: verify preservation, test transpose, return (Score 0/3, accepted)' },
+    ],
+    hypotheses: [
+      { name: 'Least frequent color extraction', iters: [1], outcome: 'failed', outcomeLabel: 'Score 0/3' },
+      { name: 'Diagonal reflection (transpose)', iters: [2, 3], outcome: 'failed', outcomeLabel: 'Score 0/3, returned' },
+    ],
+    firstCandidate: 1,
+    firstReturn: 1,
+    returnResult: 'wrong answer (0/3)',
+    findings: 'The model used a shotgun approach: 9 code blocks in iteration 1 forming a complete pipeline. It never identified the actual rule (drawing diagonal lines between scattered colored objects). Instead it fixated on simpler hypotheses (color extraction, matrix transpose) and returned a known-wrong answer after just 3 iterations.',
+    patterns: ['premature-commitment', 'multi-code-block'],
+  },
+  {
+    id: 'arc-0934a4d8',
+    score: 0,
+    iterations: 25,
+    wallTimeMs: 158797,
+    verdict: 'timeout',
+    inputChars: 761574,
+    outputChars: 27203,
+    returnAttempts: 0,
+    failureMode: 'near-miss-abandonment',
+    expected: [[7,7,9],[7,2,9],[7,2,9],[7,7,9],[4,4,7],[4,4,7],[6,6,1],[6,6,6],[1,6,1]],
+    submitted: null,
+    phases: [
+      { iter: 1,  phase: 'EXPLORE', desc: 'Parse task structure, count examples, log dimensions' },
+      { iter: 2,  phase: 'EXPLORE', desc: 'Visualize Train 0 input (first 10 rows) and output' },
+      { iter: 3,  phase: 'EXPLORE', desc: 'Count color frequencies, locate colors 2 and 7' },
+      { iter: 4,  phase: 'EXPLORE', desc: 'Find bounding box of 2+7 frame, extract 22x22 inner region' },
+      { iter: 5,  phase: 'EXPLORE', desc: 'Visualize frame pattern (2s and 7s)' },
+      { iter: 6,  phase: 'EXPLORE', desc: 'Find color 7 bounding box, extract 14x14 inner region' },
+      { iter: 7,  phase: 'EXTRACT', desc: 'Find color 2 pattern within 7-frame, extract bounded region' },
+      { iter: 8,  phase: 'EXTRACT', desc: 'Compare extracted region with output, try subsampling' },
+      { iter: 9,  phase: 'EXPLORE', desc: 'Analyze all 4 training examples for color 7 and 2 bounds' },
+      { iter: 10, phase: 'EXPLORE', desc: 'Analyze color 2 bounds across all examples' },
+      { iter: 11, phase: 'EXPLORE', desc: 'Visualize full 30x30 grid' },
+      { iter: 12, phase: 'EXPLORE', desc: 'Find connected components of color 2 (22 regions)' },
+      { iter: 13, phase: 'EXPLORE', desc: 'Print full 30x30 grid with all values' },
+      { iter: 14, phase: 'EXTRACT', desc: 'Find color 8 positions - BINGO: 9x4 rectangle matching output' },
+      { iter: 15, phase: 'EXPLORE', desc: 'Check global symmetry (vertical and horizontal) - not found' },
+      { iter: 16, phase: 'EXPLORE', desc: 'Search for horizontal reflection symmetry axis' },
+      { iter: 17, phase: 'EXTRACT', desc: 'Check symmetry within 7-framed inner region - confirmed' },
+      { iter: 18, phase: 'EXPLORE', desc: 'Realize 8-region is OUTSIDE the 7-frame' },
+      { iter: 19, phase: 'EXTRACT', desc: 'Reconstruct via full-row horizontal mirror' },
+      { iter: 20, phase: 'VERIFY',  desc: 'Compare reconstruction with expected - mismatch (6449 vs 9964)' },
+      { iter: 21, phase: 'EXTRACT', desc: 'Try reversed column order - still mismatch' },
+      { iter: 22, phase: 'EXTRACT', desc: 'Try different column mappings - still mismatch' },
+      { iter: 23, phase: 'EXTRACT', desc: 'Try transposed reading - still wrong' },
+      { iter: 24, phase: 'STALL',   desc: 'No progress, testing same approaches' },
+      { iter: 25, phase: 'STALL',   desc: 'No progress, hit max iterations' },
+    ],
+    hypotheses: [
+      { name: 'Frame analysis (2+7 interior)', iters: [1,2,3,4,5,6,7,8], outcome: 'abandoned', outcomeLabel: 'Misdirected' },
+      { name: 'Multi-example color analysis', iters: [9,10,11,12,13], outcome: 'partial', outcomeLabel: 'Led to breakthrough' },
+      { name: 'Color 8 = corruption region', iters: [14], outcome: 'partial', outcomeLabel: 'Correct insight' },
+      { name: 'Symmetry-based reconstruction', iters: [15,16,17,18,19,20,21,22,23], outcome: 'failed', outcomeLabel: 'Wrong symmetry type' },
+      { name: '(Stalling)', iters: [24,25], outcome: 'stuck', outcomeLabel: 'Budget exhausted' },
+    ],
+    firstCandidate: 19,
+    firstReturn: null,
+    returnResult: null,
+    findings: 'Correctly identified the corruption region (color 8, 9x4 block matching output dims) at iteration 14. Spent 11 iterations trying single-axis reflections when the actual operation was likely a 2D point symmetry. Generated candidate values (6449) that were structurally close to expected (9964) but never submitted.',
+    patterns: ['near-miss-abandonment', 'no-return'],
+  },
+  {
+    id: 'arc-135a2760',
+    score: 0,
+    iterations: 25,
+    wallTimeMs: 223558,
+    verdict: 'timeout',
+    inputChars: 856674,
+    outputChars: 43412,
+    returnAttempts: 0,
+    failureMode: 'algorithmic-struggle',
+    expected: null, // too large to inline
+    submitted: null,
+    phases: [
+      { iter: 1,  phase: 'EXPLORE', desc: 'Parse task, log dimensions' },
+      { iter: 2,  phase: 'EXPLORE', desc: 'Visualize both training examples' },
+      { iter: 3,  phase: 'EXTRACT', desc: 'Diff input vs output - find changed cells' },
+      { iter: 4,  phase: 'EXPLORE', desc: 'Examine row-level patterns, identify nested frames' },
+      { iter: 5,  phase: 'EXPLORE', desc: 'Identify frame structure (outer=3, inner=2)' },
+      { iter: 6,  phase: 'EXPLORE', desc: 'Discover "131313331" -> "131313131" pattern' },
+      { iter: 7,  phase: 'EXTRACT', desc: 'Confirm hypothesis: fix periodic/tiled patterns (verified)' },
+      { iter: 8,  phase: 'EXTRACT', desc: 'Implement pattern finder using exact division - fails' },
+      { iter: 9,  phase: 'EXTRACT', desc: 'Implement voting-based pattern finder - picks single-char' },
+      { iter: 10, phase: 'EXTRACT', desc: 'Improve voting for longer patterns - still "3"' },
+      { iter: 11, phase: 'EXTRACT', desc: 'Try shortest pattern with voting - single-char dominates' },
+      { iter: 12, phase: 'EXTRACT', desc: 'Skip length 1, start from 2 - maps to itself (no fix)' },
+      { iter: 13, phase: 'EXTRACT', desc: 'Analyze divisibility constraints (9 only divides by 1,3,9)' },
+      { iter: 14, phase: 'EXTRACT', desc: 'Re-examine rows, look at full row relationships' },
+      { iter: 15, phase: 'EXTRACT', desc: 'Check if row pairs are shifted versions' },
+      { iter: 16, phase: 'EXTRACT', desc: 'Analyze section 3 tiles "848884888488..." in detail' },
+      { iter: 17, phase: 'EXTRACT', desc: 'Examine local neighborhood of corrupted positions' },
+      { iter: 18, phase: 'EXTRACT', desc: 'Discover tile cycling pattern - shifted rows' },
+      { iter: 19, phase: 'EXTRACT', desc: 'Verify 4-tile cycle (848,884,888,488)' },
+      { iter: 20, phase: 'EXTRACT', desc: 'Try to generalize cycle detection - partial success' },
+      { iter: 21, phase: 'EXTRACT', desc: 'Consensus repair across rows - fails when both have errors' },
+      { iter: 22, phase: 'EXTRACT', desc: 'Tile frequency analysis - partially correct' },
+      { iter: 23, phase: 'EXTRACT', desc: 'Cycle detection via transition graph - finds correct cycle' },
+      { iter: 24, phase: 'EXTRACT', desc: 'Test cycle starting position - off by one' },
+      { iter: 25, phase: 'STALL',   desc: 'Try from expected outputs - confirms cycle but cannot generalize' },
+    ],
+    hypotheses: [
+      { name: 'Structure exploration', iters: [1,2,3,4,5,6], outcome: 'partial', outcomeLabel: 'Correct setup' },
+      { name: 'Fix corrupted tiles (correct rule)', iters: [7], outcome: 'partial', outcomeLabel: 'Rule identified' },
+      { name: 'Exact-division tile finder', iters: [8], outcome: 'failed', outcomeLabel: 'Non-dividing lengths' },
+      { name: 'Voting-based tile detection', iters: [9,10,11,12], outcome: 'failed', outcomeLabel: 'Single-char bias' },
+      { name: 'Divisibility analysis', iters: [13,14,15], outcome: 'failed', outcomeLabel: 'Dead end' },
+      { name: 'Tile cycling / shifted rows', iters: [16,17,18,19,20], outcome: 'partial', outcomeLabel: 'Works for some' },
+      { name: 'Consensus repair', iters: [21], outcome: 'failed', outcomeLabel: 'Both rows corrupted' },
+      { name: 'Transition graph cycles', iters: [22,23,24,25], outcome: 'stuck', outcomeLabel: 'Off-by-one, timeout' },
+    ],
+    firstCandidate: 8,
+    firstReturn: null,
+    returnResult: null,
+    findings: 'Correctly identified the transformation rule by iteration 7: fix corrupted cells in repeating tile patterns. Spent 18 iterations struggling with the implementation. The core challenge: tile length "13" has length 2, which does not divide string length 9. Standard algorithms assume divisibility. The model cycled through 6+ algorithm variants without converging.',
+    patterns: ['pattern-detection-loop', 'algorithmic-struggle', 'no-return'],
+  },
+  {
+    id: 'arc-136b0064',
+    score: 0,
+    iterations: 25,
+    wallTimeMs: 252493,
+    verdict: 'timeout',
+    inputChars: 1016491,
+    outputChars: 47746,
+    returnAttempts: 0,
+    failureMode: 'hypothesis-cycling',
+    expected: [[0,0,5,0,0,0,0],[0,0,1,1,1,0,0],[0,0,0,2,2,0,0],[0,0,0,6,0,0,0],[0,0,0,6,0,0,0],[3,3,3,3,0,0,0],[6,0,0,0,0,0,0],[6,0,0,0,0,0,0],[1,1,1,0,0,0,0],[0,0,1,1,1,0,0],[0,0,0,0,6,0,0],[0,0,0,0,6,0,0],[0,3,3,3,3,0,0],[2,2,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,0,0]],
+    submitted: null,
+    phases: [
+      { iter: 1,  phase: 'EXPLORE', desc: 'Parse task, log dimensions' },
+      { iter: 2,  phase: 'EXPLORE', desc: 'Visualize all training examples - see column-7 separator' },
+      { iter: 3,  phase: 'EXPLORE', desc: 'Identify left/right sections divided by column of 4s' },
+      { iter: 4,  phase: 'EXPLORE', desc: 'Find groups in left section, locate marker' },
+      { iter: 5,  phase: 'EXPLORE', desc: 'Log group contents, identify marker positions' },
+      { iter: 6,  phase: 'EXTRACT', desc: 'Test marker column extraction hypothesis - partial match' },
+      { iter: 7,  phase: 'EXPLORE', desc: 'Compare output with right section - most rows differ' },
+      { iter: 8,  phase: 'EXTRACT', desc: 'Analyze how left section maps to output positions' },
+      { iter: 9,  phase: 'EXTRACT', desc: 'Analyze per-row color counts (left vs right)' },
+      { iter: 10, phase: 'EXTRACT', desc: 'Investigate how counts relate to output' },
+      { iter: 11, phase: 'EXTRACT', desc: 'Count non-zero cells per side' },
+      { iter: 12, phase: 'EXTRACT', desc: 'Test "left count placed at marker" - partial match' },
+      { iter: 13, phase: 'EXTRACT', desc: 'Analyze placement logic (centering)' },
+      { iter: 14, phase: 'EXTRACT', desc: 'Test "count becomes color value" - some matches' },
+      { iter: 15, phase: 'EXTRACT', desc: 'Systematic placement analysis' },
+      { iter: 16, phase: 'EXTRACT', desc: 'Test "bigger count wins" - partial match' },
+      { iter: 17, phase: 'EXTRACT', desc: 'Analyze which original color appears in output' },
+      { iter: 18, phase: 'EXTRACT', desc: 'Test "losing side color" - inconsistent' },
+      { iter: 19, phase: 'EXTRACT', desc: 'Try group-level analysis instead of row-level' },
+      { iter: 20, phase: 'EXTRACT', desc: 'Test "left wins -> output right color" - inconsistent' },
+      { iter: 21, phase: 'EXTRACT', desc: 'Formulate complex multi-rule hypothesis' },
+      { iter: 22, phase: 'EXTRACT', desc: 'Analyze group-level totals and output patterns' },
+      { iter: 23, phase: 'EXTRACT', desc: 'Test "losing side color" at group level - partial' },
+      { iter: 24, phase: 'EXTRACT', desc: 'Detailed row-by-row analysis within groups' },
+      { iter: 25, phase: 'EXTRACT', desc: 'Focus on "count as color" pattern - partial understanding' },
+    ],
+    hypotheses: [
+      { name: 'Structure discovery (separator)', iters: [1,2,3,4,5], outcome: 'partial', outcomeLabel: 'Correct structure' },
+      { name: 'Marker column extraction', iters: [6,7], outcome: 'failed', outcomeLabel: 'Partial match' },
+      { name: 'Row-level count mapping', iters: [8,9,10,11,12,13], outcome: 'failed', outcomeLabel: '~60% match' },
+      { name: 'Count-as-color hypothesis', iters: [14,15,16], outcome: 'failed', outcomeLabel: 'Some rows only' },
+      { name: 'Winner/loser color selection', iters: [17,18], outcome: 'failed', outcomeLabel: 'Inconsistent' },
+      { name: 'Group-level analysis', iters: [19,20,21,22,23,24,25], outcome: 'stuck', outcomeLabel: 'Never converged' },
+    ],
+    firstCandidate: null,
+    firstReturn: null,
+    returnResult: null,
+    findings: 'Never fully cracked the transformation rule. Cycled through 7+ related hypotheses (column extraction, count mapping, count-as-color, winner-takes-all, losing-side-color, group-level) each explaining 60-70% of rows. The model correctly observed many individual facts but could not synthesize them into a complete, consistent rule.',
+    patterns: ['hypothesis-cycling', 'under-verification', 'no-return'],
+  },
+  {
+    id: 'arc-13e47133',
+    score: 0,
+    iterations: 25,
+    wallTimeMs: 487112,
+    verdict: 'timeout',
+    inputChars: 4829716,
+    outputChars: 93460,
+    returnAttempts: 6,
+    failureMode: 'marker-detection-struggle',
+    expected: null, // too large (multiple 20x20 and 30x30 grids)
+    submitted: null,
+    phases: [
+      { iter: 1,  phase: 'EXPLORE', desc: 'Parse task, visualize all (117KB output!), identify divisions' },
+      { iter: 2,  phase: 'EXPLORE', desc: 'Look for grid division patterns' },
+      { iter: 3,  phase: 'EXTRACT', desc: 'Sierpinski carpet hypothesis - FAILS, ReferenceError' },
+      { iter: 4,  phase: 'ERROR',   desc: 'Fix bug, retry Sierpinski - still fails (wrong values)' },
+      { iter: 5,  phase: 'EXPLORE', desc: 'Visualize actual output patterns in detail' },
+      { iter: 6,  phase: 'EXPLORE', desc: 'Find actual divider columns' },
+      { iter: 7,  phase: 'EXTRACT', desc: 'Implement nested rectangular frame fill - partial' },
+      { iter: 8,  phase: 'EXPLORE', desc: 'Analyze exact layer pattern (concentric rectangles)' },
+      { iter: 9,  phase: 'EXTRACT', desc: 'Verify layer logic - confirmed correct' },
+      { iter: 10, phase: 'SOLVE',   desc: 'Implement and return - FAIL Score 0/3, wrong colors' },
+      { iter: 11, phase: 'EXPLORE', desc: 'Debug marker detection - left:(0,0)=7, right: nothing' },
+      { iter: 12, phase: 'EXPLORE', desc: 'Find color 8 at (1,1), verify color assignments' },
+      { iter: 13, phase: 'SOLVE',   desc: 'Implement 2-marker detection - FAIL Score 0/3' },
+      { iter: 14, phase: 'EXPLORE', desc: 'Debug Train 2 horizontal divider detection' },
+      { iter: 15, phase: 'EXPLORE', desc: 'Check horizontal divider (row 6 is all-6s)' },
+      { iter: 16, phase: 'EXPLORE', desc: 'Verify quadrant: all color 7 (single marker)' },
+      { iter: 17, phase: 'EXPLORE', desc: 'Check bottom regions, confirm pattern' },
+      { iter: 18, phase: 'SOLVE',   desc: 'Implement corner markers - FAIL Score 0/3' },
+      { iter: 19, phase: 'EXPLORE', desc: 'Debug Train 0 and Train 1 marker positions' },
+      { iter: 20, phase: 'SOLVE',   desc: 'Implement input corner markers - FAIL Score 0/3' },
+      { iter: 21, phase: 'EXPLORE', desc: 'Debug: right region picks up background, not marker' },
+      { iter: 22, phase: 'SOLVE',   desc: 'Fix non-background corners - FAIL Score 0/3' },
+      { iter: 23, phase: 'EXPLORE', desc: 'Debug: exclusion list incorrectly filters markers' },
+      { iter: 24, phase: 'SOLVE',   desc: 'Fix exclusion logic - FAIL Score 0/3' },
+      { iter: 25, phase: 'EXPLORE', desc: 'Finally finds correct markers (7,8 left; 8,4 right) - timeout' },
+    ],
+    hypotheses: [
+      { name: 'Sierpinski carpet fill', iters: [1,2,3,4], outcome: 'failed', outcomeLabel: 'Wrong pattern' },
+      { name: 'Concentric rectangle fill', iters: [5,6,7,8,9], outcome: 'partial', outcomeLabel: 'Algorithm correct' },
+      { name: 'Marker detection v1 (single)', iters: [10,11], outcome: 'failed', outcomeLabel: 'Score 0/3' },
+      { name: 'Marker detection v2 (dual)', iters: [12,13], outcome: 'failed', outcomeLabel: 'Score 0/3' },
+      { name: 'Horizontal divider handling', iters: [14,15,16,17], outcome: 'partial', outcomeLabel: 'Found dividers' },
+      { name: 'Corner-based markers', iters: [18,19,20], outcome: 'failed', outcomeLabel: 'Score 0/3' },
+      { name: 'Non-background filtering', iters: [21,22,23,24,25], outcome: 'stuck', outcomeLabel: 'Exclusion bug, timeout' },
+    ],
+    firstCandidate: 10,
+    firstReturn: 10,
+    returnResult: '6 attempts, all Score 0/3',
+    findings: 'The geometric fill algorithm (concentric rectangles with alternating colors) was correct from iteration 9. The sole remaining problem was marker color detection: determining which two colors to use per region. A 5-line function consumed 16 iterations due to hardcoded exclusion lists, background confusion, and coordinate bugs. 6 return attempts, all failing verification.',
+    patterns: ['repeated-return-failure', 'marker-detection-struggle'],
+  },
+];
+
+// ============================================================
+// RENDER TIMELINE HEATMAP
+// ============================================================
+function renderTimeline() {
+  const container = document.getElementById('timeline-chart');
+  const maxIter = 25;
+
+  tasks.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+
+    const label = document.createElement('div');
+    label.className = 'timeline-task-id';
+    label.textContent = task.id.replace('arc-', '');
+    row.appendChild(label);
+
+    const phases = document.createElement('div');
+    phases.className = 'timeline-phases';
+
+    task.phases.forEach(p => {
+      const block = document.createElement('div');
+      block.className = `phase-block phase-${p.phase}`;
+      block.textContent = p.iter;
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+      tooltip.innerHTML = `<strong>Iter ${p.iter} &mdash; ${p.phase}</strong><br>${p.desc}`;
+      block.appendChild(tooltip);
+
+      phases.appendChild(block);
+    });
+
+    // Fill remaining slots for visual alignment
+    for (let i = task.phases.length; i < maxIter; i++) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'width:28px;height:28px;border-radius:3px;background:rgba(255,255,255,0.02);flex-shrink:0;min-width:28px;';
+      phases.appendChild(empty);
+    }
+
+    row.appendChild(phases);
+
+    const meta = document.createElement('div');
+    meta.className = 'timeline-meta';
+    meta.innerHTML = `
+      <span class="score-badge score-${task.score}">${task.score}/1</span>
+      <span class="verdict-label">${task.verdict}</span>
+    `;
+    row.appendChild(meta);
+
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// RENDER TOKEN BUDGET BURN
+// ============================================================
+function renderBudgetChart() {
+  const container = document.getElementById('budget-chart');
+  const maxTotal = Math.max(...tasks.map(t => t.inputChars + t.outputChars));
+
+  tasks.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'budget-row';
+
+    const label = document.createElement('div');
+    label.className = 'budget-label';
+    label.textContent = task.id.replace('arc-', '');
+
+    const barContainer = document.createElement('div');
+    barContainer.className = 'budget-bar-container';
+
+    const inputBar = document.createElement('div');
+    inputBar.className = 'budget-bar-input';
+    inputBar.style.width = (task.inputChars / maxTotal * 100) + '%';
+
+    const outputBar = document.createElement('div');
+    outputBar.className = 'budget-bar-output';
+    outputBar.style.width = (task.outputChars / maxTotal * 100) + '%';
+
+    barContainer.appendChild(inputBar);
+    barContainer.appendChild(outputBar);
+
+    const value = document.createElement('div');
+    value.className = 'budget-value';
+    value.textContent = `${(task.inputChars / 1000).toFixed(0)}K + ${(task.outputChars / 1000).toFixed(0)}K`;
+
+    row.appendChild(label);
+    row.appendChild(barContainer);
+    row.appendChild(value);
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// RENDER CUMULATIVE TOKEN CHART (SVG)
+// ============================================================
+function renderCumulativeChart() {
+  const svg = document.getElementById('cum-chart');
+  const W = 900, H = 280, PAD = { top: 20, right: 120, bottom: 40, left: 70 };
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  // Simulate cumulative input chars per iteration (linear interpolation from total)
+  const taskColors = ['#f85149', '#58a6ff', '#bc8cff', '#d29922', '#f778ba'];
+  const maxIter = 25;
+
+  // Approximate cumulative data: assume roughly linear accumulation
+  const cumData = tasks.map(t => {
+    const perIter = t.inputChars / t.iterations;
+    const points = [];
+    for (let i = 0; i <= t.iterations; i++) {
+      points.push(perIter * i);
+    }
+    return points;
+  });
+
+  const maxVal = Math.max(...cumData.map(d => d[d.length - 1]));
+
+  // Draw axes
+  let svgContent = `<g transform="translate(${PAD.left}, ${PAD.top})">`;
+
+  // Y-axis gridlines
+  const yTicks = [0, 1000000, 2000000, 3000000, 4000000, 5000000];
+  yTicks.forEach(v => {
+    if (v > maxVal * 1.05) return;
+    const y = plotH - (v / (maxVal * 1.05)) * plotH;
+    svgContent += `<line x1="0" y1="${y}" x2="${plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    svgContent += `<text x="-8" y="${y + 4}" text-anchor="end" fill="#6e7681" font-size="10" font-family="monospace">${(v/1000000).toFixed(1)}M</text>`;
+  });
+
+  // X-axis
+  for (let i = 0; i <= maxIter; i += 5) {
+    const x = (i / maxIter) * plotW;
+    svgContent += `<text x="${x}" y="${plotH + 18}" text-anchor="middle" fill="#6e7681" font-size="10" font-family="monospace">${i}</text>`;
+  }
+  svgContent += `<text x="${plotW/2}" y="${plotH + 35}" text-anchor="middle" fill="#8b949e" font-size="11">Iteration</text>`;
+
+  // Draw lines
+  cumData.forEach((points, ti) => {
+    const color = taskColors[ti];
+    let path = '';
+    points.forEach((v, i) => {
+      const x = (i / maxIter) * plotW;
+      const y = plotH - (v / (maxVal * 1.05)) * plotH;
+      path += (i === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    svgContent += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" opacity="0.85"/>`;
+
+    // End label
+    const lastX = (tasks[ti].iterations / maxIter) * plotW;
+    const lastY = plotH - (points[points.length - 1] / (maxVal * 1.05)) * plotH;
+    svgContent += `<circle cx="${lastX}" cy="${lastY}" r="3" fill="${color}"/>`;
+    svgContent += `<text x="${lastX + 8}" y="${lastY + 4}" fill="${color}" font-size="10" font-family="monospace">${tasks[ti].id.replace('arc-','').slice(0,4)}</text>`;
+  });
+
+  svgContent += '</g>';
+  svg.innerHTML = svgContent;
+}
+
+// ============================================================
+// RENDER RETURN() PROBLEM
+// ============================================================
+function renderReturnProblem() {
+  const container = document.getElementById('return-timeline');
+  const maxIter = 25;
+
+  const returnData = [
+    {
+      id: 'arc-142ca369', iters: 3,
+      firstCandidate: 1, firstReturn: 1,
+      returnAttempts: [{ iter: 1, result: 'intercepted (0/3)' }, { iter: 2, result: 'TypeError' }, { iter: 3, result: 'accepted (0/3)' }],
+      gap: 0,
+      note: 'Returned wrong answer at iter 3. Score 0/3 on training but submitted anyway.',
+    },
+    {
+      id: 'arc-0934a4d8', iters: 25,
+      firstCandidate: 19, firstReturn: null,
+      returnAttempts: [],
+      gap: null,
+      note: 'Had reconstruction candidate at iter 19. Never called return(). Gap: 6+ iterations wasted.',
+    },
+    {
+      id: 'arc-135a2760', iters: 25,
+      firstCandidate: 8, firstReturn: null,
+      returnAttempts: [],
+      gap: null,
+      note: 'Partial algorithm working by iter 8. Never called return(). Gap: 17+ iterations wasted.',
+    },
+    {
+      id: 'arc-136b0064', iters: 25,
+      firstCandidate: null, firstReturn: null,
+      returnAttempts: [],
+      gap: null,
+      note: 'Never generated a complete candidate. Never called return(). No viable solution found.',
+    },
+    {
+      id: 'arc-13e47133', iters: 25,
+      firstCandidate: 10, firstReturn: 10,
+      returnAttempts: [
+        { iter: 10, result: '0/3 wrong colors' },
+        { iter: 13, result: '0/3 wrong colors' },
+        { iter: 18, result: '0/3 wrong corners' },
+        { iter: 20, result: '0/3 background color' },
+        { iter: 22, result: '0/3 exclusion bug' },
+        { iter: 24, result: '0/3 exclusion bug' },
+      ],
+      gap: 0,
+      note: '6 return attempts, all Score 0/3. Correct algorithm, wrong marker colors every time.',
+    },
+  ];
+
+  returnData.forEach(rd => {
+    const row = document.createElement('div');
+    row.className = 'return-task';
+
+    const idEl = document.createElement('div');
+    idEl.className = 'return-task-id';
+    idEl.textContent = rd.id.replace('arc-', '');
+
+    const track = document.createElement('div');
+    track.className = 'return-track';
+
+    // Draw iteration ticks
+    for (let i = 1; i <= maxIter; i++) {
+      if (i <= rd.iters) {
+        const tick = document.createElement('div');
+        tick.style.cssText = `position:absolute;left:${((i - 0.5) / maxIter * 100)}%;width:1px;height:100%;background:rgba(255,255,255,0.05);`;
+        track.appendChild(tick);
+      }
+    }
+
+    // First candidate marker (green triangle)
+    if (rd.firstCandidate) {
+      const m = document.createElement('div');
+      m.className = 'return-marker';
+      m.style.cssText = `left:${((rd.firstCandidate - 0.5) / maxIter * 100)}%;background:var(--accent-green);`;
+      const lbl = document.createElement('div');
+      lbl.className = 'return-marker-label';
+      lbl.style.color = 'var(--accent-green)';
+      lbl.innerHTML = `1st candidate (${rd.firstCandidate})`;
+      m.appendChild(lbl);
+      track.appendChild(m);
+    }
+
+    // Return attempt markers (orange/red dots)
+    rd.returnAttempts.forEach(ra => {
+      const m = document.createElement('div');
+      m.style.cssText = `position:absolute;left:${((ra.iter - 0.5) / maxIter * 100)}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:var(--accent-red);z-index:6;cursor:default;`;
+      m.title = `Iter ${ra.iter}: ${ra.result}`;
+      track.appendChild(m);
+    });
+
+    // Gap indicator (if there's a gap between first candidate and timeout)
+    if (rd.firstCandidate && !rd.firstReturn && rd.iters > rd.firstCandidate) {
+      const gap = document.createElement('div');
+      gap.className = 'return-gap';
+      const startPct = ((rd.firstCandidate - 0.5) / maxIter * 100);
+      const endPct = ((rd.iters - 0.5) / maxIter * 100);
+      gap.style.left = startPct + '%';
+      gap.style.width = (endPct - startPct) + '%';
+      track.appendChild(gap);
+    }
+
+    // Timeout line
+    if (rd.iters === 25) {
+      const timeout = document.createElement('div');
+      timeout.style.cssText = `position:absolute;right:0;top:0;width:2px;height:100%;background:var(--accent-orange);border-radius:1px;`;
+      track.appendChild(timeout);
+    }
+
+    const info = document.createElement('div');
+    info.className = 'return-info';
+    info.innerHTML = rd.note.replace(/return\(\)/g, '<code style="color:var(--accent-teal)">return()</code>')
+                           .replace(/Gap: (\d+\+? iterations wasted)/, '<span class="gap-label">Gap: $1</span>')
+                           .replace(/Score 0\/3/g, '<strong>Score 0/3</strong>')
+                           .replace(/Never called return\(\)/, '<strong>Never called return()</strong>');
+
+    row.appendChild(idEl);
+    row.appendChild(track);
+    row.appendChild(info);
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// RENDER HYPOTHESIS EVOLUTION
+// ============================================================
+function renderHypotheses() {
+  const container = document.getElementById('hypothesis-container');
+
+  tasks.forEach(task => {
+    const taskDiv = document.createElement('div');
+    taskDiv.className = 'hyp-task';
+
+    const header = document.createElement('div');
+    header.className = 'hyp-task-header';
+    header.innerHTML = `${task.id} <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem">&mdash; ${task.verdict}, ${task.iterations} iters</span>`;
+    taskDiv.appendChild(header);
+
+    // Iteration labels
+    const iterLabels = document.createElement('div');
+    iterLabels.className = 'hyp-iter-labels';
+    for (let i = 1; i <= task.iterations; i++) {
+      const lbl = document.createElement('div');
+      lbl.className = 'hyp-iter-label';
+      lbl.textContent = i % 5 === 0 || i === 1 ? i : '';
+      iterLabels.appendChild(lbl);
+    }
+    taskDiv.appendChild(iterLabels);
+
+    task.hypotheses.forEach(hyp => {
+      const lane = document.createElement('div');
+      lane.className = 'hyp-lane';
+
+      const name = document.createElement('div');
+      name.className = 'hyp-name';
+      name.textContent = hyp.name;
+      lane.appendChild(name);
+
+      const track = document.createElement('div');
+      track.className = 'hyp-track';
+
+      for (let i = 1; i <= task.iterations; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'hyp-cell';
+        if (hyp.iters.includes(i)) {
+          // Determine cell class based on outcome and phase
+          const phase = task.phases.find(p => p.iter === i);
+          if (phase && (phase.phase === 'SOLVE' || phase.phase === 'ERROR')) {
+            cell.className += ' active-fail';
+          } else if (phase && phase.phase === 'VERIFY') {
+            cell.className += ' active-verify';
+          } else {
+            cell.className += ' active';
+          }
+        } else {
+          cell.className += ' empty';
+        }
+        track.appendChild(cell);
+      }
+      lane.appendChild(track);
+
+      const outcome = document.createElement('div');
+      outcome.className = `hyp-outcome ${hyp.outcome}`;
+      outcome.textContent = hyp.outcomeLabel;
+      lane.appendChild(outcome);
+
+      taskDiv.appendChild(lane);
+    });
+
+    container.appendChild(taskDiv);
+  });
+}
+
+// ============================================================
+// RENDER ARC GRID
+// ============================================================
+function renderArcGrid(grid, containerEl) {
+  if (!grid) {
+    containerEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.78rem;font-style:italic">No grid data (too large or not submitted)</span>';
+    return;
+  }
+
+  const rows = grid.length;
+  const cols = grid[0].length;
+
+  const gridEl = document.createElement('div');
+  gridEl.className = 'arc-grid';
+  gridEl.style.gridTemplateColumns = `repeat(${cols}, 18px)`;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'arc-cell';
+      cell.style.backgroundColor = ARC_COLORS[grid[r][c]] || '#333';
+      cell.title = `(${r},${c}) = ${grid[r][c]}`;
+      gridEl.appendChild(cell);
+    }
+  }
+
+  containerEl.appendChild(gridEl);
+}
+
+// ============================================================
+// RENDER DETAIL CARDS
+// ============================================================
+function renderDetailCards() {
+  const container = document.getElementById('detail-cards');
+
+  tasks.forEach(task => {
+    const card = document.createElement('div');
+    card.className = 'detail-card';
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'detail-header';
+    headerDiv.onclick = function() {
+      const body = this.nextElementSibling;
+      const toggle = this.querySelector('.detail-toggle');
+      body.classList.toggle('open');
+      toggle.classList.toggle('open');
+    };
+
+    headerDiv.innerHTML = `
+      <div class="detail-header-left">
+        <span class="detail-task-id">${task.id}</span>
+        <span class="verdict-badge verdict-${task.verdict === 'timeout' ? 'timeout' : 'wrong'}">${task.verdict}</span>
+      </div>
+      <div class="detail-header-stats">
+        <span>${task.iterations} iters</span>
+        <span>${(task.wallTimeMs / 1000).toFixed(0)}s</span>
+        <span>${(task.inputChars / 1000).toFixed(0)}K input</span>
+        <span>${task.returnAttempts} returns</span>
+      </div>
+      <div class="detail-toggle">&#9660;</div>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'detail-body';
+
+    // Meta grid
+    const metaGrid = document.createElement('div');
+    metaGrid.className = 'detail-meta-grid';
+    metaGrid.innerHTML = `
+      <div class="detail-meta-item">
+        <div class="detail-meta-value stat-red">${task.score}</div>
+        <div class="detail-meta-label">Score</div>
+      </div>
+      <div class="detail-meta-item">
+        <div class="detail-meta-value stat-blue">${task.iterations}</div>
+        <div class="detail-meta-label">Iterations</div>
+      </div>
+      <div class="detail-meta-item">
+        <div class="detail-meta-value stat-orange">${(task.wallTimeMs / 1000).toFixed(0)}s</div>
+        <div class="detail-meta-label">Wall Time</div>
+      </div>
+      <div class="detail-meta-item">
+        <div class="detail-meta-value stat-teal">${(task.inputChars / 1000).toFixed(0)}K</div>
+        <div class="detail-meta-label">Input Chars</div>
+      </div>
+      <div class="detail-meta-item">
+        <div class="detail-meta-value stat-purple">${(task.outputChars / 1000).toFixed(0)}K</div>
+        <div class="detail-meta-label">Output Chars</div>
+      </div>
+      <div class="detail-meta-item">
+        <div class="detail-meta-value" style="color: ${task.returnAttempts > 0 ? 'var(--accent-red)' : 'var(--text-muted)'}">${task.returnAttempts}</div>
+        <div class="detail-meta-label">Return Attempts</div>
+      </div>
+    `;
+    body.appendChild(metaGrid);
+
+    // Grids
+    const gridRow = document.createElement('div');
+    gridRow.className = 'detail-grid-row';
+
+    if (task.expected) {
+      const expectedPanel = document.createElement('div');
+      expectedPanel.className = 'detail-grid-panel';
+      expectedPanel.innerHTML = '<h4>Expected Answer</h4>';
+      // Check if expected is an array of arrays (single grid) or needs special handling
+      if (Array.isArray(task.expected) && Array.isArray(task.expected[0]) && typeof task.expected[0][0] === 'number') {
+        renderArcGrid(task.expected, expectedPanel);
+      } else {
+        expectedPanel.innerHTML += '<span style="color:var(--text-muted);font-size:0.78rem;font-style:italic">Multiple test grids (not shown)</span>';
+      }
+      gridRow.appendChild(expectedPanel);
+    }
+
+    if (task.submitted) {
+      const submittedPanel = document.createElement('div');
+      submittedPanel.className = 'detail-grid-panel';
+      submittedPanel.innerHTML = '<h4>Submitted Answer</h4>';
+      if (Array.isArray(task.submitted) && Array.isArray(task.submitted[0]) && typeof task.submitted[0][0] === 'number') {
+        renderArcGrid(task.submitted, submittedPanel);
+      }
+      gridRow.appendChild(submittedPanel);
+    } else if (task.verdict === 'timeout') {
+      const noSubmit = document.createElement('div');
+      noSubmit.className = 'detail-grid-panel';
+      noSubmit.innerHTML = '<h4>Submitted Answer</h4><span style="color:var(--accent-red);font-size:0.78rem;font-weight:600">TIMEOUT &mdash; No answer submitted</span>';
+      gridRow.appendChild(noSubmit);
+    }
+
+    body.appendChild(gridRow);
+
+    // Findings
+    const findings = document.createElement('div');
+    findings.className = 'detail-findings';
+    findings.innerHTML = `
+      <h4>Key Failure Analysis &mdash; ${task.failureMode}</h4>
+      <p>${task.findings}</p>
+      <ul>
+        ${task.patterns.map(p => `<li><code style="color:var(--accent-purple)">${p}</code></li>`).join('')}
+      </ul>
+    `;
+    body.appendChild(findings);
+
+    card.appendChild(headerDiv);
+    card.appendChild(body);
+    container.appendChild(card);
+  });
+}
+
+// ============================================================
+// INITIALIZE
+// ============================================================
+renderTimeline();
+renderBudgetChart();
+renderCumulativeChart();
+renderReturnProblem();
+renderHypotheses();
+renderDetailCards();
+</script>
+
+</body>
+</html>

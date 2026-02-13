@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC Eval Run-003: Recursive Delegation Test &mdash; arc-solver v0.2.0</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-hover: #30363d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-orange: #d29922;
+    --accent-purple: #bc8cff;
+    --accent-teal: #39d2c0;
+    --accent-yellow: #e3b341;
+    --accent-pink: #f778ba;
+
+    --phase-explore: #4a7fb5;
+    --phase-delegate: #bc8cff;
+    --phase-refine: #d29922;
+    --phase-return: #56d364;
+    --phase-error: #f85149;
+    --phase-stall: #6e7681;
+
+    --arc-0: #000000;
+    --arc-1: #0074d9;
+    --arc-2: #ff4136;
+    --arc-3: #2ecc40;
+    --arc-4: #ffdc00;
+    --arc-5: #aaaaaa;
+    --arc-6: #f012be;
+    --arc-7: #ff851b;
+    --arc-8: #7fdbff;
+    --arc-9: #870c25;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: rgba(13, 17, 23, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .nav-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .nav-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(188, 140, 255, 0.2);
+    color: var(--accent-purple);
+    border: 1px solid rgba(188, 140, 255, 0.3);
+    white-space: nowrap;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .nav-links a:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent-blue);
+  }
+
+  .content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  .viz-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .viz-section h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .viz-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .mono {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  }
+
+  /* Aggregate Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .stat-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+  }
+
+  .stat-detail {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+
+  .stat-red { color: var(--accent-red); }
+  .stat-orange { color: var(--accent-orange); }
+  .stat-blue { color: var(--accent-blue); }
+  .stat-green { color: var(--accent-green); }
+  .stat-teal { color: var(--accent-teal); }
+  .stat-purple { color: var(--accent-purple); }
+
+  /* Config table */
+  .config-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-top: 0.5rem;
+  }
+
+  .config-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .config-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    vertical-align: middle;
+  }
+
+  .config-table tr:hover td {
+    background: rgba(48, 54, 61, 0.2);
+  }
+
+  /* Task results table */
+  .task-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+
+  .task-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .task-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    vertical-align: middle;
+  }
+
+  .task-table tr:hover td {
+    background: rgba(48, 54, 61, 0.2);
+  }
+
+  .verdict-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .verdict-timeout {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--accent-orange);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+  }
+
+  /* Phase Legend */
+  .phase-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Timeline */
+  .timeline-container {
+    margin-top: 0.5rem;
+  }
+
+  .timeline-task {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+  }
+
+  .timeline-task-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0.75rem;
+  }
+
+  .timeline-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+  }
+
+  .timeline-task-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 3px;
+    gap: 8px;
+  }
+
+  .timeline-row-label {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    min-width: 90px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .timeline-row-label.child-label {
+    color: var(--accent-purple);
+    font-size: 0.64rem;
+    padding-left: 20px;
+  }
+
+  .timeline-phases {
+    display: flex;
+    gap: 2px;
+    flex-grow: 1;
+    align-items: center;
+  }
+
+  .phase-block {
+    height: 28px;
+    min-width: 28px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    cursor: default;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .phase-block:hover {
+    opacity: 0.85;
+    transform: scale(1.08);
+    z-index: 10;
+  }
+
+  .phase-block .tooltip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
+    color: var(--text-primary);
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    max-width: 400px;
+    white-space: normal;
+  }
+
+  .phase-block:hover .tooltip { display: block; }
+
+  .phase-EXPLORE { background: var(--phase-explore); }
+  .phase-DELEGATE { background: var(--phase-delegate); }
+  .phase-REFINE { background: var(--phase-refine); color: rgba(0,0,0,0.8); }
+  .phase-RETURN { background: var(--phase-return); color: rgba(0,0,0,0.8); }
+  .phase-ERROR { background: var(--phase-error); }
+  .phase-STALL { background: var(--phase-stall); }
+
+  .phase-block.child-block {
+    height: 20px;
+    min-width: 20px;
+    font-size: 0.55rem;
+    opacity: 0.85;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .phase-block.empty-block {
+    background: rgba(255,255,255,0.02);
+    cursor: default;
+  }
+
+  .phase-block.empty-block:hover {
+    transform: none;
+    opacity: 1;
+  }
+
+  .timeline-row-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 130px;
+    justify-content: flex-end;
+  }
+
+  .score-badge {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .score-0 { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+
+  /* Context accumulation chart */
+  .chart-svg {
+    display: block;
+    margin-top: 0.5rem;
+  }
+
+  /* Driver compliance */
+  .compliance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .compliance-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+
+  .compliance-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.75rem;
+  }
+
+  .compliance-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+  }
+
+  .compliance-list {
+    list-style: none;
+    font-size: 0.78rem;
+    line-height: 2;
+  }
+
+  .compliance-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+    padding: 2px 0;
+  }
+
+  .compliance-list li:last-child {
+    border-bottom: none;
+  }
+
+  .check-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .check-yes {
+    background: rgba(63, 185, 80, 0.2);
+    color: var(--accent-green);
+    border: 1px solid rgba(63, 185, 80, 0.4);
+  }
+
+  .check-partial {
+    background: rgba(210, 153, 34, 0.2);
+    color: var(--accent-orange);
+    border: 1px solid rgba(210, 153, 34, 0.4);
+  }
+
+  .check-no {
+    background: rgba(248, 81, 73, 0.2);
+    color: var(--accent-red);
+    border: 1px solid rgba(248, 81, 73, 0.4);
+  }
+
+  .compliance-label {
+    color: var(--text-secondary);
+    flex-grow: 1;
+  }
+
+  .compliance-note {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    text-align: right;
+    flex-shrink: 0;
+    max-width: 200px;
+  }
+
+  /* Delegation audit */
+  .delegation-audit {
+    margin-top: 0.5rem;
+  }
+
+  .delegation-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .delegation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .delegation-header:hover {
+    background: rgba(48, 54, 61, 0.3);
+  }
+
+  .delegation-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .delegation-header-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .delegation-toggle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+
+  .delegation-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(48, 54, 61, 0.4);
+  }
+
+  .delegation-body.open { display: block; }
+  .delegation-toggle.open { transform: rotate(180deg); }
+
+  .delegation-child {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(13, 17, 23, 0.5);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent-purple);
+  }
+
+  .delegation-child-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.5rem;
+  }
+
+  .child-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(188, 140, 255, 0.15);
+    color: var(--accent-purple);
+    border: 1px solid rgba(188, 140, 255, 0.3);
+  }
+
+  .child-model-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .model-fast {
+    background: rgba(57, 210, 192, 0.15);
+    color: var(--accent-teal);
+    border: 1px solid rgba(57, 210, 192, 0.3);
+  }
+
+  .model-orchestrator {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+  }
+
+  .child-score {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .child-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+  }
+
+  .child-return-data {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 6px 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* Code snippets */
+  .snippet-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .snippet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .snippet-header:hover {
+    background: rgba(48, 54, 61, 0.3);
+  }
+
+  .snippet-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .snippet-iter-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  }
+
+  .snippet-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .snippet-toggle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+
+  .snippet-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(48, 54, 61, 0.4);
+  }
+
+  .snippet-body.open { display: block; }
+  .snippet-toggle.open { transform: rotate(180deg); }
+
+  .snippet-context {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+  }
+
+  pre.code-block {
+    background: rgba(13, 17, 23, 0.8);
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin-top: 0.5rem;
+  }
+
+  pre.code-block .kw { color: var(--accent-purple); }
+  pre.code-block .str { color: var(--accent-green); }
+  pre.code-block .cm { color: var(--text-muted); font-style: italic; }
+  pre.code-block .err { color: var(--accent-red); font-weight: 600; }
+  pre.code-block .fn { color: var(--accent-blue); }
+  pre.code-block .num { color: var(--accent-orange); }
+
+  /* Callouts */
+  .callout {
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .callout-error {
+    background: rgba(248, 81, 73, 0.08);
+    border: 1px solid rgba(248, 81, 73, 0.25);
+  }
+
+  .callout-info {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+  }
+
+  .callout-success {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.2);
+  }
+
+  .callout-warning {
+    background: rgba(210, 153, 34, 0.08);
+    border: 1px solid rgba(210, 153, 34, 0.25);
+  }
+
+  .callout-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .callout-error .callout-title { color: var(--accent-red); }
+  .callout-info .callout-title { color: var(--accent-blue); }
+  .callout-success .callout-title { color: var(--accent-green); }
+  .callout-warning .callout-title { color: var(--accent-orange); }
+
+  .callout p, .callout li {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .callout ul {
+    margin: 0.4rem 0 0 1.25rem;
+  }
+
+  .callout code {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--accent-teal);
+  }
+
+  /* Cross-run comparison table */
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    margin-top: 0.75rem;
+  }
+
+  .comparison-table th {
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .comparison-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    vertical-align: middle;
+  }
+
+  .comparison-table tr:hover td {
+    background: rgba(48, 54, 61, 0.15);
+  }
+
+  .regression-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+  }
+
+  .same-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(110, 118, 129, 0.15);
+    color: var(--text-muted);
+    border: 1px solid rgba(110, 118, 129, 0.3);
+  }
+
+  .new-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(188, 140, 255, 0.15);
+    color: var(--accent-purple);
+    border: 1px solid rgba(188, 140, 255, 0.3);
+  }
+
+  /* Expandable generic */
+  .expandable-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .expandable-header:hover {
+    background: rgba(48, 54, 61, 0.3);
+  }
+
+  .expandable-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(48, 54, 61, 0.4);
+  }
+
+  .expandable-body.open { display: block; }
+
+  .toggle-icon {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+
+  .toggle-icon.open { transform: rotate(180deg); }
+
+  @media (max-width: 900px) {
+    .content { padding: 1rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .compliance-grid { grid-template-columns: 1fr; }
+    .timeline-row-label { min-width: 70px; font-size: 0.62rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sticky-nav">
+  <div class="nav-title">ARC Eval Run-003</div>
+  <div class="nav-badge">recursive delegation</div>
+  <div class="nav-links">
+    <a href="#summary">Summary</a>
+    <a href="#timeline">Timeline</a>
+    <a href="#context">Context</a>
+    <a href="#compliance">Compliance</a>
+    <a href="#delegation">Delegation</a>
+    <a href="#snippets">Code</a>
+    <a href="#comparison">Comparison</a>
+  </div>
+</nav>
+
+<div class="content">
+
+<h1>ARC-AGI-2 Run-003: Recursive Delegation</h1>
+<p class="page-subtitle">
+  arc-solver v0.2.0 &mdash; Claude Sonnet 4.5 + Gemini Flash children &mdash;
+  2 tasks, 30 iterations, 6 child delegations, 0% accuracy &mdash; 2026-02-13
+</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: AGGREGATE SUMMARY -->
+<!-- ============================================================ -->
+<div class="viz-section" id="summary">
+  <h2>Run Configuration &amp; Results</h2>
+  <p class="viz-subtitle">First test of the recursive delegation architecture. maxDepth=2, 15 iterations, children via Gemini Flash.</p>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value stat-red">0 / 2</div>
+      <div class="stat-label">Tasks Correct</div>
+      <div class="stat-detail">Both timeout (no return)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-orange">30</div>
+      <div class="stat-label">Total Iterations</div>
+      <div class="stat-detail">15 per task (budget: 15)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-purple">6</div>
+      <div class="stat-label">Child Delegations</div>
+      <div class="stat-detail">3 crashed, 2 returned 0/4, 3 returned 0/2</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-blue">~6.6 min</div>
+      <div class="stat-label">Total Wall Time</div>
+      <div class="stat-detail">399 seconds</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-teal">1.29M</div>
+      <div class="stat-label">Total Input Chars</div>
+      <div class="stat-detail">660K + 632K</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-green">$1.20</div>
+      <div class="stat-label">Est. Cost</div>
+      <div class="stat-detail">Including child API calls</div>
+    </div>
+  </div>
+
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th>Value</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">model</td>
+        <td class="mono" style="color: var(--accent-blue)">anthropic/claude-sonnet-4.5</td>
+        <td style="color: var(--text-muted); font-size: 0.78rem">Outer strategist</td>
+      </tr>
+      <tr>
+        <td class="mono">maxIterations</td>
+        <td class="mono" style="color: var(--accent-orange)">15</td>
+        <td style="color: var(--text-muted); font-size: 0.78rem">Reduced from 50 (run-002) -- delegation overhead accounted for</td>
+      </tr>
+      <tr>
+        <td class="mono">maxDepth</td>
+        <td class="mono" style="color: var(--accent-purple)">2</td>
+        <td style="color: var(--text-muted); font-size: 0.78rem">Children can run their own REPL loops (5-10 iters each)</td>
+      </tr>
+      <tr>
+        <td class="mono">app</td>
+        <td class="mono" style="color: var(--accent-teal)">arc-solver v0.2.0</td>
+        <td style="color: var(--text-muted); font-size: 0.78rem">Recursive strategist pattern</td>
+      </tr>
+      <tr>
+        <td class="mono">model aliases</td>
+        <td>
+          <span class="child-model-badge model-fast">fast</span> Gemini Flash &nbsp;
+          <span class="child-model-badge model-orchestrator">orchestrator</span> Sonnet &nbsp;
+        </td>
+        <td style="color: var(--accent-red); font-size: 0.78rem">orchestrator alias BROKEN (invalid model ID)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="task-table" style="margin-top: 1rem">
+    <thead>
+      <tr>
+        <th>Task ID</th>
+        <th>Score</th>
+        <th>Iters</th>
+        <th>Wall Time</th>
+        <th>Verdict</th>
+        <th>Delegations</th>
+        <th>vs Run-002</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-0934a4d8</td>
+        <td class="mono stat-red">0</td>
+        <td class="mono">15 / 15</td>
+        <td class="mono">210s</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">3 <span style="color:var(--text-muted)">(1 crashed, 2 returned 0/4)</span></td>
+        <td><span class="regression-badge">worse</span> <span style="color:var(--text-muted);font-size:0.72rem">was 3/4 solution @ 50 iters</span></td>
+      </tr>
+      <tr>
+        <td class="mono" style="color: var(--accent-blue)">arc-135a2760</td>
+        <td class="mono stat-red">0</td>
+        <td class="mono">15 / 15</td>
+        <td class="mono">189s</td>
+        <td><span class="verdict-badge verdict-timeout">timeout</span></td>
+        <td class="mono">3 <span style="color:var(--text-muted)">(all returned 0/2)</span></td>
+        <td><span class="regression-badge">worse</span> <span style="color:var(--text-muted);font-size:0.72rem">was return @ 13 iters</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: PER-TASK TIMELINE WITH CHILD SUB-TIMELINES -->
+<!-- ============================================================ -->
+<div class="viz-section" id="timeline">
+  <h2>Iteration Timeline with Delegation</h2>
+  <p class="viz-subtitle">Each cell is one outer iteration. Child RLM delegations are shown as nested indented sub-rows. Hover for details.</p>
+
+  <div class="phase-legend">
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-explore)"></div>EXPLORE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-delegate)"></div>DELEGATE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-refine)"></div>REFINE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-return)"></div>RETURN</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-error)"></div>ERROR</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-stall)"></div>STALL</div>
+  </div>
+
+  <div class="timeline-container" id="timeline-container"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: CONTEXT ACCUMULATION CHART -->
+<!-- ============================================================ -->
+<div class="viz-section" id="context">
+  <h2>Context Accumulation</h2>
+  <p class="viz-subtitle">Estimated cumulative input characters per iteration. Delegation iterations (purple markers) consume context for child prompt construction.</p>
+
+  <svg id="context-chart" class="chart-svg"></svg>
+
+  <div class="callout callout-warning" style="margin-top: 1rem">
+    <div class="callout-title">Budget vs. Context</div>
+    <p>Both tasks consumed their full 15-iteration budget. arc-0934a4d8 consumed 660K input chars (heavy grid visualization in early iterations). arc-135a2760 consumed 632K. The delegation overhead (constructing child prompts with HELPER_LIBRARY) adds ~5-10K chars per delegation attempt.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: DRIVER COMPLIANCE CHECKLIST -->
+<!-- ============================================================ -->
+<div class="viz-section" id="compliance">
+  <h2>Driver Compliance Checklist</h2>
+  <p class="viz-subtitle">How well each task followed the arc-solver v0.2.0 protocol. Green = complied, yellow = partial, red = not done.</p>
+
+  <div class="compliance-grid" id="compliance-grid"></div>
+
+  <div class="callout callout-success" style="margin-top: 1rem">
+    <div class="callout-title">Best Protocol Execution To Date</div>
+    <p>arc-135a2760 achieved the best execution of the delegation protocol in any run: 3 named hypotheses, parallel children via <code>Promise.all</code>, HELPER_LIBRARY injection, and structured <code>{score, code}</code> returns from all children. The protocol works mechanically. The problem is hypothesis quality and budget sizing.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: DELEGATION AUDIT -->
+<!-- ============================================================ -->
+<div class="viz-section" id="delegation">
+  <h2>Delegation Audit</h2>
+  <p class="viz-subtitle">Detailed audit of every child RLM spawned: model, hypothesis, return value, and outcome. Click to expand.</p>
+
+  <div class="delegation-audit" id="delegation-audit"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: KEY CODE SNIPPETS -->
+<!-- ============================================================ -->
+<div class="viz-section" id="snippets">
+  <h2>Key Code Snippets</h2>
+  <p class="viz-subtitle">Pivotal code from critical iterations. Click to expand.</p>
+
+  <div id="snippets-container"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: CROSS-RUN COMPARISON -->
+<!-- ============================================================ -->
+<div class="viz-section" id="comparison">
+  <h2>Cross-Run Comparison</h2>
+  <p class="viz-subtitle">How run-003 compares to run-001 (baseline) and run-002 (50-iter no-delegation).</p>
+
+  <div id="comparison-container"></div>
+</div>
+
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+
+const PHASE_COLORS = {
+  EXPLORE:  '#4a7fb5',
+  DELEGATE: '#bc8cff',
+  REFINE:   '#d29922',
+  RETURN:   '#56d364',
+  ERROR:    '#f85149',
+  STALL:    '#6e7681',
+};
+
+const tasks = [
+  {
+    id: 'arc-0934a4d8',
+    score: 0,
+    iterations: 15,
+    wallTime: 210,
+    inputChars: 659693,
+    outputChars: 29660,
+    expected: '[[7,7,9],[7,2,9],[7,2,9],[7,7,9],[4,4,7],[4,4,7],[6,6,1],[6,6,6],[1,6,1]]',
+    submitted: '""  (empty string)',
+    phases: [
+      { iter: 0, phase: 'EXPLORE', desc: 'Parse task, visualize all 4 training examples + test input. 4 train (30x30), 1 test (30x30).' },
+      { iter: 1, phase: 'EXPLORE', desc: 'Find 8-marker regions, compute bounding boxes. Bug: used map(p => p[0]) for both min/max col.' },
+      { iter: 2, phase: 'EXPLORE', desc: 'Fix bounding box. Ex0 rows 14-22 cols 25-28 (9x4). 8-region size = output size in all 4 examples.' },
+      { iter: 3, phase: 'EXPLORE', desc: 'Hypothesis: horizontal mirror. reflectedMinC = 29 - maxC. No match for any example.' },
+      { iter: 4, phase: 'EXPLORE', desc: 'Hypothesis: vertical mirror. reflectedMinR = 29 - maxR. No match for any example.' },
+      { iter: 5, phase: 'EXPLORE', desc: 'Hypothesis: 180-degree rotation (point symmetry). (29-r, 29-c) for each cell. No match.' },
+      { iter: 6, phase: 'EXPLORE', desc: 'Compare point-symmetric region cell-by-cell vs output. Ex0: 9/36 cells match.' },
+      { iter: 7, phase: 'EXPLORE', desc: 'New hypothesis: repeating/tiled grid structure. 32.7% point symmetry. No match.' },
+      { iter: 8, phase: 'DELEGATE', desc: 'DELEGATION #1: 3 child RLMs via Promise.all. CRASHED -- orchestrator alias invalid. 2 rlm() calls NOT awaited.', isDelegate: true, delegationFailed: true },
+      { iter: 9, phase: 'DELEGATE', desc: 'DELEGATION #2: single child model:"fast". H1 child returned {score:"0/4", code:...}. Wrong approach.', isDelegate: true },
+      { iter: 10, phase: 'DELEGATE', desc: 'DELEGATION #3: single child model:"fast". H2 child returned {score:"0/4", code:...}. Extracted interior of 8-box (all 8s).', isDelegate: true },
+      { iter: 11, phase: 'REFINE', desc: 'Brute-force search for output as 9x4 subgrid. No perfect match anywhere. Output is CONSTRUCTED, not extracted.' },
+      { iter: 12, phase: 'REFINE', desc: 'Look at regions adjacent to 8s. Region ABOVE (rows 10-13) has 4 rows matching output rows 4-7. Near-miss!' },
+      { iter: 13, phase: 'ERROR', desc: 'Test "region ABOVE 8s" hypothesis. TypeError: Cannot read properties of undefined -- negative row index.' },
+      { iter: 14, phase: 'STALL', desc: 'Final trace entry from iter 13 error. Budget exhausted. Never called return().' },
+    ],
+    children: [
+      {
+        iter: 8, batch: true, batchSize: 3,
+        children: [
+          { id: 'H1', model: 'fast', hypothesis: 'Extract output from a reflected position in the grid', result: 'LOST (Promise.all crashed)', score: null, failed: true },
+          { id: 'H2', model: 'fast', hypothesis: 'Search for output pattern elsewhere in the grid', result: 'LOST (Promise.all crashed)', score: null, failed: true },
+          { id: 'H3', model: 'orchestrator', hypothesis: 'Complex transform with rotation/reflection', result: 'CRASHED: anthropic/claude-sonnet-4-5-20250929 is not a valid model ID', score: null, failed: true },
+        ]
+      },
+      {
+        iter: 9, batch: false,
+        children: [
+          { id: 'H1-retry', model: 'fast', hypothesis: 'Extract from a reflected position (with reduced helper library)', result: '{"score":"0/4","code":"function find8Region(grid) {...} function transform(grid) {...}"}', score: '0/4', failed: false },
+        ]
+      },
+      {
+        iter: 10, batch: false,
+        children: [
+          { id: 'H2-retry', model: 'fast', hypothesis: 'Search for output as subgrid in input', result: '{"score":"0/4","code":"function transform(grid) {...}"}', score: '0/4', failed: false },
+        ]
+      },
+    ],
+    compliance: [
+      { step: 'Iter 1: Parse and explore yourself', status: 'yes', note: 'Iters 0-2' },
+      { step: 'Iter 2: Generate 3 hypotheses', status: 'partial', note: 'Generated but not as clear numbered list' },
+      { step: 'Iter 3-5: Delegate to children', status: 'partial', note: '3 delegations, 1 crashed, 2 returned 0/4' },
+      { step: 'Iter 6: Compare and commit', status: 'no', note: 'No HYPOTHESIS COMPARISON block' },
+      { step: 'Iter 7: Refine best', status: 'no', note: 'All 0/4, nothing to refine' },
+      { step: 'Iter 8: Apply to test', status: 'no', note: 'Never found correct rule' },
+      { step: 'Iter 9: Return', status: 'no', note: 'Never called return()' },
+      { step: 'Pass HELPER_LIBRARY', status: 'yes', note: 'Full library for iter 8, reduced for 9-10' },
+      { step: 'model: "fast" for testing', status: 'yes', note: '2/3 calls used fast' },
+      { step: 'Promise.all for parallel', status: 'partial', note: 'Attempted, crashed (orchestrator bug)' },
+      { step: 'Budget awareness', status: 'partial', note: '"entering deadline mode soon" at iter 9 (first ever)' },
+    ],
+  },
+  {
+    id: 'arc-135a2760',
+    score: 0,
+    iterations: 15,
+    wallTime: 189,
+    inputChars: 631731,
+    outputChars: 31028,
+    expected: '29x29 pattern-corrected grid',
+    submitted: '""  (empty string)',
+    phases: [
+      { iter: 0, phase: 'EXPLORE', desc: 'Parse task, print all training examples and test input. 2 train (5x13, 21x22), 1 test (29x29). Same-size output.' },
+      { iter: 1, phase: 'EXPLORE', desc: 'Generate 3 hypotheses: H1 Pattern completion via tiling, H2 Alternating pattern extension, H3 Symmetry-based correction. Announced delegation.' },
+      { iter: 2, phase: 'DELEGATE', desc: 'DELEGATION: 3 parallel children via Promise.all. All model:"fast", all passed HELPER_LIBRARY, all returned structured JSON.', isDelegate: true },
+      { iter: 3, phase: 'STALL', desc: 'Model confused -- logged "Waiting for hypothesis testing to complete..." Children already returned in iter 2.' },
+      { iter: 4, phase: 'EXPLORE', desc: 'Parsed results: H1 0/2, H2 0/2, H3 0/2. All three hypotheses failed.' },
+      { iter: 5, phase: 'REFINE', desc: 'Self-directed: compute cell-by-cell diffs. Train 0: 1 change. Train 1: 9 changes. Small number of cells changed.' },
+      { iter: 6, phase: 'REFINE', desc: 'Implement own transform: row-level pattern detection. Majority voting. 0/2 -- applied to frame borders too.' },
+      { iter: 7, phase: 'REFINE', desc: 'Frame analysis: identify 2-layer border structure. Positions 0,1 and W-2,W-1 are frame. Content is 2..W-3.' },
+      { iter: 8, phase: 'REFINE', desc: 'Fix frame handling: process only interior. Train 0: PASS. Train 1: FAIL (row 8 corrupted). Score: 1/2.' },
+      { iter: 9, phase: 'REFINE', desc: 'Debug row 8 failure: test all periods on interior. Interior [4,1,4,1,...] has 0 errors at period 2.' },
+      { iter: 10, phase: 'REFINE', desc: 'Verify: row 8 input = output (no changes needed). Confirmed. But transform corrupts it anyway.' },
+      { iter: 11, phase: 'REFINE', desc: 'Reproduce issue from scratch. Score: 1/2 persists.' },
+      { iter: 12, phase: 'REFINE', desc: 'Debug with logging. FOUND BUG: period 2 has 0 errors, but period 3 picked as "best" with fewer non-zero errors.' },
+      { iter: 13, phase: 'REFINE', desc: 'FIX: skip if any period has 0 errors (foundPerfect flag). Train 0: PASS. Train 1: PASS. Score: 2/2!' },
+      { iter: 14, phase: 'STALL', desc: 'Budget exhausted. Never called return(). Had 2/2 solution but 0 iterations left to apply to test and return.' },
+    ],
+    children: [
+      {
+        iter: 2, batch: true, batchSize: 3,
+        children: [
+          { id: 'H1', model: 'fast', hypothesis: 'Pattern Completion via Tiling -- find minimal repeating unit per row, fill gaps', result: '{"score":"0/2","code":"function transform(grid) {...}"}', score: '0/2', failed: false },
+          { id: 'H2', model: 'fast', hypothesis: 'Alternating Pattern Extension -- extend alternating color sequences', result: '{"score":"0/2","code":"function transform(grid) {...}"}', score: '0/2', failed: false },
+          { id: 'H3', model: 'fast', hypothesis: 'Symmetry-Based Correction -- use grid symmetry to fix errors', result: '{"score":"0/2","code":"function transformFixed(grid) {...}"}', score: '0/2', failed: false },
+        ]
+      },
+    ],
+    compliance: [
+      { step: 'Iter 1: Parse and explore yourself', status: 'yes', note: 'Iter 0' },
+      { step: 'Iter 2: Generate 3 hypotheses', status: 'yes', note: 'Iter 1 -- named and numbered' },
+      { step: 'Iter 3-5: Delegate to children', status: 'yes', note: 'Iter 2 -- 3 fast children, parallel, HELPER_LIBRARY' },
+      { step: 'Iter 6: Compare and commit', status: 'partial', note: 'Displayed results but no comparison block' },
+      { step: 'Iter 7: Refine via delegation', status: 'no', note: 'Switched to self-directed coding' },
+      { step: 'Iter 8: Apply to test', status: 'no', note: 'Never applied to test input' },
+      { step: 'Iter 9: Return', status: 'no', note: 'Budget exhausted at iter 13 (2/2 achieved)' },
+      { step: 'Pass HELPER_LIBRARY', status: 'yes', note: 'Full library to all 3 children' },
+      { step: 'model: "fast" for testing', status: 'yes', note: 'All 3 children used fast' },
+      { step: 'Promise.all for parallel', status: 'yes', note: 'Worked correctly (first time ever)' },
+      { step: 'Budget awareness', status: 'no', note: 'Never mentioned iteration budget' },
+    ],
+  },
+];
+
+// ============================================================
+// UTILITY: Toggle expandable
+// ============================================================
+function toggleExpandable(headerEl) {
+  const body = headerEl.nextElementSibling;
+  const toggle = headerEl.querySelector('.toggle-icon') ||
+                 headerEl.querySelector('.delegation-toggle') ||
+                 headerEl.querySelector('.snippet-toggle');
+  body.classList.toggle('open');
+  if (toggle) toggle.classList.toggle('open');
+}
+
+// ============================================================
+// RENDER TIMELINE
+// ============================================================
+function renderTimeline() {
+  const container = document.getElementById('timeline-container');
+  const maxIter = 15;
+
+  tasks.forEach(task => {
+    const taskDiv = document.createElement('div');
+    taskDiv.className = 'timeline-task';
+
+    // Task header
+    const header = document.createElement('div');
+    header.className = 'timeline-task-header';
+    header.innerHTML = `
+      <span class="timeline-task-id">${task.id}</span>
+      <span class="timeline-task-meta">${task.iterations} iters &middot; ${task.wallTime}s &middot; ${(task.inputChars/1000).toFixed(0)}K input</span>
+      <span class="score-badge score-0">Score: ${task.score}</span>
+      <span class="verdict-badge verdict-timeout">timeout</span>
+    `;
+    taskDiv.appendChild(header);
+
+    // Outer iteration row
+    const outerRow = document.createElement('div');
+    outerRow.className = 'timeline-row';
+
+    const outerLabel = document.createElement('div');
+    outerLabel.className = 'timeline-row-label';
+    outerLabel.textContent = 'outer model';
+    outerRow.appendChild(outerLabel);
+
+    const outerPhases = document.createElement('div');
+    outerPhases.className = 'timeline-phases';
+
+    task.phases.forEach(p => {
+      const block = document.createElement('div');
+      block.className = `phase-block phase-${p.phase}`;
+      block.textContent = p.iter;
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+      tooltip.innerHTML = `<strong>Iter ${p.iter} &mdash; ${p.phase}</strong><br>${p.desc}`;
+      block.appendChild(tooltip);
+
+      outerPhases.appendChild(block);
+    });
+
+    outerRow.appendChild(outerPhases);
+    taskDiv.appendChild(outerRow);
+
+    // Child delegation rows
+    task.children.forEach(delegation => {
+      delegation.children.forEach(child => {
+        const childRow = document.createElement('div');
+        childRow.className = 'timeline-row';
+
+        const childLabel = document.createElement('div');
+        childLabel.className = 'timeline-row-label child-label';
+        childLabel.innerHTML = `&#x2514; ${child.id}`;
+        childRow.appendChild(childLabel);
+
+        const childPhases = document.createElement('div');
+        childPhases.className = 'timeline-phases';
+
+        // Empty blocks before delegation iter
+        for (let i = 0; i < delegation.iter; i++) {
+          const empty = document.createElement('div');
+          empty.className = 'phase-block empty-block child-block';
+          childPhases.appendChild(empty);
+        }
+
+        // Delegation block
+        const delegBlock = document.createElement('div');
+        delegBlock.className = `phase-block child-block phase-${child.failed ? 'ERROR' : 'DELEGATE'}`;
+        delegBlock.textContent = child.score || (child.failed ? 'X' : '?');
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        tooltip.innerHTML = `<strong>${child.id}</strong> (${child.model})<br>` +
+          `${child.hypothesis}<br>` +
+          `<span style="color:${child.failed ? 'var(--accent-red)' : 'var(--accent-teal)'}">` +
+          `${child.failed ? 'FAILED' : child.score}</span>`;
+        delegBlock.appendChild(tooltip);
+        childPhases.appendChild(delegBlock);
+
+        // Empty blocks after
+        for (let i = delegation.iter + 1; i < maxIter; i++) {
+          const empty = document.createElement('div');
+          empty.className = 'phase-block empty-block child-block';
+          childPhases.appendChild(empty);
+        }
+
+        childRow.appendChild(childPhases);
+        taskDiv.appendChild(childRow);
+      });
+    });
+
+    container.appendChild(taskDiv);
+  });
+}
+
+// ============================================================
+// RENDER CONTEXT ACCUMULATION CHART
+// ============================================================
+function renderContextChart() {
+  const svg = document.getElementById('context-chart');
+  const W = 900, H = 320, PAD = { top: 30, right: 140, bottom: 45, left: 75 };
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const taskColors = ['#58a6ff', '#f778ba'];
+  const taskLabels = ['0934a4d8', '135a2760'];
+  const maxIter = 15;
+
+  // Approximate cumulative data based on total input chars
+  // arc-0934a4d8: 659,693 over 15 iters, heavy early iters (grid visualization)
+  const cumData = [
+    // arc-0934a4d8: front-loaded (grid viz in iter 0), delegation overhead iters 8-10
+    [0, 80000, 130000, 180000, 220000, 260000, 300000, 340000, 400000, 460000, 510000, 550000, 590000, 620000, 645000, 660000],
+    // arc-135a2760: more even, delegation in iter 2
+    [0, 70000, 130000, 200000, 240000, 290000, 340000, 380000, 420000, 460000, 500000, 530000, 560000, 595000, 620000, 632000],
+  ];
+
+  const maxVal = Math.max(...cumData.map(d => d[d.length - 1]));
+
+  let svgContent = `<g transform="translate(${PAD.left}, ${PAD.top})">`;
+
+  // Y-axis gridlines
+  const yTicks = [0, 100000, 200000, 300000, 400000, 500000, 600000, 700000];
+  yTicks.forEach(v => {
+    if (v > maxVal * 1.1) return;
+    const y = plotH - (v / (maxVal * 1.1)) * plotH;
+    svgContent += `<line x1="0" y1="${y}" x2="${plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    svgContent += `<text x="-10" y="${y + 4}" text-anchor="end" fill="#6e7681" font-size="10" font-family="monospace">${(v/1000).toFixed(0)}K</text>`;
+  });
+
+  // X-axis labels
+  for (let i = 0; i <= maxIter; i++) {
+    const x = (i / maxIter) * plotW;
+    if (i % 3 === 0 || i === maxIter) {
+      svgContent += `<text x="${x}" y="${plotH + 20}" text-anchor="middle" fill="#6e7681" font-size="10" font-family="monospace">${i}</text>`;
+    }
+    svgContent += `<line x1="${x}" y1="${plotH}" x2="${x}" y2="${plotH + 5}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>`;
+  }
+  svgContent += `<text x="${plotW/2}" y="${plotH + 38}" text-anchor="middle" fill="#8b949e" font-size="11">Iteration</text>`;
+  svgContent += `<text x="-50" y="${plotH/2}" text-anchor="middle" fill="#8b949e" font-size="11" transform="rotate(-90, -50, ${plotH/2})">Input Chars</text>`;
+
+  // Delegation markers (vertical bands)
+  const delegationIters = [
+    { task: 0, iters: [8, 9, 10] },
+    { task: 1, iters: [2] },
+  ];
+
+  delegationIters.forEach(d => {
+    d.iters.forEach(iter => {
+      const x = (iter / maxIter) * plotW;
+      svgContent += `<rect x="${x - 3}" y="0" width="6" height="${plotH}" fill="rgba(188, 140, 255, 0.08)" rx="2"/>`;
+    });
+  });
+
+  // Draw lines
+  cumData.forEach((points, ti) => {
+    const color = taskColors[ti];
+    let path = '';
+    points.forEach((v, i) => {
+      const x = (i / maxIter) * plotW;
+      const y = plotH - (v / (maxVal * 1.1)) * plotH;
+      path += (i === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    svgContent += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.85"/>`;
+
+    // Points for delegation iters
+    const delegIters = delegationIters[ti].iters;
+    points.forEach((v, i) => {
+      const x = (i / maxIter) * plotW;
+      const y = plotH - (v / (maxVal * 1.1)) * plotH;
+      if (delegIters.includes(i)) {
+        svgContent += `<circle cx="${x}" cy="${y}" r="5" fill="#bc8cff" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>`;
+      }
+    });
+
+    // End label
+    const lastX = plotW;
+    const lastY = plotH - (points[points.length - 1] / (maxVal * 1.1)) * plotH;
+    svgContent += `<circle cx="${lastX}" cy="${lastY}" r="3.5" fill="${color}"/>`;
+    svgContent += `<text x="${lastX + 10}" y="${lastY + 4}" fill="${color}" font-size="11" font-weight="600" font-family="monospace">${taskLabels[ti]}</text>`;
+    svgContent += `<text x="${lastX + 10}" y="${lastY + 18}" fill="#6e7681" font-size="9" font-family="monospace">${(points[points.length-1]/1000).toFixed(0)}K</text>`;
+  });
+
+  // Legend for purple markers
+  svgContent += `<circle cx="${plotW - 120}" cy="-10" r="4" fill="#bc8cff"/>`;
+  svgContent += `<text x="${plotW - 110}" y="-7}" fill="#8b949e" font-size="10">= delegation iteration</text>`;
+
+  svgContent += '</g>';
+  svg.innerHTML = svgContent;
+}
+
+// ============================================================
+// RENDER COMPLIANCE CHECKLIST
+// ============================================================
+function renderCompliance() {
+  const container = document.getElementById('compliance-grid');
+
+  tasks.forEach(task => {
+    const card = document.createElement('div');
+    card.className = 'compliance-card';
+
+    const header = document.createElement('div');
+    header.className = 'compliance-card-header';
+    header.innerHTML = `
+      <span class="compliance-task-id">${task.id}</span>
+      <span class="verdict-badge verdict-timeout">timeout</span>
+    `;
+    card.appendChild(header);
+
+    const list = document.createElement('ul');
+    list.className = 'compliance-list';
+
+    task.compliance.forEach(item => {
+      const li = document.createElement('li');
+
+      const icon = document.createElement('div');
+      icon.className = `check-icon check-${item.status}`;
+      icon.textContent = item.status === 'yes' ? '\u2713' : item.status === 'partial' ? '~' : '\u2717';
+
+      const label = document.createElement('span');
+      label.className = 'compliance-label';
+      label.textContent = item.step;
+
+      const note = document.createElement('span');
+      note.className = 'compliance-note';
+      note.textContent = item.note;
+
+      li.appendChild(icon);
+      li.appendChild(label);
+      li.appendChild(note);
+      list.appendChild(li);
+    });
+
+    card.appendChild(list);
+    container.appendChild(card);
+  });
+}
+
+// ============================================================
+// RENDER DELEGATION AUDIT
+// ============================================================
+function renderDelegationAudit() {
+  const container = document.getElementById('delegation-audit');
+
+  tasks.forEach(task => {
+    const card = document.createElement('div');
+    card.className = 'delegation-card';
+
+    const header = document.createElement('div');
+    header.className = 'delegation-header';
+    header.onclick = function() { toggleExpandable(this); };
+
+    const totalChildren = task.children.reduce((sum, d) => sum + d.children.length, 0);
+    const failedChildren = task.children.reduce((sum, d) => sum + d.children.filter(c => c.failed).length, 0);
+
+    header.innerHTML = `
+      <div class="delegation-header-left">
+        <span class="compliance-task-id">${task.id}</span>
+        <span style="font-size:0.75rem;color:var(--text-secondary)">${totalChildren} children spawned, ${failedChildren} failed</span>
+      </div>
+      <div class="delegation-header-stats">
+        <span>${task.children.length} delegation attempts</span>
+      </div>
+      <div class="delegation-toggle">&#9660;</div>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'delegation-body';
+
+    task.children.forEach(delegation => {
+      const delegDiv = document.createElement('div');
+      delegDiv.style.marginTop = '0.75rem';
+
+      const delegHeader = document.createElement('div');
+      delegHeader.style.cssText = 'font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.5rem;font-weight:600;';
+      delegHeader.innerHTML = `Iteration ${delegation.iter}` +
+        (delegation.batch ? ` &mdash; ${delegation.batchSize} children via <code style="color:var(--accent-teal)">Promise.all</code>` : ' &mdash; sequential') +
+        (delegation.iter === 8 && task.id === 'arc-0934a4d8' ? ' <span style="color:var(--accent-red);font-weight:700"> CRASHED</span>' : '');
+      delegDiv.appendChild(delegHeader);
+
+      delegation.children.forEach(child => {
+        const childDiv = document.createElement('div');
+        childDiv.className = 'delegation-child';
+        if (child.failed) {
+          childDiv.style.borderLeftColor = 'var(--accent-red)';
+        }
+
+        childDiv.innerHTML = `
+          <div class="delegation-child-header">
+            <span class="child-badge">${child.id}</span>
+            <span class="child-model-badge ${child.model === 'fast' ? 'model-fast' : 'model-orchestrator'}">${child.model}</span>
+            <span class="child-score" style="color: ${child.failed ? 'var(--accent-red)' : (child.score === '0/4' || child.score === '0/2') ? 'var(--accent-orange)' : 'var(--accent-green)'}">
+              ${child.failed ? 'FAILED' : child.score}
+            </span>
+          </div>
+          <div class="child-desc"><strong>Hypothesis:</strong> ${child.hypothesis}</div>
+          <div class="child-return-data">${child.result}</div>
+        `;
+
+        delegDiv.appendChild(childDiv);
+      });
+
+      body.appendChild(delegDiv);
+    });
+
+    card.appendChild(header);
+    card.appendChild(body);
+    container.appendChild(card);
+  });
+}
+
+// ============================================================
+// RENDER CODE SNIPPETS
+// ============================================================
+function renderSnippets() {
+  const container = document.getElementById('snippets-container');
+
+  const snippets = [
+    {
+      task: 'arc-0934a4d8',
+      iter: 8,
+      phase: 'DELEGATE',
+      title: 'First-ever delegation attempt (CRASHED)',
+      context: 'The model attempted to spawn 3 child RLMs in parallel. The orchestrator alias resolved to an invalid model ID, crashing Promise.all and losing all results. This was the first time rlm() was called in any ARC run.',
+      code: `<span class="kw">const</span> HELPER_LIBRARY = <span class="str">\`
+  function gridDims(grid) { return [grid.length, grid[0].length]; }
+  function gridEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function gridCopy(grid) { return grid.map(r => [...r]); }
+  ...\`</span>;
+
+<span class="kw">const</span> h1Promise = <span class="fn">rlm</span>(
+  <span class="str">"Find the transformation rule for ARC task"</span>,
+  context,
+  {
+    model: <span class="str">"fast"</span>,
+    systemPrompt: <span class="str">\`You are solving an ARC transformation puzzle.
+HYPOTHESIS 1: The output is extracted from a different part of the grid.
+HELPER FUNCTIONS: \${HELPER_LIBRARY} ...\`</span>
+  }
+);
+
+<span class="kw">const</span> h3Promise = <span class="fn">rlm</span>(
+  <span class="str">"Find complex transformation in ARC task"</span>,
+  context,
+  {
+    model: <span class="str">"orchestrator"</span>,  <span class="cm">// &lt;-- CRASHED: invalid model ID</span>
+    systemPrompt: <span class="str">\`...\`</span>
+  }
+);
+
+<span class="kw">const</span> [r1, r2, r3] = <span class="kw">await</span> Promise.<span class="fn">all</span>([h1Promise, h2Promise, h3Promise]);
+<span class="err">// ERROR: anthropic/claude-sonnet-4-5-20250929 is not a valid model ID</span>
+<span class="err">// ERROR: 2 rlm() call(s) were NOT awaited</span>`,
+    },
+    {
+      task: 'arc-0934a4d8',
+      iter: 9,
+      phase: 'DELEGATE',
+      title: 'First successful delegation (sequential)',
+      context: 'After the Promise.all crash, the model adapted by running children sequentially. This child returned valid structured JSON, but scored 0/4 because the hypothesis was wrong.',
+      code: `<span class="kw">const</span> h1Result = <span class="kw">await</span> <span class="fn">rlm</span>(
+  <span class="str">"Find the transformation rule for ARC task"</span>,
+  context,
+  {
+    model: <span class="str">"fast"</span>,
+    systemPrompt: <span class="str">\`...HYPOTHESIS: The output is extracted from a different
+    part of the grid...
+    \${HELPER_LIBRARY}
+    ...You MUST call return() before running out of iterations.\`</span>
+  }
+);
+console.<span class="fn">log</span>(<span class="str">"Hypothesis 1 result:"</span>, h1Result);
+<span class="cm">// Output: {"score":"0/4","code":"function find8Region(grid) {...} function transform(grid) {...}"}</span>`,
+    },
+    {
+      task: 'arc-135a2760',
+      iter: 2,
+      phase: 'DELEGATE',
+      title: 'First successful parallel delegation (Promise.all)',
+      context: 'The best protocol execution to date. Three children spawned in parallel, all with model:"fast", all with full HELPER_LIBRARY, all returned structured {score, code} JSON. This is the first time Promise.all worked correctly in any run.',
+      code: `<span class="kw">const</span> results = <span class="kw">await</span> Promise.<span class="fn">all</span>([
+  <span class="cm">// Hypothesis 1: Pattern Completion via Tiling</span>
+  <span class="fn">rlm</span>(
+    <span class="str">"Implement and test this ARC transformation hypothesis."</span>,
+    context,
+    {
+      model: <span class="str">"fast"</span>,
+      systemPrompt: <span class="str">\`You are implementing an ARC grid transformation.
+HYPOTHESIS: Pattern Completion via Tiling
+Each row contains a repeating tile pattern. Find the minimal
+repeating unit for each row, then fill any gaps.
+HELPER FUNCTIONS:
+\${HELPER_LIBRARY}
+YOUR TASK:
+1. Parse the task: const task = JSON.parse(context);
+2. Write a transform(grid) function.
+3. Test it against ALL training examples.
+4. return(JSON.stringify({ score, code: transform.toString() }));
+IMPORTANT: You MUST call return() before running out of iterations.\`</span>
+    }
+  ),
+  <span class="cm">// Hypothesis 2: Alternating Pattern Extension</span>
+  <span class="fn">rlm</span>(..., { model: <span class="str">"fast"</span>, systemPrompt: <span class="str">\`...H2...\`</span> }),
+  <span class="cm">// Hypothesis 3: Symmetry-Based Correction</span>
+  <span class="fn">rlm</span>(..., { model: <span class="str">"fast"</span>, systemPrompt: <span class="str">\`...H3...\`</span> })
+]);
+
+<span class="cm">// All 3 returned successfully:</span>
+<span class="cm">// H1: {"score":"0/2","code":"function transform(grid) {...}"}</span>
+<span class="cm">// H2: {"score":"0/2","code":"function transform(grid) {...}"}</span>
+<span class="cm">// H3: {"score":"0/2","code":"function transformFixed(grid) {...}"}</span>`,
+    },
+    {
+      task: 'arc-0934a4d8',
+      iter: 12,
+      phase: 'REFINE',
+      title: 'Near-miss on correct pattern (region above 8s)',
+      context: 'After delegation failed, the model explored adjacent regions. It found that the region ABOVE the 8-marker region partially matched output rows 4-7 (reversed). This was a genuine clue toward the correct rule, but the model did not pursue it further before budget exhaustion.',
+      code: `<span class="cm">// Examining region ABOVE 8s (rows 10-13, cols 25-28):</span>
+<span class="cm">// Row 10: [4 9 9 4]   &lt;-- this is output row 7: [4 9 9 4]</span>
+<span class="cm">// Row 11: [4 1 9 1]   &lt;-- this is output row 6: [4 1 9 1]</span>
+<span class="cm">// Row 12: [6 9 9 9]   &lt;-- this is output row 5: [6 9 9 9]</span>
+<span class="cm">// Row 13: [9 9 2 1]   &lt;-- this is output row 4: [9 9 2 1]</span>
+
+<span class="cm">// The model spotted partial overlap between the above-region</span>
+<span class="cm">// and output rows 4-7 (reversed). A genuine clue.</span>
+<span class="cm">// But with only 2 iterations remaining, it crashed on bounds check.</span>`,
+    },
+    {
+      task: 'arc-135a2760',
+      iter: 13,
+      phase: 'REFINE',
+      title: 'The 2/2 fix (too late to return)',
+      context: 'At the very last productive iteration, the model found and fixed the bug: when a row already has a perfect period (0 errors), skip it. This achieved 2/2 on training. But with 0 iterations remaining, there was no way to apply the transform to test input and call return().',
+      code: `<span class="kw">for</span> (<span class="kw">let</span> period = <span class="num">2</span>; period <= Math.<span class="fn">floor</span>(interiorLen / <span class="num">2</span>); period++) {
+  <span class="cm">// ... build pattern via majority voting ...</span>
+  <span class="kw">let</span> errors = <span class="num">0</span>;
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i < interiorLen; i++) {
+    <span class="kw">if</span> (interior[i] !== pattern[i % period]) errors++;
+  }
+  <span class="kw">if</span> (errors === <span class="num">0</span>) {
+    foundPerfect = <span class="kw">true</span>;
+    <span class="kw">break</span>; <span class="cm">// Already perfect, no need to continue</span>
+  }
+  <span class="kw">if</span> (errors < minErrors) { ... }
+}
+<span class="cm">// Only apply if we didn't find a perfect match</span>
+<span class="kw">if</span> (bestPattern && !foundPerfect) { ... }
+
+<span class="cm">// Train 0: PASS, Train 1: PASS -- Score: 2/2</span>
+<span class="err">// BUT: no iterations remain to call return()!</span>`,
+    },
+    {
+      task: 'arc-135a2760',
+      iter: 5,
+      phase: 'REFINE',
+      title: 'The insight children needed (diff analysis)',
+      context: 'After all 3 children scored 0/2, the model performed its own cell-by-cell diff analysis. This revealed the transformation is about fixing a small number of corrupted cells in repeating tile patterns. This structural insight -- which the children never received -- was the key to solving the task.',
+      code: `<span class="cm">// Training Example 0:</span>
+<span class="cm">//   Total differences: 1</span>
+<span class="cm">//     [2,8]: 3 -> 1</span>
+<span class="cm">//   Row 2:</span>
+<span class="cm">//     Input:  [3,2,1,3,1,3,1,3,<span style="color:var(--accent-red)">3</span>,3,1,2,3]</span>
+<span class="cm">//     Output: [3,2,1,3,1,3,1,3,<span style="color:var(--accent-green)">1</span>,3,1,2,3]</span>
+<span class="cm">//</span>
+<span class="cm">// Training Example 1:</span>
+<span class="cm">//   Total differences: 9</span>
+<span class="cm">//     [2,17]: 4 -> 3    [7,9]: 1 -> 4</span>
+<span class="cm">//     [12,4]: 4 -> 8    [17,19]: 9 -> 4  ...</span>
+<span class="cm">//</span>
+<span class="cm">// Key insight: small number of cells change.</span>
+<span class="cm">// The transform FIXES corrupted cells in a tiled pattern.</span>
+<span class="cm">// Children never received this structural analysis.</span>`,
+    },
+  ];
+
+  snippets.forEach(snippet => {
+    const card = document.createElement('div');
+    card.className = 'snippet-card';
+
+    const header = document.createElement('div');
+    header.className = 'snippet-header';
+    header.onclick = function() { toggleExpandable(this); };
+
+    const phaseColor = PHASE_COLORS[snippet.phase] || '#6e7681';
+
+    header.innerHTML = `
+      <div class="snippet-header-left">
+        <span class="snippet-iter-badge" style="background: ${phaseColor}22; color: ${phaseColor}; border: 1px solid ${phaseColor}44;">Iter ${snippet.iter}</span>
+        <span class="snippet-title">${snippet.title}</span>
+        <span style="font-size:0.68rem;color:var(--text-muted)">${snippet.task}</span>
+      </div>
+      <div class="snippet-toggle">&#9660;</div>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'snippet-body';
+
+    body.innerHTML = `
+      <div class="snippet-context">${snippet.context}</div>
+      <pre class="code-block">${snippet.code}</pre>
+    `;
+
+    card.appendChild(header);
+    card.appendChild(body);
+    container.appendChild(card);
+  });
+}
+
+// ============================================================
+// RENDER CROSS-RUN COMPARISON
+// ============================================================
+function renderComparison() {
+  const container = document.getElementById('comparison-container');
+
+  // Task 1: arc-0934a4d8
+  const task1HTML = `
+    <div style="margin-bottom:1.5rem">
+      <h3 style="font-size:1rem;margin-bottom:0.5rem;color:var(--accent-blue)">
+        <span class="mono">arc-0934a4d8</span>
+        <span class="regression-badge" style="margin-left:8px">regression</span>
+      </h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Run-001 (baseline)</th>
+            <th>Run-002 (50 iters)</th>
+            <th>Run-003 (delegation)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:var(--text-secondary)">Iterations</td>
+            <td class="mono">25</td>
+            <td class="mono">50</td>
+            <td class="mono" style="color:var(--accent-orange)">15</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Found rule</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+            <td class="mono" style="color:var(--accent-green)">Yes (iter 21)</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Best train score</td>
+            <td class="mono" style="color:var(--text-muted)">Unknown</td>
+            <td class="mono" style="color:var(--accent-orange)">3/4 (iter 45)</td>
+            <td class="mono" style="color:var(--accent-red)">0/4</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Returned answer</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Delegated</td>
+            <td class="mono" style="color:var(--text-muted)">No</td>
+            <td class="mono" style="color:var(--text-muted)">No</td>
+            <td class="mono" style="color:var(--accent-purple)">Yes (3 children, all failed)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Score</td>
+            <td class="mono stat-red">0</td>
+            <td class="mono stat-red">0</td>
+            <td class="mono stat-red">0</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout callout-error" style="margin-top:0.75rem">
+        <div class="callout-title">Why Worse</div>
+        <p>The reduced budget (15 vs 50) was catastrophic. In run-002, the model needed 20 iterations just to find the core pattern (column reversal + offset). With only 15 iterations and 3 spent on failed delegation, there was no path to success. The delegation itself was operationally useless: the model delegated hypotheses it had already falsified in iterations 3-7.</p>
+      </div>
+    </div>
+  `;
+
+  // Task 2: arc-135a2760
+  const task2HTML = `
+    <div style="margin-bottom:1.5rem">
+      <h3 style="font-size:1rem;margin-bottom:0.5rem;color:var(--accent-blue)">
+        <span class="mono">arc-135a2760</span>
+        <span class="regression-badge" style="margin-left:8px">regression</span>
+      </h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Run-001 (baseline)</th>
+            <th>Run-002 (50 iters)</th>
+            <th>Run-003 (delegation)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:var(--text-secondary)">Iterations</td>
+            <td class="mono">25</td>
+            <td class="mono">13 / 50</td>
+            <td class="mono" style="color:var(--accent-orange)">15 / 15</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Found rule</td>
+            <td class="mono" style="color:var(--accent-red)">Timeout</td>
+            <td class="mono" style="color:var(--accent-green)">Yes (iter 3)</td>
+            <td class="mono" style="color:var(--accent-green)">Yes (iter 5)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Best train score</td>
+            <td class="mono" style="color:var(--text-muted)">Unknown</td>
+            <td class="mono" style="color:var(--accent-green)">2/2 (iter 11)</td>
+            <td class="mono" style="color:var(--accent-green)">2/2 (iter 13)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Returned answer</td>
+            <td class="mono" style="color:var(--accent-red)">No</td>
+            <td class="mono" style="color:var(--accent-orange)">Yes (iter 12)</td>
+            <td class="mono" style="color:var(--accent-red)">No (budget exhausted)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Delegated</td>
+            <td class="mono" style="color:var(--text-muted)">No</td>
+            <td class="mono" style="color:var(--text-muted)">No</td>
+            <td class="mono" style="color:var(--accent-purple)">Yes (3 children, all 0/2)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary)">Score</td>
+            <td class="mono stat-red">0</td>
+            <td class="mono stat-red">0 (format bug)</td>
+            <td class="mono stat-red">0 (no return)</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout callout-warning" style="margin-top:0.75rem">
+        <div class="callout-title">Delegation Was Net-Negative</div>
+        <p>Despite the best protocol execution to date, delegation added 2 iterations of overhead (iters 2-4: spawn, wait, parse). The model found the rule at iter 5 vs iter 3 in run-002. It achieved 2/2 at iter 13 with 0 iterations left to return. If the budget had been 17 instead of 15, the model would have had time. The children failed because they received generic hypotheses without the critical structural insight (2-layer frame, interior-only correction).</p>
+      </div>
+    </div>
+  `;
+
+  // Central lesson
+  const lessonHTML = `
+    <div class="callout callout-info">
+      <div class="callout-title">Central Lesson</div>
+      <p><strong>Delegation is overhead unless the strategist gives children well-informed, specific tasks.</strong></p>
+      <ul>
+        <li>The arc-solver protocol's "explore, hypothesize, delegate" sequence is correct, but the exploration phase needs to produce <em>structural insights</em>, not just data visualization.</li>
+        <li>Children need to know about frame structure, color roles, and grid organization -- not just "try tiling."</li>
+        <li>Early delegation (before structural analysis) produces generic hypotheses that children cannot refine.</li>
+        <li>The sweet spot: explore structure yourself for 2-3 iterations, <em>then</em> delegate specific hypotheses.</li>
+      </ul>
+    </div>
+
+    <div class="callout callout-error" style="margin-top:1rem">
+      <div class="callout-title">Infrastructure Issues</div>
+      <ul>
+        <li><strong>Orchestrator alias bug (critical):</strong> <code>orchestrator</code> resolves to <code>anthropic/claude-sonnet-4-5-20250929</code> which is not a valid LiteLLM model ID. Must be fixed before any run using <code>model: "orchestrator"</code>.</li>
+        <li><strong>Budget too small:</strong> 15 iterations insufficient when delegation adds 3-4 iterations overhead. Recommendation: <code>max(20, N)</code> where N is estimated task complexity.</li>
+        <li><strong>Promise.all error handling:</strong> When one child crashes, the entire batch fails and other children's results are lost. Need individual promise rejection handling.</li>
+      </ul>
+    </div>
+  `;
+
+  container.innerHTML = task1HTML + task2HTML + lessonHTML;
+}
+
+// ============================================================
+// INITIALIZE
+// ============================================================
+renderTimeline();
+renderContextChart();
+renderCompliance();
+renderDelegationAudit();
+renderSnippets();
+renderComparison();
+
+// Auto-expand first delegation audit card
+document.querySelector('.delegation-body').classList.add('open');
+document.querySelector('.delegation-toggle').classList.add('open');
+
+// Auto-expand first snippet
+document.querySelector('.snippet-body').classList.add('open');
+document.querySelector('.snippet-toggle').classList.add('open');
+</script>
+
+</body>
+</html>

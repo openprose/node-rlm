@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC-AGI-2: Cross-Run Comparison -- 5 Runs, 12 Task-Runs, 0 Correct</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-hover: #30363d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-orange: #d29922;
+    --accent-purple: #bc8cff;
+    --accent-teal: #39d2c0;
+    --accent-yellow: #e3b341;
+    --accent-pink: #f778ba;
+
+    --sonnet: #58a6ff;
+    --opus: #f0883e;
+
+    --run1: #58a6ff;
+    --run2: #bc8cff;
+    --run3: #f778ba;
+    --run4: #f0883e;
+    --run5: #da3633;
+
+    --phase-explore: #4a7fb5;
+    --phase-extract: #3fb950;
+    --phase-verify: #39d2c0;
+    --phase-delegate: #bc8cff;
+    --phase-solve: #d29922;
+    --phase-return: #56d364;
+    --phase-error: #f85149;
+    --phase-stall: #6e7681;
+    --phase-hallucinate: #da3633;
+    --phase-truncated: #f0883e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: rgba(13, 17, 23, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .nav-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .nav-links a:hover, .nav-links a.active {
+    background: var(--bg-tertiary);
+    color: var(--accent-blue);
+  }
+
+  .content {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  h1 { font-size: 2rem; font-weight: 600; margin-bottom: 0.25rem; }
+
+  .page-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  .viz-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .viz-section h2 { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.25rem; }
+
+  .viz-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .mono { font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat-card {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .stat-label { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
+  .stat-detail { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem; }
+  .stat-red { color: var(--accent-red); }
+  .stat-orange { color: var(--accent-orange); }
+  .stat-blue { color: var(--accent-blue); }
+  .stat-green { color: var(--accent-green); }
+  .stat-teal { color: var(--accent-teal); }
+  .stat-purple { color: var(--accent-purple); }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+
+  .data-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    vertical-align: middle;
+  }
+
+  .data-table tr:hover td { background: rgba(48, 54, 61, 0.2); }
+  .data-table td.center { text-align: center; }
+
+  .badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .badge-timeout { background: rgba(210, 153, 34, 0.15); color: var(--accent-orange); border: 1px solid rgba(210, 153, 34, 0.3); }
+  .badge-wrong { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid rgba(248, 81, 73, 0.3); }
+  .badge-returned { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); border: 1px solid rgba(63, 185, 80, 0.3); }
+  .badge-sonnet { background: rgba(88, 166, 255, 0.15); color: var(--sonnet); border: 1px solid rgba(88, 166, 255, 0.3); }
+  .badge-opus { background: rgba(240, 136, 62, 0.15); color: var(--opus); border: 1px solid rgba(240, 136, 62, 0.3); }
+  .badge-na { background: rgba(110, 118, 129, 0.15); color: var(--text-muted); border: 1px solid rgba(110, 118, 129, 0.3); }
+  .badge-error { background: rgba(218,54,51,0.15); color: #da3633; border: 1px solid rgba(218,54,51,0.3); }
+
+  .run-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .run-dot-1 { background: var(--run1); }
+  .run-dot-2 { background: var(--run2); }
+  .run-dot-3 { background: var(--run3); }
+  .run-dot-4 { background: var(--run4); }
+  .run-dot-5 { background: var(--run5); }
+
+  .phase-legend {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem;
+    padding: 10px 14px; background: var(--bg-tertiary); border-radius: 6px;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--text-secondary); }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+  .timeline-row { display: flex; align-items: center; margin-bottom: 4px; gap: 8px; }
+
+  .timeline-label {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 0.72rem; color: var(--text-secondary);
+    min-width: 180px; text-align: right; flex-shrink: 0;
+  }
+
+  .timeline-bar-container {
+    display: flex; gap: 1px; flex-grow: 1; align-items: center; position: relative;
+  }
+
+  .iter-block {
+    height: 22px; min-width: 12px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.55rem; font-weight: 600; color: rgba(255,255,255,0.85);
+    cursor: default; position: relative; flex-shrink: 0;
+  }
+
+  .iter-block:hover { opacity: 0.85; transform: scaleY(1.15); z-index: 10; }
+
+  .iter-block .tip {
+    display: none; position: absolute; bottom: 110%; left: 50%;
+    transform: translateX(-50%); background: var(--bg-tertiary);
+    border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px;
+    font-size: 0.72rem; font-weight: 400; white-space: nowrap;
+    color: var(--text-primary); z-index: 100; pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .iter-block:hover .tip { display: block; }
+
+  .timeline-meta {
+    font-size: 0.68rem; color: var(--text-muted);
+    min-width: 120px; flex-shrink: 0; text-align: right;
+  }
+
+  .callout { border-radius: 8px; padding: 1rem 1.25rem; margin-top: 1rem; }
+  .callout-red { background: rgba(248, 81, 73, 0.08); border: 1px solid rgba(248, 81, 73, 0.25); }
+  .callout-blue { background: rgba(88, 166, 255, 0.08); border: 1px solid rgba(88, 166, 255, 0.2); }
+  .callout-orange { background: rgba(210, 153, 34, 0.08); border: 1px solid rgba(210, 153, 34, 0.2); }
+  .callout-green { background: rgba(63, 185, 80, 0.08); border: 1px solid rgba(63, 185, 80, 0.2); }
+  .callout-purple { background: rgba(188,140,255,0.08); border: 1px solid rgba(188,140,255,0.2); }
+  .callout-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem; }
+  .callout p, .callout li { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; }
+  .callout ul { margin: 0.25rem 0 0 1.25rem; }
+  .callout strong { color: var(--text-primary); }
+  .callout code { color: var(--accent-teal); font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace; font-size: 0.78rem; }
+
+  .evo-container { margin-bottom: 1.5rem; padding: 1rem 1.25rem; background: var(--bg-tertiary); border-radius: 8px; }
+
+  .evo-header {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 0.9rem; font-weight: 600; color: var(--accent-blue);
+    margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px;
+  }
+
+  .evo-row {
+    display: flex; align-items: center; margin-bottom: 6px; gap: 10px;
+    padding: 6px 10px; background: rgba(13, 17, 23, 0.4); border-radius: 6px;
+  }
+
+  .evo-run-label { font-size: 0.75rem; font-weight: 600; min-width: 60px; flex-shrink: 0; }
+
+  .evo-metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); }
+  .evo-metric { display: flex; gap: 4px; align-items: center; }
+  .evo-metric-label { color: var(--text-muted); }
+  .evo-metric-value { font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace; font-weight: 600; }
+
+  .section-divider { display: flex; align-items: center; gap: 12px; margin: 1.5rem 0 1rem; }
+  .section-divider::after { content: ''; flex-grow: 1; height: 1px; background: var(--border); }
+  .section-divider span {
+    font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
+  }
+
+  .narrative {
+    columns: 2; column-gap: 2rem; margin-top: 1rem;
+  }
+
+  .narrative-item {
+    break-inside: avoid; margin-bottom: 1rem; padding: 1rem 1.25rem;
+    background: var(--bg-tertiary); border-radius: 8px;
+    border-left: 3px solid var(--accent-blue);
+  }
+
+  .narrative-item h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.4rem; }
+  .narrative-item p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; }
+  .narrative-item.insight-red { border-left-color: var(--accent-red); }
+  .narrative-item.insight-orange { border-left-color: var(--accent-orange); }
+  .narrative-item.insight-green { border-left-color: var(--accent-green); }
+  .narrative-item.insight-purple { border-left-color: var(--accent-purple); }
+  .narrative-item.insight-teal { border-left-color: var(--accent-teal); }
+  .narrative-item.insight-pink { border-left-color: var(--accent-pink); }
+
+  .model-tag-sonnet {
+    display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68rem; font-weight: 600;
+    background: rgba(88,166,255,0.15); color: var(--sonnet); border: 1px solid rgba(88,166,255,0.3);
+  }
+  .model-tag-opus {
+    display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68rem; font-weight: 600;
+    background: rgba(240,136,62,0.15); color: var(--opus); border: 1px solid rgba(240,136,62,0.3);
+  }
+
+  .expandable-header {
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+    user-select: none; padding: 4px 0;
+  }
+  .expandable-header:hover { opacity: 0.85; }
+  .expandable-arrow { transition: transform 0.2s; font-size: 0.8rem; color: var(--text-muted); }
+  .expandable-header.open .expandable-arrow { transform: rotate(90deg); }
+  .expandable-body { display: none; margin-top: 0.75rem; }
+  .expandable-body.open { display: block; }
+
+  .multi-block-bar {
+    height: 22px; border-radius: 2px; display: flex; overflow: hidden; gap: 0;
+  }
+  .multi-block-inner {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.5rem; font-weight: 600; color: rgba(255,255,255,0.9);
+    border-right: 1px solid rgba(0,0,0,0.3);
+  }
+
+  .cost-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .cost-label {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 0.72rem; color: var(--text-secondary);
+    min-width: 160px; text-align: right; flex-shrink: 0;
+  }
+  .cost-bar-wrap {
+    flex-grow: 1; height: 24px; background: rgba(255,255,255,0.03);
+    border-radius: 4px; overflow: hidden; position: relative;
+  }
+  .cost-bar-seg { height: 100%; display: inline-block; float: left; }
+  .cost-value {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 0.72rem; color: var(--text-muted); min-width: 80px; flex-shrink: 0;
+  }
+
+  .highlight-row { background: rgba(240,136,62,0.06) !important; }
+  .highlight-cell { background: rgba(63,185,80,0.15) !important; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+  svg text { font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace; }
+
+  @media (max-width: 900px) {
+    .content { padding: 1rem; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .narrative { columns: 1; }
+    .two-col { grid-template-columns: 1fr; }
+    .timeline-label { min-width: 100px; font-size: 0.65rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sticky-nav">
+  <div class="nav-title">ARC Cross-Run</div>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#run-comparison">Runs</a>
+    <a href="#task-evolution">Tasks</a>
+    <a href="#iteration-budget">Iterations</a>
+    <a href="#return-crisis">return()</a>
+    <a href="#model-comparison">Sonnet vs Opus</a>
+    <a href="#failure-taxonomy">Failures</a>
+    <a href="#opus-cap">Opus Cap</a>
+    <a href="#findings">Findings</a>
+  </div>
+</nav>
+
+<div class="content">
+
+<h1>ARC-AGI-2 Cross-Run Comparison</h1>
+<p class="page-subtitle">5 runs &middot; 12 task-runs &middot; Sonnet 4.5 + Opus 4.6 &middot; 0% accuracy across all configurations &middot; 2026-02-13</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: OVERVIEW -->
+<!-- ============================================================ -->
+<div class="viz-section" id="overview">
+  <h2>Overview</h2>
+  <p class="viz-subtitle">Aggregate stats across all 5 runs and 12 task-run combinations</p>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value stat-red">0 / 12</div>
+      <div class="stat-label">Tasks Correct</div>
+      <div class="stat-detail">5 runs, 0 correct answers</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-orange">177</div>
+      <div class="stat-label">Total Iterations</div>
+      <div class="stat-detail">103 + 63 + 30 + 7 + 2</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-blue">~43 min</div>
+      <div class="stat-label">Total Wall Time</div>
+      <div class="stat-detail">1192 + 476 + 399 + 382 + 127 sec</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-teal">$11.32</div>
+      <div class="stat-label">Estimated Total Cost</div>
+      <div class="stat-detail">$6.50 + $2.90 + $1.20 + $0.57 + $0.15</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-red">2 / 12</div>
+      <div class="stat-label">return() Call Rate</div>
+      <div class="stat-detail">R2 arc-135a2760 + R4 arc-135a2760</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-purple">2</div>
+      <div class="stat-label">Models Tested</div>
+      <div class="stat-detail">Sonnet 4.5 (R1-R3) / Opus 4.6 (R4-R5)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: RUN COMPARISON TABLE -->
+<!-- ============================================================ -->
+<div class="viz-section" id="run-comparison">
+  <h2>1. Run Comparison Table</h2>
+  <p class="viz-subtitle">Side-by-side for all 5 runs. <span class="model-tag-sonnet">Sonnet</span> runs vs <span class="model-tag-opus">Opus</span> runs color-coded.</p>
+
+  <div style="overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Attribute</th>
+        <th><span class="run-dot run-dot-1"></span>Run 001</th>
+        <th><span class="run-dot run-dot-2"></span>Run 002</th>
+        <th><span class="run-dot run-dot-3"></span>Run 003</th>
+        <th><span class="run-dot run-dot-4"></span>Run 004</th>
+        <th><span class="run-dot run-dot-5"></span>Run 005</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="color:var(--text-muted)">Config</td>
+        <td><span class="badge badge-sonnet">Baseline</span></td>
+        <td><span class="badge badge-sonnet">Full Drivers</span></td>
+        <td><span class="badge badge-sonnet">Recursive Deleg.</span></td>
+        <td><span class="badge badge-opus">Opus Recursive</span></td>
+        <td><span class="badge badge-opus">Opus Linear</span></td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Model</td>
+        <td class="mono"><span class="model-tag-sonnet">Sonnet 4.5</span></td>
+        <td class="mono"><span class="model-tag-sonnet">Sonnet 4.5</span></td>
+        <td class="mono"><span class="model-tag-sonnet">Sonnet 4.5</span></td>
+        <td class="mono"><span class="model-tag-opus">Opus 4.6</span></td>
+        <td class="mono"><span class="model-tag-opus">Opus 4.6</span></td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Max Iterations</td>
+        <td class="mono">25</td>
+        <td class="mono">50</td>
+        <td class="mono">15</td>
+        <td class="mono">15</td>
+        <td class="mono">30</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Max Depth</td>
+        <td class="mono">2</td>
+        <td class="mono">1</td>
+        <td class="mono">2</td>
+        <td class="mono">2</td>
+        <td class="mono">1</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">App / Drivers</td>
+        <td class="mono" style="color:var(--text-muted);font-size:0.75rem">None</td>
+        <td style="font-size:0.72rem">arc-solver + 5 drivers</td>
+        <td style="font-size:0.72rem">arc-solver v0.2.0</td>
+        <td style="font-size:0.72rem">arc-solver v0.2.0 + 2 drivers</td>
+        <td style="font-size:0.72rem">arc-solver v0.2.0 + 2 drivers</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Tasks</td>
+        <td class="mono">5</td>
+        <td class="mono">2</td>
+        <td class="mono">2</td>
+        <td class="mono">2</td>
+        <td class="mono">1</td>
+      </tr>
+      <tr style="background: rgba(248, 81, 73, 0.05)">
+        <td style="color:var(--accent-red);font-weight:600">Score</td>
+        <td class="mono" style="color:var(--accent-red);font-weight:700">0/5</td>
+        <td class="mono" style="color:var(--accent-red);font-weight:700">0/2</td>
+        <td class="mono" style="color:var(--accent-red);font-weight:700">0/2</td>
+        <td class="mono" style="color:var(--accent-red);font-weight:700">0/2</td>
+        <td class="mono" style="color:var(--accent-red);font-weight:700">0/1</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Iters Used</td>
+        <td class="mono">103</td>
+        <td class="mono">63</td>
+        <td class="mono">30</td>
+        <td class="mono">7</td>
+        <td class="mono">2</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Wall Time</td>
+        <td class="mono">~20 min</td>
+        <td class="mono">~8 min</td>
+        <td class="mono">~6.6 min</td>
+        <td class="mono">~6.4 min</td>
+        <td class="mono">~2 min</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Est. Cost</td>
+        <td class="mono">$6.50</td>
+        <td class="mono">$2.90</td>
+        <td class="mono">$1.20</td>
+        <td class="mono">$0.57</td>
+        <td class="mono">$0.15</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">return() Calls</td>
+        <td class="mono">1 (wrong)</td>
+        <td class="mono">1 (format bug)</td>
+        <td class="mono">0</td>
+        <td class="mono">1 (9 mismatches)</td>
+        <td class="mono">1 (blocked iter-0)</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">1-block compliance</td>
+        <td class="mono" style="color:var(--accent-green)">Yes</td>
+        <td class="mono" style="color:var(--accent-green)">Yes</td>
+        <td class="mono" style="color:var(--accent-green)">Yes</td>
+        <td class="mono" style="color:var(--accent-red)">No (7-9 blocks)</td>
+        <td class="mono" style="color:var(--accent-red)">No (6-8 blocks)</td>
+      </tr>
+      <tr>
+        <td style="color:var(--text-muted)">Key Finding</td>
+        <td style="font-size:0.75rem">return() problem: 4/5 timeout</td>
+        <td style="font-size:0.75rem">Drivers ignored; String() bug</td>
+        <td style="font-size:0.75rem">First delegation; net-negative</td>
+        <td style="font-size:0.75rem">98.9% cell accuracy; output truncation</td>
+        <td style="font-size:0.75rem">Hallucinated task; 2/30 iters used</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: PER-TASK EVOLUTION -->
+<!-- ============================================================ -->
+<div class="viz-section" id="task-evolution">
+  <h2>2. Per-Task Evolution</h2>
+  <p class="viz-subtitle">Tracking arc-0934a4d8 (appears in all 5 runs) and arc-135a2760 (appears in 4 runs) across configurations</p>
+
+  <!-- arc-0934a4d8 -->
+  <div class="evo-container">
+    <div class="evo-header">
+      arc-0934a4d8
+      <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem">-- the "hard" task (8-rectangle corruption, symmetry reconstruction) -- appears in all 5 runs</span>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run1)"><span class="run-dot run-dot-1"></span>R1</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="evo-metric-label">Model:</span> <span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">25/25</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule found:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Best score:</span> <span class="evo-metric-value" style="color:var(--text-muted)">Unknown</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--text-muted)">No</span></div>
+        <div class="evo-metric"><span class="badge badge-timeout">timeout</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run2)"><span class="run-dot run-dot-2"></span>R2</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="evo-metric-label">Model:</span> <span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">50/50</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule found:</span> <span class="evo-metric-value" style="color:var(--accent-green)">Yes (iter 21)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Best score:</span> <span class="evo-metric-value" style="color:var(--accent-orange)">3/4 (iter 45)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--text-muted)">No</span></div>
+        <div class="evo-metric"><span class="badge badge-timeout">timeout</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run3)"><span class="run-dot run-dot-3"></span>R3</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="evo-metric-label">Model:</span> <span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">15/15</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule found:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Best score:</span> <span class="evo-metric-value" style="color:var(--accent-red)">0/4</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--accent-purple)">Yes (crashed)</span></div>
+        <div class="evo-metric"><span class="badge badge-timeout">timeout</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row" style="border: 1px solid rgba(240,136,62,0.3);">
+      <div class="evo-run-label" style="color:var(--run4)"><span class="run-dot run-dot-4"></span>R4</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="evo-metric-label">Model:</span> <span class="model-tag-opus">Opus</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">3/15</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule found:</span> <span class="evo-metric-value" style="color:var(--accent-orange)">Partial (iter 3, truncated)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Best score:</span> <span class="evo-metric-value" style="color:var(--text-muted)">N/A (truncated)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--text-muted)">No</span></div>
+        <div class="evo-metric"><span class="badge badge-error">truncation-timeout</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row" style="border: 1px solid rgba(218,54,51,0.3);">
+      <div class="evo-run-label" style="color:var(--run5)"><span class="run-dot run-dot-5"></span>R5</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="evo-metric-label">Model:</span> <span class="model-tag-opus">Opus</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value" style="color:var(--accent-red)">2/30</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule found:</span> <span class="evo-metric-value" style="color:var(--accent-orange)">Yes (resp2, block 1)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Best score:</span> <span class="evo-metric-value" style="color:var(--text-muted)">N/A (never scored)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-orange)">Blocked (iter-0 guard)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--text-muted)">No</span></div>
+        <div class="evo-metric"><span class="badge badge-error">hallucination + truncation</span></div>
+      </div>
+    </div>
+
+    <div class="callout callout-orange" style="margin-top:0.75rem">
+      <div class="callout-title" style="color:var(--accent-orange)">5-Run Trajectory: Best insights from Opus, best score from Sonnet</div>
+      <p>Sonnet R2 produced the only usable transform (3/4 at iter 45) but never submitted it. Opus (R4, R5) found the symmetry rule in 2-3 iters vs Sonnet's 21 -- roughly <strong>7x faster</strong> -- but output truncation prevented completion every time. The task remains unsolved: no run has both found the complete rule AND returned an answer.</p>
+    </div>
+  </div>
+
+  <!-- arc-135a2760 -->
+  <div class="evo-container">
+    <div class="evo-header">
+      arc-135a2760
+      <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem">-- the "easier" task (fix corrupted repeating tiles) -- appears in runs 1-4</span>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run1)"><span class="run-dot run-dot-1"></span>R1</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">25/25</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule:</span> <span class="evo-metric-value" style="color:var(--accent-green)">iter 7</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Train:</span> <span class="evo-metric-value" style="color:var(--text-muted)">Unknown</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No</span></div>
+        <div class="evo-metric"><span class="badge badge-timeout">timeout</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run2)"><span class="run-dot run-dot-2"></span>R2</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">13/50</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule:</span> <span class="evo-metric-value" style="color:var(--accent-green)">iter 3</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Train:</span> <span class="evo-metric-value" style="color:var(--accent-green)">2/2 (iter 11)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-green)">Yes (iter 12)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Cell acc:</span> <span class="evo-metric-value" style="color:var(--accent-orange)">~84%</span></div>
+        <div class="evo-metric"><span class="badge badge-wrong">wrong (format+algo)</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row">
+      <div class="evo-run-label" style="color:var(--run3)"><span class="run-dot run-dot-3"></span>R3</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="model-tag-sonnet">Sonnet</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">15/15</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule:</span> <span class="evo-metric-value" style="color:var(--accent-green)">iter 5</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Train:</span> <span class="evo-metric-value" style="color:var(--accent-green)">2/2 (iter 13)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-red)">No (budget)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Delegated:</span> <span class="evo-metric-value" style="color:var(--accent-purple)">3 children (all 0/2)</span></div>
+        <div class="evo-metric"><span class="badge badge-timeout">budget exhausted</span></div>
+      </div>
+    </div>
+
+    <div class="evo-row" style="border: 1px solid rgba(63,185,80,0.4); background: rgba(63,185,80,0.04);">
+      <div class="evo-run-label" style="color:var(--run4)"><span class="run-dot run-dot-4"></span>R4</div>
+      <div class="evo-metrics">
+        <div class="evo-metric"><span class="model-tag-opus">Opus</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Iters:</span> <span class="evo-metric-value">4/15</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Rule:</span> <span class="evo-metric-value" style="color:var(--accent-green)">iter 2</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Returned:</span> <span class="evo-metric-value" style="color:var(--accent-green)">Yes (iter 4)</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Cell acc:</span> <span class="evo-metric-value" style="color:var(--accent-green);font-size:0.9rem;font-weight:700">98.9%</span></div>
+        <div class="evo-metric"><span class="evo-metric-label">Mismatches:</span> <span class="evo-metric-value">9/841</span></div>
+        <div class="evo-metric"><span class="badge badge-wrong">wrong (9 cells)</span></div>
+      </div>
+    </div>
+
+    <div class="callout callout-green" style="margin-top:0.75rem">
+      <div class="callout-title" style="color:var(--accent-green)">Best Performance: Opus R4 at 98.9% Cell Accuracy</div>
+      <p>Run 004 (Opus 4.6) achieved the best-ever result on this task: 832 of 841 cells correct, rule found at iter 2 (fastest ever), and an answer was returned. The 9 mismatches are all caused by a tile-period selection bug (period too large = memorizes corruptions). The model identified this bug but was truncated before fixing it. <strong>One more iteration with a tile-period cap would likely have produced a perfect answer.</strong></p>
+    </div>
+  </div>
+
+  <!-- Discovery Timeline SVG -->
+  <div class="section-divider"><span>Rule Discovery Timeline (all 5 runs)</span></div>
+  <div style="overflow-x:auto;">
+    <svg id="discovery-chart" width="1000" height="300" viewBox="0 0 1000 300"></svg>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: ITERATION BUDGET VISUALIZATION -->
+<!-- ============================================================ -->
+<div class="viz-section" id="iteration-budget">
+  <h2>3. Iteration Budget Visualization</h2>
+  <p class="viz-subtitle">How each run spent its iterations. For Opus runs, wide blocks indicate multi-block responses (7-9 code blocks packed into a single iteration).</p>
+
+  <div class="phase-legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-explore)"></div>Explore</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-extract)"></div>Extract/Implement</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-verify)"></div>Verify</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-delegate)"></div>Delegate</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-solve)"></div>Solve/Return</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-error)"></div>Error</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-stall)"></div>Stall</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-hallucinate)"></div>Hallucination</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--phase-truncated)"></div>Truncated</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:repeating-linear-gradient(45deg,var(--phase-explore),var(--phase-explore) 2px,var(--phase-extract) 2px,var(--phase-extract) 4px); width:14px;height:14px;border-radius:3px;"></div>Multi-block (Opus)</div>
+  </div>
+
+  <div id="budget-timelines"></div>
+
+  <div class="callout callout-orange" style="margin-top:1rem">
+    <div class="callout-title" style="color:var(--accent-orange)">The Multi-Block Problem</div>
+    <p>Opus R4 and R5 packed 7-9 code blocks per harness iteration, effectively running "iterations within iterations." R5 used <strong>2 of 30 available iterations</strong> but wrote 15 self-narrated "iterations" inside them. Each response hit <code>finish=length</code>. If one-block-per-iteration had been enforced at the harness level, Opus would have had 30 real REPL interactions instead of 2 truncated monologues.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: THE RETURN() CRISIS -->
+<!-- ============================================================ -->
+<div class="viz-section" id="return-crisis">
+  <h2>4. The return() Crisis</h2>
+  <p class="viz-subtitle">5 runs, 12 task-runs, 2 outer-model return() calls -- and both returned wrong answers</p>
+
+  <div style="overflow-x:auto;">
+  <table class="data-table" id="return-table">
+    <thead>
+      <tr>
+        <th>Run</th>
+        <th>Task</th>
+        <th>Model</th>
+        <th>Iters</th>
+        <th>Best Train</th>
+        <th>Found At</th>
+        <th>Returned?</th>
+        <th>Cell Acc.</th>
+        <th>Outcome</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  </div>
+
+  <div class="two-col" style="margin-top:1.25rem;">
+    <div class="callout callout-red">
+      <div class="callout-title" style="color:var(--accent-red)">The Model's Mental Model of return()</div>
+      <p>The model treats <code>return()</code> as a declaration of confidence, not a deadline submission. Across 12 task-runs: <strong>2 returns from the outer model</strong> (R2 arc-135a2760, R4 arc-135a2760), both on the "easier" task. The hard task (arc-0934a4d8) has 0 successful returns across 5 runs. R5's return was blocked by the iter-0 guard. R1 arc-13e47133 attempted return 6 times but all failed verification.</p>
+    </div>
+    <div class="callout callout-orange">
+      <div class="callout-title" style="color:var(--accent-orange)">Opus R4: The Best Return</div>
+      <p>Run 004 (Opus 4.6) is the only run that returned an answer with <strong>meaningful accuracy</strong>: 98.9% cell accuracy (832/841). The prior return (R2) was destroyed by the String() serialization bug and had only ~84% accuracy anyway. Opus entered "DEADLINE MODE" and submitted -- the first time any model has shown deadline awareness in practice, not just in narration.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: MODEL COMPARISON -->
+<!-- ============================================================ -->
+<div class="viz-section" id="model-comparison">
+  <h2>5. Model Comparison: Sonnet vs Opus</h2>
+  <p class="viz-subtitle">Head-to-head on the two shared tasks across all 5 runs</p>
+
+  <div class="section-divider"><span>Iterations to Find Correct Rule</span></div>
+  <div style="overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th><span class="model-tag-sonnet">Sonnet R1</span></th>
+        <th><span class="model-tag-sonnet">Sonnet R2</span></th>
+        <th><span class="model-tag-sonnet">Sonnet R3</span></th>
+        <th><span class="model-tag-opus">Opus R4</span></th>
+        <th><span class="model-tag-opus">Opus R5</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono" style="color:var(--accent-blue)">arc-0934a4d8</td>
+        <td class="mono center" style="color:var(--accent-red)">Never (25 iters)</td>
+        <td class="mono center" style="color:var(--accent-orange)">Iter 21</td>
+        <td class="mono center" style="color:var(--accent-red)">Never (15 iters)</td>
+        <td class="mono center" style="color:var(--accent-green)">Iter 3</td>
+        <td class="mono center" style="color:var(--accent-green)">Resp2 (= iter 2)</td>
+      </tr>
+      <tr>
+        <td class="mono" style="color:var(--accent-blue)">arc-135a2760</td>
+        <td class="mono center" style="color:var(--accent-orange)">Iter 7</td>
+        <td class="mono center" style="color:var(--accent-green)">Iter 3</td>
+        <td class="mono center" style="color:var(--accent-orange)">Iter 5</td>
+        <td class="mono center" style="color:var(--accent-green)">Iter 2</td>
+        <td class="mono center" style="color:var(--text-muted)">N/A</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="section-divider"><span>Cell Accuracy When Answers Were Returned</span></div>
+  <div style="overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Run</th>
+        <th>Model</th>
+        <th>Cell Accuracy</th>
+        <th>Mismatches</th>
+        <th>Issue</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono" style="color:var(--accent-blue)">arc-135a2760</td>
+        <td class="mono"><span class="run-dot run-dot-2"></span>R2</td>
+        <td><span class="model-tag-sonnet">Sonnet</span></td>
+        <td class="mono center" style="color:var(--accent-orange)">~84%</td>
+        <td class="mono center">~135/841</td>
+        <td style="font-size:0.75rem">Row-only algo too simplistic + String() format bug</td>
+      </tr>
+      <tr style="background:rgba(63,185,80,0.06)">
+        <td class="mono" style="color:var(--accent-blue)">arc-135a2760</td>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td><span class="model-tag-opus">Opus</span></td>
+        <td class="mono center" style="color:var(--accent-green);font-weight:700;font-size:1rem">98.9%</td>
+        <td class="mono center" style="color:var(--accent-green)">9/841</td>
+        <td style="font-size:0.75rem">Tile period selection bug (fixable with cap)</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="section-divider"><span>Cost Per Task</span></div>
+  <div id="model-cost-chart"></div>
+
+  <div class="section-divider"><span>The Multi-Block / Truncation Tradeoff</span></div>
+  <div class="two-col">
+    <div class="callout callout-blue">
+      <div class="callout-title" style="color:var(--sonnet)">Sonnet 4.5: Compliant but Slow</div>
+      <ul>
+        <li><strong>1 code block per iteration</strong> -- follows the REPL contract</li>
+        <li>Gets real execution feedback between every step</li>
+        <li>Needs 13-50 iterations to find rules and implement solutions</li>
+        <li>Never hits output token cap (finish=stop)</li>
+        <li>Does use delegation when configured (R3)</li>
+        <li>Total iters across 9 task-runs: 196</li>
+      </ul>
+    </div>
+    <div class="callout callout-orange">
+      <div class="callout-title" style="color:var(--opus)">Opus 4.6: Brilliant but Truncated</div>
+      <ul>
+        <li><strong>7-9 code blocks per iteration</strong> -- ignores REPL contract</li>
+        <li>Hallucinated intermediate outputs between blocks</li>
+        <li>Finds rules in 2-3 iterations (7x faster than Sonnet)</li>
+        <li><strong>Every response hits finish=length</strong> (output token cap)</li>
+        <li>Never delegates despite maxDepth=2</li>
+        <li>Total iters across 3 task-runs: 9 (but 22+ inner "iterations")</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: FAILURE TAXONOMY -->
+<!-- ============================================================ -->
+<div class="viz-section" id="failure-taxonomy">
+  <h2>6. Failure Taxonomy</h2>
+  <p class="viz-subtitle">Categorizing all failures across all 12 task-runs</p>
+
+  <div style="overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Failure Mode</th>
+        <th>Count</th>
+        <th>Runs Affected</th>
+        <th>Description</th>
+        <th>Model</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-timeout">timeout / no-return</span></td>
+        <td class="mono center" style="color:var(--accent-orange);font-weight:700">7</td>
+        <td style="font-size:0.75rem">R1(4), R2(1), R3(2)</td>
+        <td style="font-size:0.75rem">Model exhausted iteration budget without calling return(). Had viable candidates in some cases.</td>
+        <td><span class="model-tag-sonnet">Sonnet</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-error">output-truncation</span></td>
+        <td class="mono center" style="color:var(--accent-red);font-weight:700">2</td>
+        <td style="font-size:0.75rem">R4(1), R5(1)</td>
+        <td style="font-size:0.75rem">finish=length cut off every Opus response. Analysis terminated mid-stream. arc-0934a4d8 in both Opus runs.</td>
+        <td><span class="model-tag-opus">Opus</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-wrong">wrong-answer</span></td>
+        <td class="mono center" style="color:var(--accent-red);font-weight:700">3</td>
+        <td style="font-size:0.75rem">R1(1), R2(1), R4(1)</td>
+        <td style="font-size:0.75rem">Returned an answer but it was incorrect. R1: wrong rule. R2: format bug + wrong algo. R4: 9 cell mismatches.</td>
+        <td>Both</td>
+      </tr>
+      <tr>
+        <td><span class="badge" style="background:rgba(218,54,51,0.15);color:#da3633;border:1px solid rgba(218,54,51,0.3)">hallucination</span></td>
+        <td class="mono center" style="color:#da3633;font-weight:700">1</td>
+        <td style="font-size:0.75rem">R5(1)</td>
+        <td style="font-size:0.75rem">Opus fabricated a 3x3 "replace 0 with 2" task that bears no resemblance to the actual 30x30 input. Novel failure class.</td>
+        <td><span class="model-tag-opus">Opus</span></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-na">format-bug</span></td>
+        <td class="mono center" style="color:var(--text-muted);font-weight:700">1</td>
+        <td style="font-size:0.75rem">R2(1)</td>
+        <td style="font-size:0.75rem">String() serialization in rlm.ts:378 flattened 2D array. Harness bug, not model behavior.</td>
+        <td>Harness</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-na">budget-exhausted</span></td>
+        <td class="mono center" style="color:var(--text-muted);font-weight:700">2</td>
+        <td style="font-size:0.75rem">R3(1), R5(1)</td>
+        <td style="font-size:0.75rem">Found solution at the very last iteration with no budget to return. R3 arc-135a2760 achieved 2/2 at iter 13/15.</td>
+        <td>Both</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="section-divider"><span>Failure Distribution by Model</span></div>
+  <div id="failure-chart"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: OPUS OUTPUT CAP PROBLEM -->
+<!-- ============================================================ -->
+<div class="viz-section" id="opus-cap">
+  <h2>7. The Opus Output Cap Problem</h2>
+  <p class="viz-subtitle">Dedicated analysis of the output truncation issue affecting every Opus call</p>
+
+  <div class="section-divider"><span>finish=length on Every Opus Call</span></div>
+
+  <div style="overflow-x:auto;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Run</th>
+        <th>Task</th>
+        <th>Iter</th>
+        <th>Input Chars</th>
+        <th>Output Chars</th>
+        <th>Code Blocks</th>
+        <th>finish</th>
+        <th>Truncated Analysis</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">0934a4d8</td>
+        <td class="mono center">1</td>
+        <td class="mono center">~70K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">8+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem">Diamond hypothesis + 8-rect discovery</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">0934a4d8</td>
+        <td class="mono center">2</td>
+        <td class="mono center">~70K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">7+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem">Symmetry testing on all 4 examples</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">0934a4d8</td>
+        <td class="mono center">3</td>
+        <td class="mono center">~70K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">8+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem;color:var(--accent-orange)">Found col-mirror/row-mirror -- truncated before selection rule</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">135a2760</td>
+        <td class="mono center">1</td>
+        <td class="mono center">~52K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">7+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem">Initial exploration + connected components</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">135a2760</td>
+        <td class="mono center">2</td>
+        <td class="mono center">~52K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">5+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem">Tile finding + panel extraction</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">135a2760</td>
+        <td class="mono center">3</td>
+        <td class="mono center">~52K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">4+</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem;color:var(--accent-orange)">Found tile-period bug -- truncated before fix</td>
+      </tr>
+      <tr style="background:rgba(63,185,80,0.04)">
+        <td class="mono"><span class="run-dot run-dot-4"></span>R4</td>
+        <td class="mono" style="font-size:0.72rem">135a2760</td>
+        <td class="mono center">4</td>
+        <td class="mono center">~52K</td>
+        <td class="mono center">~7K</td>
+        <td class="mono center" style="color:var(--accent-green)">3</td>
+        <td><span class="badge badge-returned">stop</span></td>
+        <td style="font-size:0.72rem;color:var(--accent-green)">DEADLINE MODE -- returned answer (only stop in Opus runs)</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-5"></span>R5</td>
+        <td class="mono" style="font-size:0.72rem">0934a4d8</td>
+        <td class="mono center">1</td>
+        <td class="mono center">~70K</td>
+        <td class="mono center">~3K</td>
+        <td class="mono center" style="color:var(--accent-red)">6</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem;color:#da3633">Hallucinated 3x3 task; return() blocked by iter-0 guard</td>
+      </tr>
+      <tr>
+        <td class="mono"><span class="run-dot run-dot-5"></span>R5</td>
+        <td class="mono" style="font-size:0.72rem">0934a4d8</td>
+        <td class="mono center">2</td>
+        <td class="mono center">~70K</td>
+        <td class="mono center">~10K</td>
+        <td class="mono center" style="color:var(--accent-red)">8+1 partial</td>
+        <td><span class="badge badge-error">length</span></td>
+        <td style="font-size:0.72rem;color:var(--accent-orange)">Self-corrected; testing H-flip/V-flip -- truncated mid-code</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="section-divider"><span>Multi-Block Violation Statistics</span></div>
+  <div class="two-col">
+    <div class="callout callout-red">
+      <div class="callout-title" style="color:var(--accent-red)">Sonnet vs Opus: one-block-per-iteration Compliance</div>
+      <ul>
+        <li><strong>Sonnet 4.5 (R1-R3):</strong> 196 iterations, all 1 block each. <span style="color:var(--accent-green)">100% compliant.</span></li>
+        <li><strong>Opus 4.6 (R4-R5):</strong> 9 iterations, 6-9 blocks each. <span style="color:var(--accent-red)">0% compliant.</span></li>
+        <li>Opus total code blocks across 9 iterations: <strong>~58</strong></li>
+        <li>Expected with compliance: <strong>9</strong></li>
+        <li>Violation ratio: <strong>~6.4x</strong></li>
+      </ul>
+    </div>
+    <div class="callout callout-orange">
+      <div class="callout-title" style="color:var(--opus)">The Hallucinated-Task Incident (R5)</div>
+      <p>Run 005, Response 1: Opus wrote 6 code blocks. Blocks 0-2 ran correctly against real 30x30 data. But between blocks, the model fabricated a narrative about a 3x3 grid where "the pattern is clear: replace all 0s with 2s." Blocks 3-6 implemented and returned this hallucinated solution. The harness ran all 6 blocks; the verification output showed hundreds of mismatches, but the model never saw them because all blocks were pre-written. <strong>This is the first instance of a model hallucinating an entirely different ARC task within the RLM harness.</strong></p>
+    </div>
+  </div>
+
+  <div class="callout callout-purple" style="margin-top:1rem">
+    <div class="callout-title" style="color:var(--accent-purple)">Required Fixes for Opus</div>
+    <ul>
+      <li><strong>Enforce one-block-per-iteration at harness level:</strong> Extract only the first code block per response. Discard subsequent blocks. This prevents hallucinated intermediate outputs.</li>
+      <li><strong>Increase max_tokens:</strong> Current 4096 default is too low. Opus needs 8192+ for reasoning + one code block.</li>
+      <li><strong>Handle finish=length:</strong> Detect truncation, send continuation prompt, or at least surface it in trace.</li>
+      <li><strong>Conditional iter-0 guard:</strong> Allow return on iteration 0 if deadline-return driver is loaded, or if response contains N+ verified code blocks.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 9: KEY FINDINGS -->
+<!-- ============================================================ -->
+<div class="viz-section" id="findings">
+  <h2>8. Key Findings</h2>
+  <p class="viz-subtitle">Synthesized insights from 5 runs, 12 task-runs, 2 models, and 177 iterations</p>
+
+  <div class="narrative">
+    <div class="narrative-item insight-red">
+      <h3>1. The return() Crisis Persists</h3>
+      <p>2 returns out of 12 task-runs (17%). The outer model has returned an answer only for arc-135a2760 (the easier task), never for arc-0934a4d8. Across 5 runs, the hard task has produced zero submissions despite Sonnet reaching 3/4 training accuracy (R2) and Opus discovering the symmetry rule (R4, R5). The model treats return() as "I am confident" not "time is up." This single behavior accounts for 100% of the zero-score outcomes on tasks where a viable answer existed.</p>
+    </div>
+
+    <div class="narrative-item insight-orange">
+      <h3>2. Opus Is 7x Faster at Rule Discovery</h3>
+      <p>For arc-0934a4d8: Sonnet found the reconstruction rule at iter 21 (R2); Opus found it at iter 2-3 (R4, R5). For arc-135a2760: Sonnet found the tile rule at iter 3-7; Opus found it at iter 2. Opus's per-iteration insight density is dramatically higher -- it compresses multi-step hypothesis generation and testing into single responses. But this same behavior causes output truncation and hallucinated intermediate states.</p>
+    </div>
+
+    <div class="narrative-item insight-green">
+      <h3>3. Opus R4 Is the Best Performance So Far</h3>
+      <p>Run 004 achieved 98.9% cell accuracy on arc-135a2760 (832/841 cells correct), the best result across all runs. It also returned an answer -- only the second outer-model return in the entire series. The remaining 9 mismatches are caused by a single algorithmic bug (tile period selection) that the model identified but couldn't fix due to truncation. One additional iteration would likely have produced a perfect answer.</p>
+    </div>
+
+    <div class="narrative-item insight-purple">
+      <h3>4. Delegation: Works Mechanically, Never Used by Opus</h3>
+      <p>Sonnet R3 successfully delegated to 3 parallel children (the machinery works). But Opus (R4, R5) never delegated despite identical configuration -- its multi-block response style fills the output budget before it reaches a delegation call. <strong>Irony:</strong> Opus doesn't delegate because it's too capable per-iteration, but per-iteration capability is capped by the token limit, making delegation the correct strategy that it never employs.</p>
+    </div>
+
+    <div class="narrative-item insight-teal">
+      <h3>5. The Output Cap Is the New Blocking Issue</h3>
+      <p>Replacing the return() crisis as the #1 blocker for Opus runs. Every Opus response (8 of 9) hit finish=length. R4 arc-0934a4d8 was 1-2 code blocks from a complete solution when truncated. R5 was truncated while testing the correct symmetry operations. The 4096 default max_tokens is calibrated for Sonnet's 1-block style; Opus needs 2-3x more, or harness enforcement of single-block to make the existing budget sufficient.</p>
+    </div>
+
+    <div class="narrative-item insight-pink">
+      <h3>6. Hallucinated Intermediate Outputs: New Failure Class</h3>
+      <p>R5 introduced a failure mode unique to multi-block responses: the model fabricates expected output between code blocks rather than waiting for real execution. In R5, Opus hallucinated an entirely different ARC task (3x3 "replace 0 with 2") within the first response to a 30x30 grid problem. The hallucinated narrative was internally consistent but bore no resemblance to reality. This only occurs when the model writes multiple blocks per response without REPL feedback.</p>
+    </div>
+
+    <div class="narrative-item">
+      <h3>7. Infrastructure Bugs Compound Model Failures</h3>
+      <p><strong>String() serialization</strong> (R2): Destroys 2D arrays, makes all correct ARC returns score 0. <strong>Orchestrator alias</strong> (R3): Invalid model ID crashes delegation. <strong>Promise.all error handling</strong> (R3): One child crash kills entire batch. <strong>Iter-0 guard</strong> (R5): Blocks Opus's aggressive early return. These are all fixable but have compounded across runs to prevent any non-zero score.</p>
+    </div>
+
+    <div class="narrative-item insight-orange">
+      <h3>8. What To Try Next</h3>
+      <p><strong>Immediate:</strong> (1) Enforce one-block-per-iteration at harness level for Opus. (2) Increase max_tokens to 8192 for Opus. (3) Fix String() serialization. (4) Fix orchestrator alias. <strong>Next run:</strong> Opus 4.6 with enforced single-block, higher token limit, and 20-25 iteration budget. Expected: Opus's rule discovery speed + real REPL feedback should produce the first correct ARC score. <strong>Longer term:</strong> Model-specific harness profiles (Sonnet config vs Opus config) for iteration limits, token budgets, and block enforcement.</p>
+    </div>
+  </div>
+
+  <div class="section-divider"><span>Open Issues (Priority Order)</span></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Issue</th>
+        <th>Type</th>
+        <th>Impact</th>
+        <th>Blocks</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">1</td>
+        <td>Enforce one-block-per-iteration at harness level for Opus</td>
+        <td><span class="badge badge-error">Harness</span></td>
+        <td style="color:var(--accent-red)">Opus uses 2/30 iters, hallucinate outputs</td>
+        <td>All Opus runs</td>
+      </tr>
+      <tr>
+        <td class="mono">2</td>
+        <td>Increase max_tokens to 8192+ for Opus</td>
+        <td><span class="badge badge-error">Config</span></td>
+        <td style="color:var(--accent-red)">Every Opus response truncated</td>
+        <td>Opus analysis completion</td>
+      </tr>
+      <tr>
+        <td class="mono">3</td>
+        <td>Fix <code>String()</code> serialization in <code>src/rlm.ts:378</code></td>
+        <td><span class="badge badge-wrong">Harness Bug</span></td>
+        <td style="color:var(--accent-red)">All returned ARC answers score 0</td>
+        <td>All ARC scoring</td>
+      </tr>
+      <tr>
+        <td class="mono">4</td>
+        <td>Handle <code>finish=length</code> in harness (detect truncation)</td>
+        <td><span class="badge badge-timeout">Robustness</span></td>
+        <td style="color:var(--accent-orange)">Truncated responses silently fail</td>
+        <td>Opus reliability</td>
+      </tr>
+      <tr>
+        <td class="mono">5</td>
+        <td>Fix <code>orchestrator</code> model alias mapping</td>
+        <td><span class="badge badge-wrong">Config Bug</span></td>
+        <td style="color:var(--accent-red)">Delegation crashes</td>
+        <td>Refinement delegation</td>
+      </tr>
+      <tr>
+        <td class="mono">6</td>
+        <td>Add per-promise error handling in Promise.all</td>
+        <td><span class="badge badge-timeout">Robustness</span></td>
+        <td style="color:var(--accent-orange)">One child crash kills batch</td>
+        <td>Parallel delegation</td>
+      </tr>
+      <tr>
+        <td class="mono">7</td>
+        <td>Model-specific harness profiles (Sonnet vs Opus config)</td>
+        <td><span class="badge badge-na">Architecture</span></td>
+        <td style="color:var(--accent-orange)">Same config cannot serve both models</td>
+        <td>Multi-model benchmarking</td>
+      </tr>
+      <tr>
+        <td class="mono">8</td>
+        <td>Conditional iter-0 return guard</td>
+        <td><span class="badge badge-na">Config</span></td>
+        <td style="color:var(--accent-orange)">Blocks Opus early returns</td>
+        <td>Opus return rate</td>
+      </tr>
+      <tr>
+        <td class="mono">9</td>
+        <td>Rewrite delegation protocol for Opus's planning style</td>
+        <td><span class="badge badge-na">Protocol</span></td>
+        <td style="color:var(--accent-orange)">Opus never delegates despite config</td>
+        <td>Opus delegation</td>
+      </tr>
+      <tr>
+        <td class="mono">10</td>
+        <td>Add tile-period cap to arc-solver helper library</td>
+        <td><span class="badge badge-na">Protocol</span></td>
+        <td style="color:var(--text-muted)">Would have fixed R4's 9 mismatches</td>
+        <td>arc-135a2760 correctness</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div> <!-- end .content -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const RUN_COLORS = {1:'#58a6ff',2:'#bc8cff',3:'#f778ba',4:'#f0883e',5:'#da3633'};
+const MODEL_FOR_RUN = {1:'Sonnet',2:'Sonnet',3:'Sonnet',4:'Opus',5:'Opus'};
+
+const RETURN_DATA = [
+  {run:1,task:'arc-142ca369',model:'Sonnet',iters:'3/25',bestScore:'0/3',scoreIter:'-',returned:true,returnType:'wrong',cellAcc:'N/A',note:'Returned wrong answer (0/3 training). Only R1 task to call return().'},
+  {run:1,task:'arc-0934a4d8',model:'Sonnet',iters:'25/25',bestScore:'Unknown',scoreIter:'-',returned:false,returnType:'timeout',cellAcc:'N/A',note:'Never found correct rule. 25 iters, no return.'},
+  {run:1,task:'arc-135a2760',model:'Sonnet',iters:'25/25',bestScore:'Unknown',scoreIter:'-',returned:false,returnType:'timeout',cellAcc:'N/A',note:'Found rule iter 7. 18 iters debugging. No return.'},
+  {run:1,task:'arc-136b0064',model:'Sonnet',iters:'25/25',bestScore:'~60%',scoreIter:'-',returned:false,returnType:'timeout',cellAcc:'N/A',note:'Hypothesis cycling. Never cracked full rule.'},
+  {run:1,task:'arc-13e47133',model:'Sonnet',iters:'25/25',bestScore:'0/3',scoreIter:'10',returned:true,returnType:'failed',cellAcc:'N/A',note:'6 return attempts, all 0/3. Correct algorithm, wrong markers.'},
+  {run:2,task:'arc-0934a4d8',model:'Sonnet',iters:'50/50',bestScore:'3/4',scoreIter:'45',returned:false,returnType:'timeout',cellAcc:'N/A',note:'3/4 at iter 45, never submitted. 5 more iters exploring.'},
+  {run:2,task:'arc-135a2760',model:'Sonnet',iters:'13/50',bestScore:'2/2',scoreIter:'11',returned:true,returnType:'format',cellAcc:'~84%',note:'Only Sonnet return. String() bug destroyed format.'},
+  {run:3,task:'arc-0934a4d8',model:'Sonnet',iters:'15/15',bestScore:'0/4',scoreIter:'-',returned:false,returnType:'timeout',cellAcc:'N/A',note:'Delegation crashed (alias bug). Rule never found.'},
+  {run:3,task:'arc-135a2760',model:'Sonnet',iters:'15/15',bestScore:'2/2',scoreIter:'13',returned:false,returnType:'budget',cellAcc:'N/A',note:'2/2 at iter 13/15. Zero iterations left to return.'},
+  {run:4,task:'arc-0934a4d8',model:'Opus',iters:'3/15',bestScore:'N/A',scoreIter:'-',returned:false,returnType:'truncation',cellAcc:'N/A',note:'Found rule at iter 3, truncated before completion.'},
+  {run:4,task:'arc-135a2760',model:'Opus',iters:'4/15',bestScore:'N/A',scoreIter:'-',returned:true,returnType:'near-miss',cellAcc:'98.9%',note:'Best ever: 832/841 cells. 9 mismatches from tile-period bug.'},
+  {run:5,task:'arc-0934a4d8',model:'Opus',iters:'2/30',bestScore:'N/A',scoreIter:'-',returned:false,returnType:'hallucination',cellAcc:'N/A',note:'Hallucinated 3x3 task. return() blocked iter-0 guard. 28 iters unused.'},
+];
+
+// Timeline data for each task-run
+const TIMELINE_DATA = [
+  {run:1,task:'arc-142ca369',maxIters:25,phases:['X','X','O'],model:'Sonnet',blocks:[1,1,1]},
+  {run:1,task:'arc-0934a4d8',maxIters:25,model:'Sonnet',blocks:Array(25).fill(1),
+   phases:['E','E','E','E','E','E','X','X','E','E','E','E','E','X','E','E','X','E','X','V','X','X','X','S','S']},
+  {run:1,task:'arc-135a2760',maxIters:25,model:'Sonnet',blocks:Array(25).fill(1),
+   phases:['E','E','X','E','E','E','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','S']},
+  {run:1,task:'arc-136b0064',maxIters:25,model:'Sonnet',blocks:Array(25).fill(1),
+   phases:['E','E','E','E','E','X','E','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X','X']},
+  {run:1,task:'arc-13e47133',maxIters:25,model:'Sonnet',blocks:Array(25).fill(1),
+   phases:['E','E','X','R','E','E','X','E','X','O','E','E','O','E','E','E','E','O','E','O','E','O','E','O','E']},
+  {run:2,task:'arc-0934a4d8',maxIters:50,model:'Sonnet',blocks:Array(50).fill(1),
+   phases:(function(){var a=[];for(var i=0;i<50;i++){if([6,7,13,14,18,19,20,21,35,41,42,45].includes(i))a.push('X');else a.push('E');}return a;})()},
+  {run:2,task:'arc-135a2760',maxIters:50,model:'Sonnet',blocks:Array(13).fill(1),
+   phases:['E','X','E','X','X','E','X','X','X','X','X','X','O']},
+  {run:3,task:'arc-0934a4d8',maxIters:15,model:'Sonnet',blocks:Array(15).fill(1),
+   phases:['E','E','E','E','E','E','E','D','D','D','X','X','X','X','E']},
+  {run:3,task:'arc-135a2760',maxIters:15,model:'Sonnet',blocks:Array(15).fill(1),
+   phases:['E','E','D','E','E','X','X','X','X','X','X','X','X','X','E']},
+  {run:4,task:'arc-0934a4d8',maxIters:15,model:'Opus',blocks:[8,7,8],
+   phases:['E','E','T']},
+  {run:4,task:'arc-135a2760',maxIters:15,model:'Opus',blocks:[7,5,4,3],
+   phases:['E','X','T','O']},
+  {run:5,task:'arc-0934a4d8',maxIters:30,model:'Opus',blocks:[6,9],
+   phases:['H','E']},
+];
+
+const PHASE_MAP = {
+  'E': {color:'#4a7fb5',label:'Explore'},
+  'X': {color:'#3fb950',label:'Extract/Implement'},
+  'V': {color:'#39d2c0',label:'Verify'},
+  'D': {color:'#bc8cff',label:'Delegate'},
+  'O': {color:'#d29922',label:'Solve/Return'},
+  'R': {color:'#f85149',label:'Error'},
+  'S': {color:'#6e7681',label:'Stall'},
+  'H': {color:'#da3633',label:'Hallucination'},
+  'T': {color:'#f0883e',label:'Truncated'},
+};
+
+// ============================================================
+// RENDER: RETURN CRISIS TABLE
+// ============================================================
+function renderReturnTable() {
+  var tbody = document.querySelector('#return-table tbody');
+  RETURN_DATA.forEach(function(rd) {
+    var tr = document.createElement('tr');
+    var runColor = RUN_COLORS[rd.run];
+    var isOpus = rd.model === 'Opus';
+
+    if (isOpus) tr.style.background = 'rgba(240,136,62,0.04)';
+
+    var returnedHtml = '';
+    switch(rd.returnType) {
+      case 'format': returnedHtml = '<span class="badge badge-returned">Yes</span> <span style="font-size:0.65rem;color:var(--accent-orange)">(format bug)</span>'; break;
+      case 'wrong': returnedHtml = '<span class="badge badge-wrong">Yes (wrong)</span>'; break;
+      case 'failed': returnedHtml = '<span class="badge badge-wrong">6x failed</span>'; break;
+      case 'budget': returnedHtml = '<span class="badge badge-timeout">No (budget)</span>'; break;
+      case 'truncation': returnedHtml = '<span class="badge badge-error">No (truncated)</span>'; break;
+      case 'near-miss': returnedHtml = '<span class="badge badge-returned">Yes</span> <span style="font-size:0.65rem;color:var(--accent-green)">(98.9%)</span>'; break;
+      case 'hallucination': returnedHtml = '<span class="badge badge-error">Blocked (iter-0)</span>'; break;
+      default: returnedHtml = '<span class="badge badge-timeout">No</span>'; break;
+    }
+
+    var modelTag = isOpus ? '<span class="model-tag-opus">Opus</span>' : '<span class="model-tag-sonnet">Sonnet</span>';
+    var accColor = rd.cellAcc === '98.9%' ? 'var(--accent-green)' : rd.cellAcc === '~84%' ? 'var(--accent-orange)' : 'var(--text-muted)';
+
+    tr.innerHTML =
+      '<td><span class="run-dot run-dot-'+rd.run+'"></span><span class="mono" style="color:'+runColor+'">R'+rd.run+'</span></td>'+
+      '<td class="mono" style="color:var(--accent-blue);font-size:0.75rem">'+rd.task+'</td>'+
+      '<td class="center">'+modelTag+'</td>'+
+      '<td class="mono center">'+rd.iters+'</td>'+
+      '<td class="mono center" style="color:'+((rd.bestScore||'').indexOf('2/2')>=0||(rd.bestScore||'').indexOf('3/4')>=0?'var(--accent-green)':rd.bestScore==='Unknown'||rd.bestScore==='N/A'?'var(--text-muted)':'var(--accent-red)')+'">'+rd.bestScore+'</td>'+
+      '<td class="mono center">'+rd.scoreIter+'</td>'+
+      '<td class="center">'+returnedHtml+'</td>'+
+      '<td class="mono center" style="color:'+accColor+'">'+rd.cellAcc+'</td>'+
+      '<td style="font-size:0.72rem;color:var(--text-secondary);max-width:280px">'+rd.note+'</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ============================================================
+// RENDER: ITERATION BUDGET TIMELINES
+// ============================================================
+function renderBudgetTimelines() {
+  var container = document.getElementById('budget-timelines');
+  var maxIter = 50;
+
+  TIMELINE_DATA.forEach(function(tr) {
+    var row = document.createElement('div');
+    row.className = 'timeline-row';
+
+    var label = document.createElement('div');
+    label.className = 'timeline-label';
+    var runColor = RUN_COLORS[tr.run];
+    var modelTag = tr.model === 'Opus' ? ' <span class="model-tag-opus" style="font-size:0.6rem">Opus</span>' : '';
+    label.innerHTML = '<span style="color:'+runColor+'">R'+tr.run+'</span> '+tr.task.replace('arc-','')+modelTag;
+
+    var barContainer = document.createElement('div');
+    barContainer.className = 'timeline-bar-container';
+
+    var isOpus = tr.model === 'Opus';
+    var unitW = Math.max(12, 650 / maxIter);
+
+    tr.phases.forEach(function(p, i) {
+      var pm = PHASE_MAP[p] || PHASE_MAP['E'];
+      var block = document.createElement('div');
+      block.className = 'iter-block';
+
+      if (isOpus && tr.blocks && tr.blocks[i] > 1) {
+        // Multi-block: make wider with striped pattern
+        var numBlocks = tr.blocks[i];
+        var w = unitW * Math.min(numBlocks, 4);
+        block.style.width = w + 'px';
+        block.style.background = 'repeating-linear-gradient(90deg, '+pm.color+' 0px, '+pm.color+' '+(w/numBlocks-1)+'px, rgba(0,0,0,0.4) '+(w/numBlocks-1)+'px, rgba(0,0,0,0.4) '+(w/numBlocks)+'px)';
+        block.style.border = '1px solid '+pm.color;
+        block.style.opacity = '0.9';
+        block.textContent = numBlocks+'b';
+      } else {
+        block.style.background = pm.color;
+        block.style.width = unitW + 'px';
+        block.style.opacity = '0.8';
+      }
+
+      var tip = document.createElement('div');
+      tip.className = 'tip';
+      var tipText = '<strong>Iter '+(i+1)+'</strong> -- '+pm.label;
+      if (isOpus && tr.blocks && tr.blocks[i] > 1) {
+        tipText += ' ('+tr.blocks[i]+' code blocks in 1 response)';
+      }
+      tip.innerHTML = tipText;
+      block.appendChild(tip);
+      barContainer.appendChild(block);
+    });
+
+    // Fill unused budget
+    for (var i = tr.phases.length; i < tr.maxIters; i++) {
+      var empty = document.createElement('div');
+      empty.style.cssText = 'width:'+unitW+'px;height:22px;border-radius:2px;background:rgba(255,255,255,0.02);flex-shrink:0;';
+      barContainer.appendChild(empty);
+    }
+
+    var meta = document.createElement('div');
+    meta.className = 'timeline-meta';
+    var usedIters = tr.phases.length;
+    var totalBlocks = (tr.blocks||[]).reduce(function(a,b){return a+b;},0) || usedIters;
+    meta.innerHTML = usedIters+'/'+tr.maxIters+' iters';
+    if (isOpus) meta.innerHTML += '<br><span style="color:var(--opus)">'+totalBlocks+' blocks</span>';
+
+    row.appendChild(label);
+    row.appendChild(barContainer);
+    row.appendChild(meta);
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// RENDER: DISCOVERY TIMELINE (SVG)
+// ============================================================
+function renderDiscoveryChart() {
+  var svg = document.getElementById('discovery-chart');
+  var W = 1000, H = 300;
+  var PAD = {top:30,right:20,bottom:40,left:140};
+  var plotW = W-PAD.left-PAD.right;
+  var plotH = H-PAD.top-PAD.bottom;
+  var maxIter = 50;
+
+  var content = '<g transform="translate('+PAD.left+','+PAD.top+')">';
+
+  // Gridlines
+  for (var i = 0; i <= maxIter; i += 10) {
+    var x = (i/maxIter)*plotW;
+    content += '<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+plotH+'" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+    content += '<text x="'+x+'" y="'+(plotH+18)+'" text-anchor="middle" fill="#6e7681" font-size="10">'+i+'</text>';
+  }
+  content += '<text x="'+(plotW/2)+'" y="'+(plotH+35)+'" text-anchor="middle" fill="#8b949e" font-size="11">Iteration</text>';
+
+  var tasks = ['arc-0934a4d8','arc-135a2760'];
+  var laneH = plotH/2;
+
+  var runDataMap = {
+    'arc-0934a4d8': [
+      {run:1,color:RUN_COLORS[1],ruleIter:null,scoreIter:null,maxIters:25,iters:25,model:'Sonnet'},
+      {run:2,color:RUN_COLORS[2],ruleIter:21,scoreIter:45,maxIters:50,iters:50,model:'Sonnet'},
+      {run:3,color:RUN_COLORS[3],ruleIter:null,scoreIter:null,maxIters:15,iters:15,model:'Sonnet'},
+      {run:4,color:RUN_COLORS[4],ruleIter:3,scoreIter:null,maxIters:15,iters:3,model:'Opus'},
+      {run:5,color:RUN_COLORS[5],ruleIter:2,scoreIter:null,maxIters:30,iters:2,model:'Opus'},
+    ],
+    'arc-135a2760': [
+      {run:1,color:RUN_COLORS[1],ruleIter:7,scoreIter:null,maxIters:25,iters:25,model:'Sonnet'},
+      {run:2,color:RUN_COLORS[2],ruleIter:3,scoreIter:11,maxIters:50,iters:13,model:'Sonnet'},
+      {run:3,color:RUN_COLORS[3],ruleIter:5,scoreIter:13,maxIters:15,iters:15,model:'Sonnet'},
+      {run:4,color:RUN_COLORS[4],ruleIter:2,scoreIter:null,maxIters:15,iters:4,model:'Opus'},
+    ],
+  };
+
+  tasks.forEach(function(taskId, ti) {
+    var y = ti * laneH;
+    var labelY = y + laneH/2;
+
+    content += '<text x="-10" y="'+(labelY+4)+'" text-anchor="end" fill="#58a6ff" font-size="11">'+taskId.replace('arc-','')+'</text>';
+    content += '<rect x="0" y="'+(y+4)+'" width="'+plotW+'" height="'+(laneH-8)+'" rx="4" fill="rgba(255,255,255,0.02)"/>';
+
+    var runData = runDataMap[taskId];
+    var rowCount = runData.length;
+
+    runData.forEach(function(rd, ri) {
+      var rowY = y + 10 + ri * (laneH / (rowCount + 1));
+      var isOpus = rd.model === 'Opus';
+
+      // Iteration bar
+      var barW = Math.max(4, (rd.iters/maxIter)*plotW);
+      content += '<rect x="0" y="'+(rowY-4)+'" width="'+barW+'" height="10" rx="2" fill="'+rd.color+'" opacity="'+(isOpus?'0.3':'0.15')+'"/>';
+
+      // Budget limit
+      var budgetX = (rd.maxIters/maxIter)*plotW;
+      content += '<line x1="'+budgetX+'" y1="'+(rowY-6)+'" x2="'+budgetX+'" y2="'+(rowY+8)+'" stroke="'+rd.color+'" stroke-width="1" stroke-dasharray="2,2" opacity="0.4"/>';
+
+      // Rule discovery marker
+      if (rd.ruleIter) {
+        var rx = (rd.ruleIter/maxIter)*plotW;
+        content += '<polygon points="'+rx+','+(rowY-6)+' '+(rx+5)+','+(rowY+1)+' '+rx+','+(rowY+8)+' '+(rx-5)+','+(rowY+1)+'" fill="'+rd.color+'" opacity="0.9"/>';
+        content += '<text x="'+rx+'" y="'+(rowY-9)+'" text-anchor="middle" fill="'+rd.color+'" font-size="8">rule</text>';
+      }
+
+      // Best score marker
+      if (rd.scoreIter) {
+        var sx = (rd.scoreIter/maxIter)*plotW;
+        content += '<circle cx="'+sx+'" cy="'+(rowY+1)+'" r="5" fill="none" stroke="'+rd.color+'" stroke-width="2"/>';
+        content += '<circle cx="'+sx+'" cy="'+(rowY+1)+'" r="2" fill="'+rd.color+'"/>';
+      }
+
+      // Run label
+      content += '<text x="-130" y="'+(rowY+4)+'" text-anchor="start" fill="'+rd.color+'" font-size="9">'+(isOpus?'*':'')+'R'+rd.run+'</text>';
+    });
+  });
+
+  // Legend
+  var legY = -15;
+  content += '<text x="0" y="'+legY+'" fill="#6e7681" font-size="9">Legend:</text>';
+  content += '<polygon points="60,'+(legY-4)+' 65,'+(legY+1)+' 60,'+(legY+6)+' 55,'+(legY+1)+'" fill="#8b949e"/>';
+  content += '<text x="72" y="'+(legY+3)+'" fill="#8b949e" font-size="9">= Rule discovered</text>';
+  content += '<circle cx="162" cy="'+(legY+1)+'" r="4" fill="none" stroke="#8b949e" stroke-width="2"/>';
+  content += '<text x="172" y="'+(legY+3)+'" fill="#8b949e" font-size="9">= Best train score</text>';
+  content += '<line x1="265" y1="'+(legY-3)+'" x2="265" y2="'+(legY+6)+'" stroke="#8b949e" stroke-width="1" stroke-dasharray="2,2"/>';
+  content += '<text x="272" y="'+(legY+3)+'" fill="#8b949e" font-size="9">= Budget limit</text>';
+  content += '<text x="370" y="'+(legY+3)+'" fill="var(--opus)" font-size="9">*R = Opus run</text>';
+
+  content += '</g>';
+  svg.innerHTML = content;
+}
+
+// ============================================================
+// RENDER: MODEL COST CHART
+// ============================================================
+function renderModelCostChart() {
+  var container = document.getElementById('model-cost-chart');
+  var maxCost = 7;
+
+  var runs = [
+    {id:'Run 001',label:'R1',color:RUN_COLORS[1],cost:6.50,model:'Sonnet',tasks:5},
+    {id:'Run 002',label:'R2',color:RUN_COLORS[2],cost:2.90,model:'Sonnet',tasks:2},
+    {id:'Run 003',label:'R3',color:RUN_COLORS[3],cost:1.20,model:'Sonnet',tasks:2},
+    {id:'Run 004',label:'R4',color:RUN_COLORS[4],cost:0.57,model:'Opus',tasks:2},
+    {id:'Run 005',label:'R5',color:RUN_COLORS[5],cost:0.15,model:'Opus',tasks:1},
+  ];
+
+  runs.forEach(function(run) {
+    var row = document.createElement('div');
+    row.className = 'cost-row';
+
+    var label = document.createElement('div');
+    label.className = 'cost-label';
+    label.innerHTML = '<span style="color:'+run.color+'">'+run.id+'</span> <span style="font-size:0.6rem;color:var(--text-muted)">('+run.model+', '+run.tasks+'t)</span>';
+
+    var barWrap = document.createElement('div');
+    barWrap.className = 'cost-bar-wrap';
+
+    var bar = document.createElement('div');
+    bar.className = 'cost-bar-seg';
+    bar.style.width = (run.cost/maxCost*100)+'%';
+    bar.style.background = run.color;
+    bar.style.opacity = '0.7';
+    bar.style.borderRadius = '4px';
+    barWrap.appendChild(bar);
+
+    var value = document.createElement('div');
+    value.className = 'cost-value';
+    value.textContent = '$'+run.cost.toFixed(2);
+
+    row.appendChild(label);
+    row.appendChild(barWrap);
+    row.appendChild(value);
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// RENDER: FAILURE DISTRIBUTION CHART
+// ============================================================
+function renderFailureChart() {
+  var container = document.getElementById('failure-chart');
+
+  var failures = [
+    {mode:'timeout/no-return',count:7,color:'var(--accent-orange)',model:'Sonnet only'},
+    {mode:'wrong-answer',count:3,color:'var(--accent-red)',model:'Both'},
+    {mode:'output-truncation',count:2,color:'var(--opus)',model:'Opus only'},
+    {mode:'budget-exhausted',count:2,color:'var(--text-muted)',model:'Both'},
+    {mode:'hallucination',count:1,color:'#da3633',model:'Opus only'},
+    {mode:'format-bug',count:1,color:'var(--accent-purple)',model:'Harness'},
+  ];
+
+  var maxCount = 7;
+
+  failures.forEach(function(f) {
+    var row = document.createElement('div');
+    row.className = 'cost-row';
+
+    var label = document.createElement('div');
+    label.className = 'cost-label';
+    label.innerHTML = '<span style="color:'+f.color+'">'+f.mode+'</span>';
+
+    var barWrap = document.createElement('div');
+    barWrap.className = 'cost-bar-wrap';
+
+    var bar = document.createElement('div');
+    bar.className = 'cost-bar-seg';
+    bar.style.width = (f.count/maxCount*100)+'%';
+    bar.style.background = f.color;
+    bar.style.opacity = '0.7';
+    bar.style.borderRadius = '4px';
+    barWrap.appendChild(bar);
+
+    var value = document.createElement('div');
+    value.className = 'cost-value';
+    value.innerHTML = f.count+' <span style="font-size:0.6rem;color:var(--text-muted)">('+f.model+')</span>';
+
+    row.appendChild(label);
+    row.appendChild(barWrap);
+    row.appendChild(value);
+    container.appendChild(row);
+  });
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderReturnTable();
+renderBudgetTimelines();
+renderDiscoveryChart();
+renderModelCostChart();
+renderFailureChart();
+
+// Smooth scroll for nav links
+document.querySelectorAll('.nav-links a').forEach(function(a) {
+  a.addEventListener('click', function(e) {
+    e.preventDefault();
+    var target = document.querySelector(this.getAttribute('href'));
+    if (target) target.scrollIntoView({behavior:'smooth',block:'start'});
+    document.querySelectorAll('.nav-links a').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+  });
+});
+
+// Highlight active nav on scroll
+var sections = document.querySelectorAll('.viz-section');
+var navLinks = document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll', function() {
+  var current = '';
+  sections.forEach(function(section) {
+    if (window.scrollY >= section.offsetTop - 80) current = section.id;
+  });
+  navLinks.forEach(function(link) {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#'+current) link.classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>
