@@ -82,6 +82,28 @@ console.log("Labels:", JSON.stringify(labels));
 
 `llm()` costs 1 API call per item (vs 3-7 for `rlm()`). Use it when each item can be classified without multi-step reasoning.
 
+### Model selection for delegation
+
+When model aliases are configured, pass `{ model: "alias" }` as the options argument to `rlm()` or `llm()` to choose which model handles a delegation. Three default aliases are always available: `fast`, `orchestrator`, `intelligent`.
+
+Use a cheap model for bulk classification fan-out, and let the orchestrator (default model) handle aggregation:
+
+**Option A** — cheap `rlm()` fan-out:
+```javascript
+chunks.map(chunk =>
+  rlm(`Classify lines ${chunk.start}-${chunk.end - 1} ...`, undefined, { model: "fast" })
+)
+```
+
+**Option C** — cheap `llm()` per-item classification:
+```javascript
+items.map(item =>
+  llm(`Classify into exactly one of [A, B, C, D]. Reply with ONLY the label.`, item, { model: "fast" })
+)
+```
+
+Omit the option to use the current model.
+
 ### Aggregation and failure handling
 
 ```javascript

@@ -33,7 +33,7 @@ When the task requires counting, grouping, or aggregating items from `context`:
      chunks.push(items.slice(i, i + BATCH).join('\n'));
 
    const results = await Promise.all(
-     chunks.map(c => llm(classifyPrompt, c))
+     chunks.map(c => llm(classifyPrompt, c, { model: "fast" }))
    );
 
    const totals = {};
@@ -43,6 +43,8 @@ When the task requires counting, grouping, or aggregating items from `context`:
        totals[k] = (totals[k] || 0) + v;
    }
    ```
+
+   When model aliases are configured, use `{ model: "fast" }` for batch classification to minimize cost. Omit the option to use the current model.
 
 4. **Verify** — Check your counts before returning:
    - Do the category counts sum to the total number of items? If not, re-examine.

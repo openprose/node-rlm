@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { rlm, RlmError, RlmMaxIterationsError } from "../src/rlm.js";
-import type { CallLLM } from "../src/rlm.js";
+import type { CallLLM, ModelEntry } from "../src/rlm.js";
 import type {
 	BenchmarkResult,
 	EvalResult,
@@ -28,6 +28,8 @@ export interface HarnessConfig {
 	resultsDir?: string;
 	/** Concatenated plugin bodies to append to the system prompt. */
 	pluginBodies?: string;
+	/** Named model aliases available for child delegation. */
+	models?: Record<string, ModelEntry>;
 	/** Raw --filter string for resumability tracking. */
 	filter?: string;
 	/** Progress callback, called after each task completes. */
@@ -78,7 +80,7 @@ export async function runEval(
 	const pool = new Set<Promise<void>>();
 
 	const handleTask = (task: EvalTask): Promise<void> => {
-		const p = runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies)
+		const p = runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models)
 			.then((result) => {
 				results.push(result);
 				completed++;
@@ -146,6 +148,7 @@ async function runSingleTask(
 	maxIterations: number,
 	maxDepth: number,
 	pluginBodies?: string,
+	models?: Record<string, ModelEntry>,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -170,6 +173,7 @@ async function runSingleTask(
 			maxIterations,
 			maxDepth,
 			pluginBodies,
+			...(models && { models }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;

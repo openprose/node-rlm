@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fromProviderModel } from "./drivers/openrouter-compatible.js";
+import { DEFAULT_MODEL_ALIASES } from "./models.js";
 import { rlm } from "./rlm.js";
 import type { ModelEntry } from "./rlm.js";
 
@@ -152,11 +153,25 @@ async function main() {
 		baseUrl: args.baseUrl,
 	});
 
-	const models = parseModelAliases(args.modelAliases);
+	// Build default model aliases, then let --model-alias override by name
+	const defaultModels: Record<string, ModelEntry> = {};
+	for (const [alias, def] of Object.entries(DEFAULT_MODEL_ALIASES)) {
+		try {
+			defaultModels[alias] = {
+				callLLM: fromProviderModel(def.modelId),
+				tags: [...def.tags],
+				description: def.description,
+			};
+		} catch {
+			// Skip defaults that can't be constructed (e.g. missing API key)
+		}
+	}
+	const userModels = parseModelAliases(args.modelAliases);
+	const models = { ...defaultModels, ...userModels };
 
 	console.log(`Model: ${args.model}`);
 	if (args.baseUrl) console.log(`Base URL: ${args.baseUrl}`);
-	if (models) console.log(`Model aliases: ${Object.keys(models).join(", ")}`);
+	if (Object.keys(models).length > 0) console.log(`Model aliases: ${Object.keys(models).join(", ")}`);
 	if (context) console.log(`Context: ${context.length.toLocaleString()} characters`);
 	console.log(`Max iterations: ${args.maxIterations}`);
 	console.log(`Max depth: ${args.maxDepth}`);
@@ -167,7 +182,7 @@ async function main() {
 		callLLM,
 		maxIterations: args.maxIterations,
 		maxDepth: args.maxDepth,
-		...(models && { models }),
+		...(Object.keys(models).length > 0 && { models }),
 	});
 
 	for (const entry of result.trace) {

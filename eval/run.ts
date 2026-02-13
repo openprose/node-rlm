@@ -34,7 +34,8 @@ import { loadOolongTasks } from "./datasets/oolong.js";
 import { generateSNIAHTasks } from "./datasets/s-niah.js";
 import { loadArcTasks } from "./datasets/arc.js";
 import { loadStack } from "../src/plugins.js";
-import type { CallLLM } from "../src/rlm.js";
+import type { CallLLM, ModelEntry } from "../src/rlm.js";
+import { DEFAULT_MODEL_ALIASES } from "../src/models.js";
 import type { EvalResult, EvalTask, ScoringFunction } from "./types.js";
 import { withRateLimit } from "./rate-limiter.js";
 
@@ -79,6 +80,7 @@ interface CliArgs {
 	withLabels: boolean;
 	filter: string | null;
 	selectedProblems: string[];
+	modelAliases: string[];
 }
 
 function usage(): never {
@@ -108,6 +110,7 @@ Options:
   --rate-limit <n>         Requests per second (default: 5, 0 to disable)
   --rate-burst <n>         Burst capacity (default: 10)
   --with-labels            OOLONG: use labeled context (context_window_text_with_labels)
+  --model-alias <spec>     Register a model alias: alias=model[:tag1,tag2] (repeatable)
   --filter <expr>          OOLONG: filter tasks by field values (comma=AND, pipe=OR)
                            e.g. "task_group=TASK_TYPE.NUMERIC_ONE_CLASS"
                            e.g. "answer_type=ANSWER_TYPE.NUMERIC|ANSWER_TYPE.COMPARISON"
@@ -130,6 +133,7 @@ Examples:
 function parseArgs(argv: string[]): CliArgs {
 	const args: Record<string, string> = {};
 	const flags = new Set<string>();
+	const modelAliases: string[] = [];
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--help" || arg === "-h") {
@@ -138,7 +142,12 @@ function parseArgs(argv: string[]): CliArgs {
 		if (arg === "--with-labels") {
 			flags.add("with-labels");
 		} else if (arg.startsWith("--") && i + 1 < argv.length) {
-			args[arg.slice(2)] = argv[i + 1];
+			const key = arg.slice(2);
+			if (key === "model-alias") {
+				modelAliases.push(argv[i + 1]);
+			} else {
+				args[key] = argv[i + 1];
+			}
 			i++;
 		}
 	}
@@ -172,6 +181,7 @@ function parseArgs(argv: string[]): CliArgs {
 		selectedProblems: args["selected-problems"]
 			? args["selected-problems"].split(",").map((s) => s.trim())
 			: [],
+		modelAliases,
 	};
 }
 
@@ -225,6 +235,55 @@ function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string }
 
 	// Otherwise pass the full spec directly — OpenRouter accepts "provider/model" natively.
 	return { callLLM: fromOpenRouter(spec, apiKey), displayName: `${spec} (openrouter)` };
+}
+
+function buildModelAliases(aliases: string[], apiKey: string): Record<string, ModelEntry> | undefined {
+	// Start with defaults
+	const models: Record<string, ModelEntry> = {};
+	for (const [alias, def] of Object.entries(DEFAULT_MODEL_ALIASES)) {
+		// Strip openrouter/ prefix for the eval's OpenRouter driver
+		const modelId = def.modelId.startsWith("openrouter/")
+			? def.modelId.slice("openrouter/".length)
+			: def.modelId;
+		models[alias] = {
+			callLLM: fromOpenRouter(modelId, apiKey),
+			tags: [...def.tags],
+			description: def.description,
+		};
+	}
+
+	// Parse user overrides
+	for (const raw of aliases) {
+		const eqIdx = raw.indexOf("=");
+		if (eqIdx === -1) {
+			console.error(`Invalid --model-alias format: "${raw}" (expected alias=model[:tag1,tag2,...])`);
+			process.exit(1);
+		}
+		const alias = raw.slice(0, eqIdx);
+		const rest = raw.slice(eqIdx + 1);
+		const colonIdx = rest.indexOf(":");
+		let modelId: string;
+		let tags: string[] | undefined;
+		if (colonIdx === -1) {
+			modelId = rest;
+		} else {
+			modelId = rest.slice(0, colonIdx);
+			tags = rest.slice(colonIdx + 1).split(",").filter(Boolean);
+		}
+		if (!alias || !modelId) {
+			console.error(`Invalid --model-alias format: "${raw}" (alias and model ID must be non-empty)`);
+			process.exit(1);
+		}
+		// Strip openrouter/ prefix if present
+		const cleanModelId = modelId.startsWith("openrouter/") ? modelId.slice("openrouter/".length) : modelId;
+		models[alias] = {
+			callLLM: fromOpenRouter(cleanModelId, apiKey),
+			tags,
+			description: modelId,
+		};
+	}
+
+	return Object.keys(models).length > 0 ? models : undefined;
 }
 
 interface BenchmarkConfig {
@@ -378,6 +437,13 @@ async function main(): Promise<void> {
 	if (args.rateLimit > 0) {
 		console.log(`  Rate limit: ${args.rateLimit} req/s, burst: ${args.rateBurst}`);
 	}
+
+	// Build model aliases (defaults + user overrides)
+	const apiKey = process.env.OPENROUTER_API_KEY!;
+	const models = buildModelAliases(args.modelAliases, apiKey);
+	if (models) {
+		console.log(`  Model aliases: ${Object.keys(models).join(", ")}`);
+	}
 	console.log();
 
 	// Load plugins via stack (profile + drivers + app)
@@ -436,6 +502,7 @@ async function main(): Promise<void> {
 		maxDepth: args.maxDepth,
 		concurrency: args.concurrency,
 		pluginBodies,
+		models,
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

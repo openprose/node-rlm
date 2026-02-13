@@ -59,13 +59,24 @@ npx node-rlm --query "Hello" --model custom/my-model --base-url http://localhost
 | `--base-url <url>`      | --                                         | Custom API base URL (for Ollama, vLLM, etc.)              |
 | `--max-iterations <n>`  | 15                                         | Maximum REPL loop iterations (root)                       |
 | `--max-depth <n>`       | 3                                          | Maximum recursion depth; beyond this, `rlm()` is one-shot |
-| `--model-alias <spec>`  | --                                         | Register a named model for child delegation (repeatable)  |
+| `--model-alias <spec>`  | --                                         | Add or override a named model alias (repeatable)          |
 
-Model aliases let the root agent (and its children) delegate to different models by name. Format: `alias=provider/model[:tag1,tag2,...]`
+#### Model aliases
+
+Three default aliases are always available -- no flags needed:
+
+| Alias          | Tags                    | Model              | Description             |
+| -------------- | ----------------------- | ------------------ | ----------------------- |
+| `fast`         | fast, cheap             | Gemini 3 Flash     | Fast and cheap          |
+| `orchestrator` | orchestrator, medium    | Claude Sonnet 4.5  | Balanced orchestration  |
+| `intelligent`  | intelligent, expensive  | Claude Opus 4.6    | Highest capability      |
+
+Use `--model-alias` to add new aliases or override the defaults. Format: `alias=provider/model[:tag1,tag2,...]`
 
 ```bash
+# Override the "fast" default and add a new "smart" alias
 npx node-rlm --query "Analyze this dataset" \
-  --model-alias fast=openrouter/google/gemini-3-flash-preview:fast,cheap \
+  --model-alias fast=openrouter/openai/gpt-4o-mini:fast,cheap \
   --model-alias smart=openrouter/anthropic/claude-sonnet-4:intelligent,thorough
 ```
 
@@ -82,7 +93,7 @@ The CLI routes models by the first path segment:
 ## Programmatic API
 
 ```typescript
-import { rlm } from "node-rlm";
+import { rlm, DEFAULT_MODEL_ALIASES } from "node-rlm";
 import { fromProviderModel } from "node-rlm/drivers/openrouter-compatible";
 
 const callLLM = fromProviderModel("openrouter/google/gemini-3-flash-preview");
@@ -95,6 +106,19 @@ const result = await rlm("What is 2 + 2?", undefined, {
 console.log(result.answer); // "4"
 console.log(result.iterations); // number of REPL turns used
 console.log(result.trace); // { reasoning, code, output, error } per turn
+```
+
+To build a `models` map from the defaults:
+
+```typescript
+const models = Object.fromEntries(
+  Object.entries(DEFAULT_MODEL_ALIASES).map(([alias, def]) => [
+    alias,
+    { callLLM: fromProviderModel(def.modelId), tags: def.tags, description: def.description },
+  ]),
+);
+
+const result = await rlm("Analyze this", data, { callLLM, models });
 ```
 
 ### `rlm(query, context?, options)`
@@ -111,7 +135,7 @@ Throws `RlmMaxIterationsError` if the iteration budget is exhausted (carries par
 | `maxIterations` | `number`  | 15         | REPL loop budget for the root agent                          |
 | `maxDepth`      | `number`  | 3          | Recursion depth limit                                        |
 | `pluginBodies`  | `string`  | --         | Extra prompt text appended to the root agent's system prompt |
-| `models`        | `Record<string, ModelEntry>` | -- | Named model aliases for child delegation (see below)  |
+| `models`        | `Record<string, ModelEntry>` | -- | Named model aliases for child delegation; build from `DEFAULT_MODEL_ALIASES` or supply your own |
 
 ### Sandbox globals
 
@@ -122,8 +146,8 @@ These are available to the model inside the REPL:
 | `context`                                       | Task data (reads `__ctx.local.context`, falling back to `__ctx.shared.data`).                                           |
 | `console.log()`                                 | Output visible to the model between iterations.                                                                         |
 | `return(value)`                                 | Ends the loop and sets the final answer. First-iteration returns are intercepted for verification.                      |
-| `await rlm(query, context?, { systemPrompt?, model? })` | Spawn a child RLM. Shared sandbox, own message history. `model` selects an alias. Must be awaited.              |
-| `await llm(query, context?, { model? })`        | One-shot LLM call. No REPL, no iteration. `model` selects an alias.                                                     |
+| `await rlm(query, context?, { systemPrompt?, model? })` | Spawn a child RLM. Shared sandbox, own message history. `model` selects an alias (default aliases are pre-configured). Must be awaited. |
+| `await llm(query, context?, { model? })`        | One-shot LLM call. No REPL, no iteration. `model` selects an alias (default aliases are pre-configured).                 |
 | `__rlm`                                         | Read-only delegation context: `depth`, `maxDepth`, `iteration`, `maxIterations`, `lineage`, `invocationId`, `parentId`. |
 | `__ctx.shared.data`                             | Root context (frozen, readable by all depths).                                                                          |
 | `__ctx.local`                                   | This invocation's writable workspace.                                                                                   |

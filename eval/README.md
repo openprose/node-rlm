@@ -57,6 +57,7 @@ The plugin system has three kinds of plugins:
 | `--profile <name>` | Load a named driver profile (e.g., `gemini-3-flash`) |
 | `--app <name>` | Load a named app plugin (e.g., `structured-data-aggregation`) |
 | `--drivers <list>` | Comma-separated extra driver names (appended after profile drivers) |
+| `--model-alias <spec>` | Register a model alias: `name=model:tag1,tag2` (repeatable) |
 
 ### Auto-detection
 
@@ -85,6 +86,28 @@ npx tsx eval/run.ts --benchmark oolong --model anthropic/claude-sonnet-4-2025051
 ```
 
 Results are saved as timestamped JSON files in `eval/results/` (gitignored). Each run creates a new file — previous results are never overwritten.
+
+### Model Aliases
+
+The `rlm()` function accepts a `models` option — a map of named model aliases that child agents can use when delegating. Agents see the available aliases in their system prompt and can select one by name.
+
+The CLI provides three built-in aliases:
+
+| Alias | Model | Tags |
+|---|---|---|
+| `fast` | Gemini 3 Flash | fast, cheap |
+| `orchestrator` | Claude Sonnet 4.5 | orchestrator, medium |
+| `intelligent` | Claude Opus 4.6 | intelligent, expensive |
+
+Additional aliases can be registered with `--model-alias`. The format is `name=model:tag1,tag2`. The flag is repeatable.
+
+```bash
+npx tsx eval/run.ts --benchmark oolong --model openrouter/anthropic/claude-sonnet-4-5-20250929 \
+  --model-alias fast=openrouter/google/gemini-3-flash-preview:fast,cheap \
+  --app structured-data-aggregation
+```
+
+> **Note:** The built-in defaults route through OpenRouter and require `OPENROUTER_API_KEY`.
 
 ## Analyzing Results
 
