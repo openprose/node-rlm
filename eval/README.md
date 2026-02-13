@@ -6,10 +6,14 @@ Benchmarks for measuring RLM performance across models.
 
 Requires an `OPENROUTER_API_KEY` in a `.env` file in the package root. All models route through OpenRouter.
 
-Download OOLONG data (one-time):
+Download benchmark data (one-time, as needed):
 
 ```bash
+# OOLONG
 npx tsx eval/download.ts
+
+# ARC-AGI-2
+npx tsx eval/download.ts --dataset arc
 ```
 
 S-NIAH data is generated synthetically at runtime.
@@ -22,6 +26,14 @@ npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-2025051
 
 # OOLONG (long-context aggregation) — 50 tasks, trec_coarse
 npx tsx eval/run.ts --benchmark oolong --model anthropic/claude-sonnet-4-20250514 --context-len 16384
+
+# ARC-AGI-2 (abstract reasoning) — 120 tasks
+npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
+  --max-iterations 25 --max-depth 2 --concurrency 10
+
+# ARC: run specific problems
+npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
+  --selected-problems "0934a4d8,135a2760,136b0064" --max-iterations 30
 
 # With options
 npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-20250514 \
@@ -98,11 +110,12 @@ The analyzer reports:
 | `run.ts` | CLI entry point, model resolution, argument parsing |
 | `harness.ts` | Core eval runner with concurrency, resumability, incremental saves |
 | `analyze.ts` | Post-hoc trace analysis |
-| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice` |
+| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice`, `arcGridMatch` |
 | `types.ts` | Shared types: `EvalTask`, `EvalResult`, `BenchmarkResult` |
-| `download.ts` | Downloads OOLONG data from HuggingFace |
+| `download.ts` | Downloads OOLONG and ARC data from GitHub Releases |
 | `datasets/s-niah.ts` | Synthetic needle-in-haystack task generator |
 | `datasets/oolong.ts` | OOLONG dataset loader |
+| `datasets/arc.ts` | ARC-AGI-2 dataset loader |
 | `drivers/openrouter.ts` | OpenRouter `CallLLM` driver |
 | `data/` | Downloaded datasets (gitignored) |
 | `results/` | Benchmark result JSON files (gitignored) |

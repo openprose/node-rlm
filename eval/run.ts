@@ -29,9 +29,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fromOpenRouter } from "./drivers/openrouter.js";
 import { runEval } from "./harness.js";
-import { oolongScore, exactMatch } from "./scoring.js";
+import { oolongScore, exactMatch, arcGridMatch } from "./scoring.js";
 import { loadOolongTasks } from "./datasets/oolong.js";
 import { generateSNIAHTasks } from "./datasets/s-niah.js";
+import { loadArcTasks } from "./datasets/arc.js";
 import { loadStack } from "../src/plugins.js";
 import type { CallLLM } from "../src/rlm.js";
 import type { EvalResult, EvalTask, ScoringFunction } from "./types.js";
@@ -77,6 +78,7 @@ interface CliArgs {
 	rateBurst: number;
 	withLabels: boolean;
 	filter: string | null;
+	selectedProblems: string[];
 }
 
 function usage(): never {
@@ -87,6 +89,7 @@ Usage: npx tsx eval/run.ts --benchmark <name> --model <provider/model-id> [optio
 Benchmarks:
   oolong          OOLONG aggregation benchmark (trec_coarse, 50 tasks)
   s-niah          Single Needle in a Haystack (synthetic, ~48 tasks)
+  arc             ARC-AGI-2 abstract reasoning (120 tasks)
 
 Options:
   --benchmark <name>       Benchmark to run (required)
@@ -101,6 +104,7 @@ Options:
   --dataset-filter <s>     OOLONG: dataset field filter (default: trec_coarse)
   --context-len <n>        OOLONG: context_len filter (default: 131072)
   --tasks-per-length <n>   S-NIAH: tasks per context length (default: 8)
+  --selected-problems <ids> ARC: comma-separated problem IDs to run
   --rate-limit <n>         Requests per second (default: 5, 0 to disable)
   --rate-burst <n>         Burst capacity (default: 10)
   --with-labels            OOLONG: use labeled context (context_window_text_with_labels)
@@ -165,6 +169,9 @@ function parseArgs(argv: string[]): CliArgs {
 		rateBurst: parseInt(args["rate-burst"] ?? "10", 10),
 		withLabels: flags.has("with-labels"),
 		filter: args.filter ?? null,
+		selectedProblems: args["selected-problems"]
+			? args["selected-problems"].split(",").map((s) => s.trim())
+			: [],
 	};
 }
 
@@ -247,9 +254,18 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 				scoringFn: exactMatch,
 			};
 
+		case "arc":
+			return {
+				loadTasks: () => loadArcTasks(
+					args.maxTasks,
+					args.selectedProblems.length > 0 ? args.selectedProblems : undefined,
+				),
+				scoringFn: arcGridMatch,
+			};
+
 		default:
 			console.error(`Unknown benchmark: ${args.benchmark}`);
-			console.error("Available benchmarks: oolong, s-niah");
+			console.error("Available benchmarks: oolong, s-niah, arc");
 			process.exit(1);
 	}
 }
@@ -328,6 +344,9 @@ async function main(): Promise<void> {
 	console.log(`Max Depth:       ${args.maxDepth}`);
 	if (args.maxTasks) {
 		console.log(`Max Tasks:       ${args.maxTasks}`);
+	}
+	if (args.selectedProblems.length > 0) {
+		console.log(`Selected:        ${args.selectedProblems.join(", ")}`);
 	}
 	if (args.filter) {
 		console.log(`Filter:          ${args.filter}`);

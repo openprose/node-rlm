@@ -200,6 +200,81 @@ export function multipleChoice(predicted: string, expected: string | string[]): 
 	return predMatch[1] === expMatch[1] ? 1 : 0;
 }
 
+/**
+ * ARC grid exact match scoring.
+ *
+ * Compares predicted and expected grids (2D arrays of integers).
+ * Both are expected to be JSON strings representing 2D arrays.
+ * Returns 1 if the grids have identical shape and values, 0 otherwise.
+ *
+ * Handles both single-grid and multi-grid (multiple test inputs) cases.
+ *
+ * Used for: ARC-AGI.
+ */
+export function arcGridMatch(predicted: string, expected: string | string[]): number {
+	const expectedStr = Array.isArray(expected) ? expected[0] : expected;
+
+	try {
+		const predGrid = parseArcGrid(predicted.trim());
+		const expGrid = JSON.parse(expectedStr);
+
+		if (predGrid === null) return 0;
+
+		return gridsEqual(predGrid, expGrid) ? 1 : 0;
+	} catch {
+		return 0;
+	}
+}
+
+/**
+ * Parse a predicted ARC grid from LLM output.
+ * Handles various formats the model might return:
+ * - Raw JSON: [[1,2],[3,4]]
+ * - Markdown-wrapped: ```json\n[[1,2],[3,4]]\n```
+ * - With explanation text before/after the JSON
+ */
+function parseArcGrid(text: string): unknown | null {
+	// Try direct JSON parse first
+	try {
+		return JSON.parse(text);
+	} catch {
+		// Ignore
+	}
+
+	// Try extracting JSON from markdown code blocks
+	const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+	if (codeBlockMatch) {
+		try {
+			return JSON.parse(codeBlockMatch[1].trim());
+		} catch {
+			// Ignore
+		}
+	}
+
+	// Try finding the first JSON array in the text
+	const arrayMatch = text.match(/(\[[\s\S]*\])/);
+	if (arrayMatch) {
+		try {
+			return JSON.parse(arrayMatch[1]);
+		} catch {
+			// Ignore
+		}
+	}
+
+	return null;
+}
+
+/**
+ * Deep equality check for grids (2D or 3D arrays of numbers).
+ */
+function gridsEqual(a: unknown, b: unknown): boolean {
+	if (Array.isArray(a) && Array.isArray(b)) {
+		if (a.length !== b.length) return false;
+		return a.every((item, i) => gridsEqual(item, b[i]));
+	}
+	return a === b;
+}
+
 function parseNumber(s: string): number | null {
 	// Remove common formatting: commas, whitespace, brackets
 	const cleaned = s.replace(/[\[\]\s,]/g, "").trim();

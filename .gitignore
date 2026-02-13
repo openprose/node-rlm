@@ -20,3 +20,6 @@ eval/analyses/
 
 # Archive
 .archive/
+
+# External repos
+arcgentica/

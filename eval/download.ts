@@ -14,6 +14,7 @@ import { Readable } from "node:stream";
 const EVAL_DIR = new URL(".", import.meta.url).pathname;
 const DATA_DIR = join(EVAL_DIR, "data");
 const OOLONG_DIR = join(DATA_DIR, "oolong");
+const ARC_DIR = join(DATA_DIR, "arc");
 
 // HuggingFace Datasets Server API
 const HF_API_BASE = "https://datasets-server.huggingface.co";
@@ -33,6 +34,10 @@ const MAX_ROWS = 11000;
 const GITHUB_REPO = "openprose/node-rlm";
 const RELEASE_TAG = "eval-data-v1";
 const RELEASE_ASSET = "oolong-trec-coarse-validation.jsonl.gz";
+
+// ARC Release asset
+const ARC_RELEASE_TAG = "eval-data-v1";
+const ARC_RELEASE_ASSET = "arc-agi-2-evaluation.tar.gz";
 
 interface HFRowsResponse {
 	features: Array<{ name: string; type: { dtype?: string; _type?: string } }>;
@@ -245,6 +250,61 @@ async function downloadFromRelease(): Promise<void> {
 	await summarizeData(["validation"]);
 }
 
+async function downloadArcFromRelease(): Promise<void> {
+	const assetUrl = `https://github.com/${GITHUB_REPO}/releases/download/${ARC_RELEASE_TAG}/${ARC_RELEASE_ASSET}`;
+	const outputDir = ARC_DIR;
+
+	console.log("Downloading ARC-AGI-2 data from GitHub Release...");
+	console.log(`  Asset: ${ARC_RELEASE_ASSET}`);
+	console.log(`  URL: ${assetUrl}`);
+	console.log(`  Target: ${outputDir}`);
+
+	mkdirSync(outputDir, { recursive: true });
+
+	const response = await fetch(assetUrl, { signal: AbortSignal.timeout(30_000) });
+	if (!response.ok) {
+		throw new Error(`Failed to download: HTTP ${response.status} ${response.statusText}`);
+	}
+	if (!response.body) {
+		throw new Error("Response body is empty");
+	}
+
+	// Download to temp file, then extract
+	const tempFile = join(outputDir, ".download.tar.gz");
+	await pipeline(
+		Readable.fromWeb(response.body as import("node:stream/web").ReadableStream),
+		createWriteStream(tempFile),
+	);
+
+	// Extract using tar
+	const { execSync } = await import("node:child_process");
+	execSync(`tar xzf "${tempFile}" -C "${outputDir}"`);
+	unlinkSync(tempFile);
+
+	// Verify files exist
+	const challengesFile = join(outputDir, "arc-agi_evaluation_challenges.json");
+	const solutionsFile = join(outputDir, "arc-agi_evaluation_solutions.json");
+	if (!existsSync(challengesFile) || !existsSync(solutionsFile)) {
+		throw new Error("Extraction failed: expected files not found");
+	}
+
+	console.log(`  Downloaded and extracted to ${outputDir}`);
+
+	// Verify task counts
+	const challenges = JSON.parse(readFileSync(challengesFile, "utf-8"));
+	const solutions = JSON.parse(readFileSync(solutionsFile, "utf-8"));
+	const cKeys = new Set(Object.keys(challenges));
+	const sKeys = new Set(Object.keys(solutions));
+	if (cKeys.size !== 120 || sKeys.size !== 120) {
+		throw new Error(`Expected 120 tasks, got ${cKeys.size} challenges and ${sKeys.size} solutions`);
+	}
+	for (const k of cKeys) {
+		if (!sKeys.has(k)) throw new Error(`Missing solution for task ${k}`);
+	}
+
+	console.log(`  Tasks: ${cKeys.size} challenges, ${sKeys.size} solutions`);
+}
+
 function parseArgs(argv: string[]): { dataset: string; maxRows: number; splits: string[]; source: "release" | "hf" } {
 	const args: Record<string, string> = {};
 	const flags = new Set<string>();
@@ -290,9 +350,12 @@ async function main(): Promise<void> {
 			console.log("S-NIAH is a synthetic benchmark — no download needed.");
 			console.log("Tasks are generated programmatically at eval time.");
 			break;
+		case "arc":
+			await downloadArcFromRelease();
+			break;
 		default:
 			console.error(`Unknown dataset: ${args.dataset}`);
-			console.error("Available datasets: oolong, s-niah");
+			console.error("Available datasets: oolong, s-niah, arc");
 			process.exit(1);
 	}
 

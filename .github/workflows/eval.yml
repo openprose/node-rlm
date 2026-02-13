@@ -10,6 +10,7 @@ on:
         options:
           - oolong
           - s-niah
+          - arc
       model:
         description: "Model (provider/id, e.g. google/gemini-2.5-flash)"
         required: true
@@ -35,6 +36,9 @@ on:
       app:
         description: "App plugin name (e.g. structured-data-aggregation)"
         required: false
+      selected-problems:
+        description: "ARC: comma-separated problem IDs (default: all)"
+        required: false
       analyze:
         description: Run trajectory analysis after eval
         type: boolean
@@ -43,7 +47,7 @@ on:
 jobs:
   eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:
@@ -66,6 +70,18 @@ jobs:
         if: inputs.benchmark == 'oolong' && steps.cache-oolong.outputs.cache-hit != 'true'
         run: npx tsx eval/download.ts --from-release
 
+      - name: Cache ARC eval data
+        if: inputs.benchmark == 'arc'
+        id: cache-arc
+        uses: actions/cache@v4
+        with:
+          path: eval/data/arc
+          key: arc-eval-data-v1
+
+      - name: Download ARC dataset
+        if: inputs.benchmark == 'arc' && steps.cache-arc.outputs.cache-hit != 'true'
+        run: npx tsx eval/download.ts --dataset arc
+
       - name: Run eval
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -83,6 +99,9 @@ jobs:
           fi
           if [ -n "${{ inputs.app }}" ]; then
             ARGS="$ARGS --app ${{ inputs.app }}"
+          fi
+          if [ -n "${{ inputs.selected-problems }}" ]; then
+            ARGS="$ARGS --selected-problems ${{ inputs.selected-problems }}"
           fi
           npx tsx eval/run.ts $ARGS
 
