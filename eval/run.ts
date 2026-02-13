@@ -216,11 +216,11 @@ function parseFilter(raw: string): Record<string, string[]> {
 
 /** Return model-specific overrides for output headroom and timeout. */
 function modelOverrides(model: string): { maxTokens?: number; timeoutMs?: number } {
-	if (/opus/i.test(model)) return { maxTokens: 8192, timeoutMs: 120_000 };
+	if (/opus/i.test(model)) return { maxTokens: 8192, timeoutMs: 180_000 };
 	return {};
 }
 
-function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string } {
+function resolveCallLLM(spec: string, maxBlocksPerIteration?: number | null): { callLLM: CallLLM; displayName: string } {
 	const parts = spec.split("/");
 	if (parts.length < 2) {
 		console.error(`Invalid model format: ${spec}. Expected provider/model-id`);
@@ -234,7 +234,10 @@ function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string }
 		process.exit(1);
 	}
 
-	const overrides = modelOverrides(spec);
+	const overrides: { maxTokens?: number; timeoutMs?: number; stopAfterFirstBlock?: boolean } = modelOverrides(spec);
+	if (maxBlocksPerIteration === 1) {
+		overrides.stopAfterFirstBlock = true;
+	}
 
 	// If model spec starts with "openrouter/", strip the prefix —
 	// OpenRouter expects just "provider/model" (e.g. "google/gemini-3-flash-preview").
@@ -439,7 +442,7 @@ async function main(): Promise<void> {
 
 	// Resolve model and create callLLM
 	console.log("Resolving model...");
-	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model);
+	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model, args.maxBlocksPerIteration);
 	const callLLM = args.rateLimit > 0
 		? withRateLimit(rawCallLLM, { requestsPerSecond: args.rateLimit, burst: args.rateBurst })
 		: rawCallLLM;

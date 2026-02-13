@@ -39,6 +39,13 @@ export interface OpenRouterCompatibleOptions {
 	 * Default false.
 	 */
 	tools?: boolean;
+	/**
+	 * Use SSE streaming and abort generation after the first complete code block.
+	 * When the model starts writing a second ```javascript fence, the stream is
+	 * cancelled and accumulated content (up to the second fence) is returned.
+	 * Saves 80%+ of generation time on responses with multiple code blocks.
+	 */
+	stopAfterFirstBlock?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -53,6 +60,80 @@ async function sleep(ms: number): Promise<void> {
 /**
  * Create a CallLLM function that calls any OpenAI-compatible chat completions API.
  */
+/** Find the byte offset where a second ```javascript/js/repl fence begins. */
+function findSecondFenceIndex(text: string): number | null {
+	const re = /```(?:javascript|js|repl)\n/g;
+	let count = 0;
+	let match;
+	while ((match = re.exec(text))) {
+		count++;
+		if (count === 2) return match.index;
+	}
+	return null;
+}
+
+/**
+ * Read an SSE stream, accumulating content tokens. If a second code-fence
+ * opening is detected, cancel the stream early and return the content
+ * truncated just before the second fence.
+ */
+async function readStreamUntilSecondBlock(
+	body: ReadableStream<Uint8Array>,
+	abortController: AbortController,
+): Promise<{ content: string; aborted: boolean }> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	let content = "";
+	let sseBuffer = "";
+	let aborted = false;
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+
+			sseBuffer += decoder.decode(value, { stream: true });
+
+			// Parse complete SSE lines
+			const lines = sseBuffer.split("\n");
+			sseBuffer = lines.pop()!; // keep incomplete line
+
+			for (const line of lines) {
+				if (!line.startsWith("data: ")) continue;
+				const data = line.slice(6).trim();
+				if (data === "[DONE]") continue;
+				try {
+					const chunk = JSON.parse(data);
+					const delta = chunk.choices?.[0]?.delta?.content;
+					if (delta) content += delta;
+				} catch {
+					// Skip malformed chunks
+				}
+			}
+
+			// Check if a second code block is starting
+			const secondFence = findSecondFenceIndex(content);
+			if (secondFence !== null) {
+				content = content.slice(0, secondFence);
+				aborted = true;
+				abortController.abort();
+				break;
+			}
+		}
+	} catch (err) {
+		// AbortError is expected when we cancel the stream
+		if (err instanceof Error && err.name === "AbortError" && aborted) {
+			// Expected — we aborted intentionally
+		} else {
+			throw err;
+		}
+	} finally {
+		try { await reader.cancel(); } catch {}
+	}
+
+	return { content, aborted };
+}
+
 export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): CallLLM {
 	const {
 		baseUrl,
@@ -62,6 +143,7 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 		maxRetries = DEFAULT_MAX_RETRIES,
 		maxTokens = DEFAULT_MAX_TOKENS,
 		tools = false,
+		stopAfterFirstBlock = false,
 	} = options;
 
 	// Normalize: strip trailing slash so we can append /chat/completions reliably.
@@ -81,27 +163,40 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			const t0 = Date.now();
 
-			const body: Record<string, unknown> = {
+			const reqBody: Record<string, unknown> = {
 				model,
 				messages: chatMessages,
 				max_tokens: maxTokens,
 			};
 			if (tools) {
-				body.tools = [];
-				body.tool_choice = "none";
+				reqBody.tools = [];
+				reqBody.tool_choice = "none";
+			}
+			if (stopAfterFirstBlock) {
+				reqBody.stream = true;
 			}
 
-			const response = await fetch(endpoint, {
-				signal: AbortSignal.timeout(timeoutMs),
-				method: "POST",
-				headers: {
-					"Authorization": `Bearer ${apiKey}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(body),
-			});
+			const abortController = new AbortController();
+			const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+
+			let response: Response;
+			try {
+				response = await fetch(endpoint, {
+					signal: abortController.signal,
+					method: "POST",
+					headers: {
+						"Authorization": `Bearer ${apiKey}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(reqBody),
+				});
+			} catch (err) {
+				clearTimeout(timeoutId);
+				throw err;
+			}
 
 			if (!response.ok) {
+				clearTimeout(timeoutId);
 				const text = await response.text();
 				const status = response.status;
 
@@ -115,6 +210,22 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 				throw new Error(`${model} API error (${status}): ${text}`);
 			}
 
+			// --- Streaming path: read SSE tokens, abort at second code fence ---
+			if (stopAfterFirstBlock && response.body) {
+				const { content, aborted } = await readStreamUntilSecondBlock(response.body, abortController);
+				clearTimeout(timeoutId);
+				const elapsed = Date.now() - t0;
+				const suffix = aborted ? ", early-stop=second-fence" : "";
+				console.error(`[${model} #${callId}] ${elapsed}ms, in=${inputChars}c, out=${content.length}c, finish=stream${suffix}`);
+
+				if (!content) {
+					console.error(`[${model}] Empty streaming content`);
+				}
+				return content;
+			}
+
+			// --- Non-streaming path: read full JSON response ---
+			clearTimeout(timeoutId);
 			const data = (await response.json()) as ChatCompletionResponse;
 
 			if (data.error) {

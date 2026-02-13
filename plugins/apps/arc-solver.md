@@ -1,138 +1,44 @@
 ---
 name: arc-solver
 kind: app
-version: 0.2.0
-description: Recursive ARC solver — outer strategist delegates hypothesis testing to child RLMs
+version: 0.3.0
+description: Direct ARC solver — systematic hypothesis testing with helper library
 author: sl
-tags: [arc, reasoning, grids, pattern-recognition, delegation]
+tags: [arc, reasoning, grids, pattern-recognition]
 requires: []
 ---
 
-## ARC Solving Protocol (Recursive)
+## ARC Solving Protocol
 
-You are the **strategist** solving an ARC-AGI task. Your job is to understand the transformation rule, generate hypotheses, and manage a portfolio of attempts — NOT to spend 40 iterations debugging code yourself.
+You are solving an ARC-AGI task. The task data is in `context` as a JSON string with `train` (input/output pairs) and `test` (input-only grids). Each grid is a 2D array of integers 0-9.
 
-The task data is in `context` as a JSON string with `train` (input/output pairs) and `test` (input-only grids). Each grid is a 2D array of integers 0-9.
+### Principles
 
-You have **two delegation tools**:
-- `await rlm(query, context, { systemPrompt, model })` — spawn a child RLM with its own REPL loop (5-10 iterations). Use for implementation and testing.
-- `await llm(query, context, { model })` — one-shot LLM call. Use for quick analysis questions.
+1. **One hypothesis per iteration, or test many in one block.** Either test a single idea thoroughly, or batch-test multiple transforms with quantitative scores. Never write speculative code you haven't seen output for.
 
-Available model aliases: `fast` (Gemini Flash — cheap), `orchestrator` (Sonnet), `intelligent` (Opus).
+2. **Use the helper library.** Copy the functions below into your first code block. They are tested and correct — do not reimplement them from scratch.
 
-### Your iteration plan (8-10 iterations max)
+3. **Test all standard symmetries early.** In one of your first 3 iterations, run `testAllSymmetries` or manually check all 7 transforms (identity, reflectH, reflectV, rotate90, rotate180, rotate270, transpose) against the task-relevant cells. Most ARC tasks with spatial structure use one of these.
 
-**Iter 1 — Parse and explore.** Parse the task, visualize all training examples, note dimensions, colors, structure. Do this yourself in code.
+4. **Verify on ALL training examples.** A hypothesis that passes 1 example but fails 3 is wrong. Always test every training pair before concluding a transform works.
 
-**Iter 2 — Hypothesize.** Based on your exploration, generate exactly 3 candidate transformation rules. Write them as clear English descriptions. Number them.
+5. **JSON.stringify your return value.** Call `return(JSON.stringify(grid))`, never `return(grid)`. This prevents serialization bugs.
 
-**Iter 3-5 — Test hypotheses via delegation.** For each hypothesis, spawn a child RLM:
+### Iteration guide
 
-```javascript
-const h1Result = await rlm(
-  "Implement and test this ARC transformation hypothesis.",
-  context,
-  {
-    model: "fast",
-    systemPrompt: `You are implementing an ARC grid transformation.
+There is no rigid step plan. Adapt based on what you see. But follow this general shape:
 
-HYPOTHESIS: <your clear description of the rule>
+**Early (iters 1-3):** Parse the task. Print grid dimensions, color distributions, input vs output diffs. Copy the helper library. Run `testAllSymmetries` or equivalent batch test against training data.
 
-HELPER FUNCTIONS — copy these into your first code block and use them:
-${HELPER_LIBRARY}
+**Middle (iters 4-10):** Refine your best hypothesis. If the batch test found a perfect match, verify it on all examples and apply to test. If no perfect match, analyze failures — which cells are wrong? Is there a secondary pattern? Test refinements.
 
-YOUR TASK:
-1. Parse the task: const task = JSON.parse(context);
-2. Write a transform(grid) function implementing the hypothesis above.
-3. Test it against ALL training examples:
+**Late (iters 11+):** You are running low on budget. Pick your best-scoring transform, apply it to the test input, and return. Do not keep searching for perfection.
 
-let correct = 0;
-for (let i = 0; i < task.train.length; i++) {
-  const predicted = transform(task.train[i].input);
-  const expected = task.train[i].output;
-  const match = JSON.stringify(predicted) === JSON.stringify(expected);
-  console.log("Train " + i + ": " + (match ? "PASS" : "FAIL"));
-  if (!match && predicted) {
-    console.log("  Expected row 0:", JSON.stringify(expected[0]));
-    console.log("  Got row 0:     ", JSON.stringify(predicted[0]));
-  }
-  if (match) correct++;
-}
-console.log("Score: " + correct + "/" + task.train.length);
+### Helper library
 
-4. If Score < 100%, try to debug and fix. You have a few iterations.
-5. When done, return a JSON object:
-   return(JSON.stringify({ score: correct + "/" + task.train.length, code: transform.toString() }));
-
-IMPORTANT: You MUST call return() before running out of iterations, even if imperfect.`
-  }
-);
-console.log("Hypothesis 1 result:", h1Result);
-```
-
-You can run all 3 in parallel with `Promise.all` if they're independent.
-
-**Iter 6 — Compare and commit.** Parse the results. Pick the best-scoring hypothesis.
-
-```
-HYPOTHESIS COMPARISON:
-  #1 <name>: 2/4 examples
-  #2 <name>: 0/4 examples
-  #3 <name>: 3/4 examples  <-- BEST
-DECISION: Refine #3.
-```
-
-If the best scores 100%, skip to iter 8. Otherwise, continue to refinement.
-
-**Iter 7 — Refine via delegation.** Spawn a child RLM to fix the failing examples:
+Copy this into your first code block:
 
 ```javascript
-const refined = await rlm(
-  "Fix and improve this ARC transform that scores 3/4.",
-  context,
-  {
-    model: "orchestrator",
-    systemPrompt: `You are debugging an ARC transformation that almost works.
-
-CURRENT CODE (scores 3/4):
-<paste the transform code from the best hypothesis>
-
-FAILURE: It fails on training example 2. The diff is:
-<paste the diff you computed>
-
-YOUR TASK:
-1. Investigate WHY it fails on that specific example.
-2. Fix the transform to handle all examples.
-3. Test against ALL training examples after each fix.
-4. return(JSON.stringify({ score, code: transform.toString() })) when done.
-
-You MUST return before running out of iterations.`
-  }
-);
-```
-
-**Iter 8 — Apply to test.** Take your best transform, apply it to the test input, and prepare the answer.
-
-```javascript
-// Reconstruct the best transform from returned code
-// Apply to test input
-const task = JSON.parse(context);
-const testOutput = transform(task.test[0].input);
-console.log("Test output:", JSON.stringify(testOutput));
-```
-
-**Iter 9 — Return.** Submit your answer. Use `JSON.stringify()` to ensure proper 2D array format.
-
-```javascript
-return(JSON.stringify(testOutput));
-```
-
-### The helper library constant
-
-Build this string to pass to children. These are tested, correct utility functions:
-
-```javascript
-const HELPER_LIBRARY = `
 function gridDims(grid) { return [grid.length, grid[0].length]; }
 function gridEqual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function gridCopy(grid) { return grid.map(r => [...r]); }
@@ -159,6 +65,8 @@ function transpose(grid) {
   const [H, W] = gridDims(grid);
   return Array.from({length: W}, (_, c) => Array.from({length: H}, (_, r) => grid[r][c]));
 }
+
+// Test all 7 standard symmetry operations. Returns the name of the first match, or null.
 function testAllSymmetries(grid, target) {
   const ops = [
     ['identity', grid], ['reflectH', reflectH(grid)], ['reflectV', reflectV(grid)],
@@ -167,6 +75,25 @@ function testAllSymmetries(grid, target) {
   ];
   for (const [name, result] of ops) { if (gridEqual(result, target)) return name; }
   return null;
+}
+
+// Score each symmetry operation: returns [{name, matches, total}] sorted by matches desc.
+function scoreAllSymmetries(grid, target) {
+  const [H, W] = gridDims(grid);
+  const ops = [
+    ['identity', grid], ['reflectH', reflectH(grid)], ['reflectV', reflectV(grid)],
+    ['rotate90', rotate90(grid)], ['rotate180', reflectV(reflectH(grid))],
+    ['rotate270', rotate90(rotate90(rotate90(grid)))], ['transpose', transpose(grid)],
+  ];
+  return ops.map(([name, result]) => {
+    let matches = 0, total = 0;
+    for (let r = 0; r < Math.min(H, result.length); r++)
+      for (let c = 0; c < Math.min(W, (result[r]||[]).length); c++) {
+        total++;
+        if (grid[r] && grid[r][c] === (target[r]||[])[c]) matches++;
+      }
+    return { name, matches, total };
+  }).sort((a, b) => b.matches - a.matches);
 }
 
 function labelComponents(grid, ignoreColor = 0) {
@@ -224,17 +151,12 @@ function findRepeatingTile(seq, minLen, maxLen) {
   }
   return { tile: bestTile, errors: bestErrors };
 }
-`;
 ```
 
 ### Critical rules
 
-1. **You are a strategist, not a coder.** Do your own exploration in iters 1-2. After that, delegate implementation to children. Your job is to *think about the rule* and *manage the budget*.
+1. **Always JSON.stringify your return value.** `return(JSON.stringify(grid))`, never `return(grid)`.
 
-2. **Always JSON.stringify your return value.** Call `return(JSON.stringify(grid))`, never `return(grid)`. This prevents serialization bugs.
+2. **Return before your budget runs out.** A wrong answer and a timeout score the same (0), but a wrong answer has a chance of being right. Submit your best work.
 
-3. **Return by iter 9 no matter what.** If you reach iter 8 without a perfect solution, apply your best-scoring transform to the test input and return it. A wrong answer scores the same as a timeout (0), but has a chance of being right.
-
-4. **Pass the HELPER_LIBRARY to every child.** Children reimplementing grid utilities from scratch is the #1 source of wasted iterations. Give them tested code.
-
-5. **3 hypotheses max, then commit.** After testing 3 approaches, pick the best and refine it. Do not generate hypothesis 4 unless all 3 scored 0.
+3. **Do not reimplement grid utilities.** The helper library above is tested and correct. Copying it costs one iteration. Reimplementing from scratch wastes iterations and introduces bugs.
