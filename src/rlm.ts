@@ -82,7 +82,7 @@ interface ContextStore {
 
 /** Depth-decaying iteration budget. */
 function iterationsForDepth(depth: number, maxIterations: number): number {
-	const caps = [Infinity, 7, 4, 3];
+	const caps = [Infinity, 15, 4, 3];
 	return Math.min(maxIterations, caps[Math.min(depth, caps.length - 1)]);
 }
 
