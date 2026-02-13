@@ -11,7 +11,9 @@ dist/
 # Eval data
 eval/data/
 eval/results/
-eval/analyses/
+eval/analyses/*
+!eval/analyses/0*/
+!eval/analyses/README.md
 
 # OpenProse runtime state
 .prose/runs/

@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RLM Eval Trajectory Visualizations</title>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-hover: #30363d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-orange: #d29922;
+    --accent-purple: #bc8cff;
+    --accent-teal: #39d2c0;
+
+    --phase-explore: #4a7fb5;
+    --phase-extract: #3fb950;
+    --phase-plan: #d4a72c;
+    --phase-delegate: #d2742f;
+    --phase-verify: #39d2c0;
+    --phase-return: #56d364;
+    --phase-error: #f85149;
+    --phase-stall: #6e7681;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+  }
+
+  .page-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  .viz-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .viz-section h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+  }
+
+  .viz-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .run-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 0.75rem;
+  }
+
+  .run-label.no-plugins {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+  }
+
+  .run-label.plugins {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--accent-green);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+
+  /* Phase Timeline */
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 10px;
+  }
+
+  .timeline-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    min-width: 130px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .timeline-phases {
+    display: flex;
+    gap: 2px;
+    flex-grow: 1;
+    align-items: center;
+  }
+
+  .phase-block {
+    height: 28px;
+    min-width: 28px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    cursor: default;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .phase-block:hover {
+    opacity: 0.85;
+    transform: scale(1.05);
+    z-index: 10;
+  }
+
+  .phase-block .tooltip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
+    color: var(--text-primary);
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .phase-block:hover .tooltip {
+    display: block;
+  }
+
+  .phase-EXPLORE { background: var(--phase-explore); }
+  .phase-EXTRACT { background: var(--phase-extract); }
+  .phase-PLAN { background: var(--phase-plan); color: rgba(0,0,0,0.8); }
+  .phase-DELEGATE { background: var(--phase-delegate); }
+  .phase-VERIFY { background: var(--phase-verify); color: rgba(0,0,0,0.8); }
+  .phase-RETURN { background: var(--phase-return); color: rgba(0,0,0,0.8); }
+  .phase-ERROR { background: var(--phase-error); }
+  .phase-STALL { background: var(--phase-stall); }
+
+  .timeline-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 180px;
+    justify-content: flex-end;
+  }
+
+  .score-badge {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .score-1 { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+  .score-0 { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+
+  .verdict-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    min-width: 90px;
+    text-align: right;
+  }
+
+  .phase-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .run-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .run-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 1rem 0;
+  }
+
+  /* Paired Comparison */
+  .pair-group {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .pair-group:last-child { margin-bottom: 0; }
+
+  .pair-header {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin-bottom: 0.75rem;
+  }
+
+  .pair-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+
+  .pair-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    min-width: 85px;
+    flex-shrink: 0;
+  }
+
+  .pair-label.no-plugins { color: var(--accent-red); }
+  .pair-label.plugins { color: var(--accent-green); }
+
+  .delta-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(48, 54, 61, 0.6);
+    flex-wrap: wrap;
+  }
+
+  .delta-item {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+
+  .delta-value {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-weight: 600;
+  }
+
+  .delta-positive { color: var(--accent-green); }
+  .delta-negative { color: var(--accent-red); }
+  .delta-neutral { color: var(--text-muted); }
+
+  /* Phase Distribution Bars */
+  .dist-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 900px) {
+    .dist-container { grid-template-columns: 1fr; }
+  }
+
+  .dist-panel {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+
+  .dist-panel h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .dist-bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+
+  .dist-bar-label {
+    font-size: 0.75rem;
+    min-width: 75px;
+    text-align: right;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .dist-bar-track {
+    flex-grow: 1;
+    height: 22px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .dist-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    transition: width 0.4s ease;
+  }
+
+  .dist-bar-pct {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    min-width: 44px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Pattern Heatmap */
+  .heatmap-container {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .heatmap-table {
+    border-collapse: separate;
+    border-spacing: 3px;
+    width: 100%;
+    min-width: 700px;
+  }
+
+  .heatmap-table th {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 4px 6px;
+    text-align: center;
+    white-space: nowrap;
+    transform: rotate(-35deg);
+    transform-origin: bottom left;
+    height: 90px;
+    vertical-align: bottom;
+  }
+
+  .heatmap-table th.row-header {
+    transform: none;
+    text-align: right;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    min-width: 130px;
+    height: auto;
+    vertical-align: middle;
+    padding-right: 10px;
+  }
+
+  .heatmap-cell {
+    width: 32px;
+    height: 28px;
+    border-radius: 4px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+
+  .heatmap-active {
+    background: var(--accent-blue);
+    color: rgba(255,255,255,0.9);
+    box-shadow: 0 0 6px rgba(88, 166, 255, 0.3);
+  }
+
+  .heatmap-inactive {
+    background: rgba(255,255,255,0.03);
+  }
+
+  .heatmap-run-divider td {
+    padding-top: 8px;
+  }
+
+  .heatmap-run-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 4px 0;
+  }
+
+  /* Iteration Efficiency */
+  .efficiency-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 10px;
+  }
+
+  .efficiency-task-id {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    min-width: 130px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .efficiency-bar-track {
+    flex-grow: 1;
+    height: 26px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+  }
+
+  .efficiency-useful {
+    height: 100%;
+    background: var(--accent-green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(0,0,0,0.8);
+    min-width: 18px;
+  }
+
+  .efficiency-wasted {
+    height: 100%;
+    background: var(--accent-red);
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    min-width: 18px;
+  }
+
+  .efficiency-meta {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    min-width: 120px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .efficiency-legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 1rem;
+  }
+
+  .eff-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .eff-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+
+  .eff-useful-swatch { background: var(--accent-green); }
+  .eff-wasted-swatch { background: var(--accent-red); opacity: 0.6; }
+
+  /* Summary cards */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .summary-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+  }
+
+  .summary-card .big-number {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .summary-card .card-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+  }
+
+  .summary-card .card-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>RLM Eval Trajectory Visualizations</h1>
+<p class="page-subtitle">
+  Runs 18 &amp; 19 &mdash; Sonnet 4.5 on OOLONG TREC-coarse tasks. Comparing no-plugins (Run 18, 5 tasks) vs all-plugins (Run 19, 3 tasks).
+</p>
+
+<!-- Summary Cards -->
+<div class="summary-row">
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-red);">1/5</div>
+    <div class="card-label">Run 18 Score (No Plugins)</div>
+    <div class="card-sub">20% &mdash; 1 correct via prior knowledge</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-green);">1/3</div>
+    <div class="card-label">Run 19 Score (All Plugins)</div>
+    <div class="card-sub">33% &mdash; 1 correct via delegation</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-blue);">26</div>
+    <div class="card-label">Total Iterations (No Plugins)</div>
+    <div class="card-sub">Avg 5.2 per task</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-blue);">44</div>
+    <div class="card-label">Total Iterations (Plugins)</div>
+    <div class="card-sub">Avg 14.7 per task</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-orange);">706s</div>
+    <div class="card-label">Total Wall Time (No Plugins)</div>
+    <div class="card-sub">Avg 141s per task</div>
+  </div>
+  <div class="summary-card">
+    <div class="big-number" style="color: var(--accent-orange);">424s</div>
+    <div class="card-label">Total Wall Time (Plugins)</div>
+    <div class="card-sub">Avg 141s per task</div>
+  </div>
+</div>
+
+
+<!-- VIZ 1: Phase Timeline -->
+<div class="viz-section">
+  <h2>1. Phase Timeline</h2>
+  <p class="viz-subtitle">Each block represents one iteration, color-coded by dominant phase. Hover for details.</p>
+
+  <div class="phase-legend">
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-explore)"></div>EXPLORE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-extract)"></div>EXTRACT</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-plan)"></div>PLAN</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-delegate)"></div>DELEGATE</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-verify)"></div>VERIFY</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-return)"></div>RETURN</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-error)"></div>ERROR</div>
+    <div class="legend-item"><div class="legend-swatch" style="background: var(--phase-stall)"></div>STALL</div>
+  </div>
+
+  <!-- Run 18: No Plugins -->
+  <div class="run-group">
+    <div class="run-label no-plugins">Run 18 &mdash; No Plugins (Sonnet 4.5)</div>
+
+    <!-- 17000208 -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000208</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>1</span>
+          <div class="tooltip">iter 1: EXPLORE+EXTRACT &mdash; hallucinated data, single iter, timeout</div>
+        </div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">timeout</span>
+      </div>
+    </div>
+
+    <!-- 17000209 -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000209</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXTRACT" style="width: 44px;">
+          <span>1</span>
+          <div class="tooltip">iter 1: EXTRACT &mdash; hallucinated label counts, early return intercepted</div>
+        </div>
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>2</span>
+          <div class="tooltip">iter 2: EXPLORE &mdash; re-examine format, hallucinate tabs, return accepted</div>
+        </div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-1">1.0</span>
+        <span class="verdict-label">perfect*</span>
+      </div>
+    </div>
+
+    <!-- 17000210 (no plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000210</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>1</span>
+          <div class="tooltip">iter 1: EXPLORE &mdash; probe context, JSON.parse fails, hallucinate counts</div>
+        </div>
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>2</span>
+          <div class="tooltip">iter 2: EXPLORE &mdash; discover Date/User/Instance format</div>
+        </div>
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>3</span>
+          <div class="tooltip">iter 3: EXPLORE &mdash; confirm no Label: lines exist</div>
+        </div>
+        <div class="phase-block phase-DELEGATE" style="width: 44px;">
+          <span>4</span>
+          <div class="tooltip">iter 4: DELEGATE &mdash; llm() fan-out 32 batches of 100</div>
+        </div>
+        <div class="phase-block phase-EXTRACT" style="width: 44px;">
+          <span>5</span>
+          <div class="tooltip">iter 5: EXTRACT &mdash; aggregate results, "LESS COMMON" printed</div>
+        </div>
+        <div class="phase-block phase-RETURN" style="width: 44px;">
+          <span>6</span>
+          <div class="tooltip">iter 6: RETURN &mdash; returned "more common" (wrong direction!)</div>
+        </div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">wrong-answer</span>
+      </div>
+    </div>
+
+    <!-- 17000211 (no plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000211</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 44px;">
+          <span>1</span>
+          <div class="tooltip">iter 1: EXPLORE &mdash; probe context, JSON.parse fails, premature return</div>
+        </div>
+        <div class="phase-block phase-ERROR" style="width: 44px;">
+          <span>2</span>
+          <div class="tooltip">iter 2: ERROR &mdash; re-explore, JSON-line parsing fails again</div>
+        </div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">wrong-answer</span>
+      </div>
+    </div>
+
+    <!-- 17000212 (no plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000212</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>1</span><div class="tooltip">iter 1: EXPLORE &mdash; probe context type/length</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>2</span><div class="tooltip">iter 2: EXPLORE &mdash; split by newline, discover format</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>3</span><div class="tooltip">iter 3: EXPLORE &mdash; inspect lines 5-15</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>4</span><div class="tooltip">iter 4: EXPLORE &mdash; search for label field</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>5</span><div class="tooltip">iter 5: EXPLORE &mdash; check end-of-line for labels</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>6</span><div class="tooltip">iter 6: EXPLORE &mdash; search for labels in full context</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>7</span><div class="tooltip">iter 7: EXPLORE &mdash; search for Label:/Category: keys</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>8</span><div class="tooltip">iter 8: EXPLORE &mdash; check last 10 lines</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>9</span><div class="tooltip">iter 9: EXPLORE &mdash; check last 1000 chars</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>10</span><div class="tooltip">iter 10: EXPLORE &mdash; re-read first 2000 chars</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>11</span><div class="tooltip">iter 11: EXPLORE &mdash; scan char codes for hidden data</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>12</span><div class="tooltip">iter 12: EXPLORE &mdash; re-read first 2000 chars again</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>13</span><div class="tooltip">iter 13: EXTRACT &mdash; extract 3182 questions</div></div>
+        <div class="phase-block phase-DELEGATE" style="width: 28px;"><span>14</span><div class="tooltip">iter 14: DELEGATE &mdash; classify first batch only</div></div>
+        <div class="phase-block phase-STALL" style="width: 28px;"><span>15</span><div class="tooltip">iter 15: STALL &mdash; hit maxIterations</div></div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">timeout</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Run 19: Plugins -->
+  <div class="run-group">
+    <div class="run-label plugins">Run 19 &mdash; All Plugins + structured-data-aggregation (Sonnet 4.5)</div>
+
+    <!-- 17000210 (plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000210</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>1</span><div class="tooltip">iter 1: EXPLORE &mdash; probe context type/length</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>2</span><div class="tooltip">iter 2: EXPLORE &mdash; filter lines, discover structure</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>3</span><div class="tooltip">iter 3: EXPLORE &mdash; inspect lines, find questions start</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>4</span><div class="tooltip">iter 4: EXTRACT &mdash; extract 3182 questions</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>5</span><div class="tooltip">iter 5: EXPLORE &mdash; find recall line, check structure</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>6</span><div class="tooltip">iter 6: EXPLORE &mdash; split by ||, examine 3-field structure</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>7</span><div class="tooltip">iter 7: EXPLORE &mdash; count label occurrences</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>8</span><div class="tooltip">iter 8: EXPLORE &mdash; sample middle section</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>9</span><div class="tooltip">iter 9: EXPLORE &mdash; examine header/blank lines</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>10</span><div class="tooltip">iter 10: EXPLORE &mdash; check content after blanks</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>11</span><div class="tooltip">iter 11: EXPLORE &mdash; check __ctx.shared.data</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>12</span><div class="tooltip">iter 12: EXPLORE &mdash; search for label markers</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>13</span><div class="tooltip">iter 13: EXPLORE &mdash; look for tabs/delimiters</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>14</span><div class="tooltip">iter 14: EXPLORE &mdash; check __ctx, count keywords</div></div>
+        <div class="phase-block phase-STALL" style="width: 28px;"><span>15</span><div class="tooltip">iter 15: STALL &mdash; examine abbreviation occurrences</div></div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">timeout</span>
+      </div>
+    </div>
+
+    <!-- 17000211 (plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000211</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>1</span><div class="tooltip">iter 1: EXPLORE &mdash; probe context type/length</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>2</span><div class="tooltip">iter 2: EXPLORE &mdash; parse into lines (3186)</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>3</span><div class="tooltip">iter 3: EXTRACT &mdash; extract 3182 questions via regex</div></div>
+        <div class="phase-block phase-PLAN" style="width: 28px;"><span>4</span><div class="tooltip">iter 4: PLAN &mdash; create batches, design classification prompt</div></div>
+        <div class="phase-block phase-DELEGATE" style="width: 28px;"><span>5</span><div class="tooltip">iter 5: DELEGATE &mdash; classify all batches via llm() parallel</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>6</span><div class="tooltip">iter 6: EXTRACT &mdash; aggregate results (3349, overcounted)</div></div>
+        <div class="phase-block phase-DELEGATE" style="width: 28px;"><span>7</span><div class="tooltip">iter 7: DELEGATE &mdash; retry with stricter prompt</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>8</span><div class="tooltip">iter 8: EXTRACT &mdash; aggregate attempt 2 (3224)</div></div>
+        <div class="phase-block phase-DELEGATE" style="width: 28px;"><span>9</span><div class="tooltip">iter 9: DELEGATE &mdash; smaller batches (80x40)</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>10</span><div class="tooltip">iter 10: EXTRACT &mdash; aggregate attempt 3 (3238)</div></div>
+        <div class="phase-block phase-DELEGATE" style="width: 28px;"><span>11</span><div class="tooltip">iter 11: DELEGATE &mdash; switch to enumeration format</div></div>
+        <div class="phase-block phase-EXTRACT" style="width: 28px;"><span>12</span><div class="tooltip">iter 12: EXTRACT &mdash; parse enumerated (DA=352, HU=416)</div></div>
+        <div class="phase-block phase-VERIFY" style="width: 28px;"><span>13</span><div class="tooltip">iter 13: VERIFY &mdash; confirm 352 &lt; 416</div></div>
+        <div class="phase-block phase-RETURN" style="width: 28px;"><span>14</span><div class="tooltip">iter 14: RETURN &mdash; "less common than" (correct!)</div></div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-1">1.0</span>
+        <span class="verdict-label">perfect</span>
+      </div>
+    </div>
+
+    <!-- 17000212 (plugins) -->
+    <div class="timeline-row">
+      <div class="timeline-task-id">oolong-17000212</div>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>1</span><div class="tooltip">iter 1: EXPLORE &mdash; probe context type/length</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>2</span><div class="tooltip">iter 2: EXPLORE &mdash; sample line structure</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>3</span><div class="tooltip">iter 3: EXPLORE &mdash; find data start, label patterns</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>4</span><div class="tooltip">iter 4: EXPLORE &mdash; search for label keywords</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>5</span><div class="tooltip">iter 5: EXPLORE &mdash; check line structure for labels</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>6</span><div class="tooltip">iter 6: EXPLORE &mdash; count label keyword occurrences</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>7</span><div class="tooltip">iter 7: EXPLORE &mdash; find first occurrence in header</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>8</span><div class="tooltip">iter 8: EXPLORE &mdash; search abbreviation occurrences</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>9</span><div class="tooltip">iter 9: EXPLORE &mdash; examine line with split by ||</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>10</span><div class="tooltip">iter 10: EXPLORE &mdash; check end of file</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>11</span><div class="tooltip">iter 11: EXPLORE &mdash; examine lines after reminder</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>12</span><div class="tooltip">iter 12: EXPLORE &mdash; check labels on next lines</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>13</span><div class="tooltip">iter 13: EXPLORE &mdash; look for 4th field, tabs</div></div>
+        <div class="phase-block phase-EXPLORE" style="width: 28px;"><span>14</span><div class="tooltip">iter 14: EXPLORE &mdash; re-read header, consider implicit</div></div>
+        <div class="phase-block phase-STALL" style="width: 28px;"><span>15</span><div class="tooltip">iter 15: STALL &mdash; check byte encoding</div></div>
+      </div>
+      <div class="timeline-meta">
+        <span class="score-badge score-0">0.0</span>
+        <span class="verdict-label">timeout</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- VIZ 2: Plugin Comparison (Paired View) -->
+<div class="viz-section">
+  <h2>2. Plugin Comparison &mdash; Paired View</h2>
+  <p class="viz-subtitle">Three tasks appear in both runs. Top row: no-plugins. Bottom row: with-plugins. Deltas show the effect of plugins on each task.</p>
+
+  <!-- Task 17000210 -->
+  <div class="pair-group">
+    <div class="pair-header">oolong-17000210 &mdash; Compare "description and abstract concept" vs "entity"</div>
+    <div class="pair-row">
+      <span class="pair-label no-plugins">No Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 36px;"><span>1</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 36px;"><span>2</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 36px;"><span>3</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 36px;"><span>4</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 36px;"><span>5</span></div>
+        <div class="phase-block phase-RETURN" style="width: 36px;"><span>6</span></div>
+      </div>
+      <span class="score-badge score-0">0.0</span>
+    </div>
+    <div class="pair-row">
+      <span class="pair-label plugins">Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>1</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>2</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>3</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>4</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>5</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>6</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>7</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>8</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>9</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>10</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>11</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>12</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>13</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>14</span></div>
+        <div class="phase-block phase-STALL" style="width: 24px;"><span>15</span></div>
+      </div>
+      <span class="score-badge score-0">0.0</span>
+    </div>
+    <div class="delta-row">
+      <div class="delta-item">Iterations: <span class="delta-value delta-negative">6 &rarr; 15 (+9)</span></div>
+      <div class="delta-item">Score: <span class="delta-value delta-neutral">0 &rarr; 0 (=)</span></div>
+      <div class="delta-item">Wall time: <span class="delta-value delta-negative">471s &rarr; 143s</span></div>
+      <div class="delta-item">Outcome: <span class="delta-value delta-negative">wrong-answer &rarr; timeout (both failed, different modes)</span></div>
+    </div>
+  </div>
+
+  <!-- Task 17000211 -->
+  <div class="pair-group">
+    <div class="pair-header">oolong-17000211 &mdash; Compare "description and abstract concept" vs "human being"</div>
+    <div class="pair-row">
+      <span class="pair-label no-plugins">No Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 36px;"><span>1</span></div>
+        <div class="phase-block phase-ERROR" style="width: 36px;"><span>2</span></div>
+      </div>
+      <span class="score-badge score-0">0.0</span>
+    </div>
+    <div class="pair-row">
+      <span class="pair-label plugins">Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>1</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>2</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>3</span></div>
+        <div class="phase-block phase-PLAN" style="width: 24px;"><span>4</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 24px;"><span>5</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>6</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 24px;"><span>7</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>8</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 24px;"><span>9</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>10</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 24px;"><span>11</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>12</span></div>
+        <div class="phase-block phase-VERIFY" style="width: 24px;"><span>13</span></div>
+        <div class="phase-block phase-RETURN" style="width: 24px;"><span>14</span></div>
+      </div>
+      <span class="score-badge score-1">1.0</span>
+    </div>
+    <div class="delta-row">
+      <div class="delta-item">Iterations: <span class="delta-value delta-neutral">2 &rarr; 14 (+12)</span></div>
+      <div class="delta-item">Score: <span class="delta-value delta-positive">0 &rarr; 1.0 (+1.0)</span></div>
+      <div class="delta-item">Wall time: <span class="delta-value delta-neutral">16s &rarr; 190s</span></div>
+      <div class="delta-item">Outcome: <span class="delta-value delta-positive">wrong-answer &rarr; perfect</span></div>
+    </div>
+  </div>
+
+  <!-- Task 17000212 -->
+  <div class="pair-group">
+    <div class="pair-header">oolong-17000212 &mdash; Compare "description and abstract concept" vs "numeric value"</div>
+    <div class="pair-row">
+      <span class="pair-label no-plugins">No Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>1</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>2</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>3</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>4</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>5</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>6</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>7</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>8</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>9</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>10</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>11</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>12</span></div>
+        <div class="phase-block phase-EXTRACT" style="width: 24px;"><span>13</span></div>
+        <div class="phase-block phase-DELEGATE" style="width: 24px;"><span>14</span></div>
+        <div class="phase-block phase-STALL" style="width: 24px;"><span>15</span></div>
+      </div>
+      <span class="score-badge score-0">0.0</span>
+    </div>
+    <div class="pair-row">
+      <span class="pair-label plugins">Plugins</span>
+      <div class="timeline-phases">
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>1</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>2</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>3</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>4</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>5</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>6</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>7</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>8</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>9</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>10</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>11</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>12</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>13</span></div>
+        <div class="phase-block phase-EXPLORE" style="width: 24px;"><span>14</span></div>
+        <div class="phase-block phase-STALL" style="width: 24px;"><span>15</span></div>
+      </div>
+      <span class="score-badge score-0">0.0</span>
+    </div>
+    <div class="delta-row">
+      <div class="delta-item">Iterations: <span class="delta-value delta-neutral">15 &rarr; 15 (=)</span></div>
+      <div class="delta-item">Score: <span class="delta-value delta-neutral">0 &rarr; 0 (=)</span></div>
+      <div class="delta-item">Wall time: <span class="delta-value delta-neutral">80s &rarr; 91s</span></div>
+      <div class="delta-item">Outcome: <span class="delta-value delta-neutral">timeout &rarr; timeout (identical failure mode)</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- VIZ 3: Phase Distribution -->
+<div class="viz-section">
+  <h2>3. Phase Distribution</h2>
+  <p class="viz-subtitle">Aggregate percentage of iterations spent in each phase. No-plugins is dominated by EXPLORE; the successful plugins trajectory shows balanced phase distribution.</p>
+
+  <div class="dist-container">
+    <!-- No Plugins: phases counted from the 5 trajectories
+         208: EXPLORE(1) = 1
+         209: EXTRACT(1), EXPLORE(1) = 2
+         210: EXPLORE(3), DELEGATE(1), EXTRACT(1), RETURN(1) = 6
+         211: EXPLORE(1), ERROR(1) = 2
+         212: EXPLORE(12), EXTRACT(1), DELEGATE(1), STALL(1) = 15
+         Total = 26
+         EXPLORE: 1+1+3+1+12 = 18
+         EXTRACT: 1+1+1 = 3
+         DELEGATE: 1+1 = 2
+         RETURN: 1
+         ERROR: 1
+         STALL: 1
+         PLAN: 0
+         VERIFY: 0
+    -->
+    <div class="dist-panel">
+      <h3 style="color: var(--accent-red);">Run 18 &mdash; No Plugins (26 iterations)</h3>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">EXPLORE</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-EXPLORE" style="width: 69.2%;">18</div>
+        </div>
+        <div class="dist-bar-pct">69.2%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">EXTRACT</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-EXTRACT" style="width: 11.5%;">3</div>
+        </div>
+        <div class="dist-bar-pct">11.5%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">DELEGATE</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-DELEGATE" style="width: 7.7%;">2</div>
+        </div>
+        <div class="dist-bar-pct">7.7%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">RETURN</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-RETURN" style="width: 3.8%;">1</div>
+        </div>
+        <div class="dist-bar-pct">3.8%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">ERROR</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-ERROR" style="width: 3.8%;">1</div>
+        </div>
+        <div class="dist-bar-pct">3.8%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">STALL</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-STALL" style="width: 3.8%;">1</div>
+        </div>
+        <div class="dist-bar-pct">3.8%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">PLAN</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-PLAN" style="width: 0%"></div>
+        </div>
+        <div class="dist-bar-pct">0.0%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">VERIFY</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-VERIFY" style="width: 0%"></div>
+        </div>
+        <div class="dist-bar-pct">0.0%</div>
+      </div>
+    </div>
+
+    <!-- Plugins: phases counted from the 3 trajectories
+         210(p): EXPLORE(12), EXTRACT(1), STALL(1), (no DELEGATE despite having it in no-plugins) = 15 (wait, let me recheck)
+         210(p) from control flow: iter1 EXPLORE, iter2 EXPLORE, iter3 EXPLORE, iter4 EXTRACT, iter5 EXPLORE, iter6 EXPLORE,
+                 iter7 EXPLORE, iter8 EXPLORE, iter9 EXPLORE, iter10 EXPLORE, iter11 EXPLORE, iter12 EXPLORE, iter13 EXPLORE, iter14 EXPLORE, iter15 STALL
+                 EXPLORE=13, EXTRACT=1, STALL=1
+
+         211(p): iter1 EXPLORE, iter2 EXPLORE, iter3 EXTRACT, iter4 PLAN, iter5 DELEGATE, iter6 EXTRACT, iter7 DELEGATE,
+                 iter8 EXTRACT, iter9 DELEGATE, iter10 EXTRACT, iter11 DELEGATE, iter12 EXTRACT, iter13 VERIFY, iter14 RETURN
+                 EXPLORE=2, EXTRACT=5, PLAN=1, DELEGATE=4, VERIFY=1, RETURN=1
+
+         212(p): iter1 EXPLORE, iter2 EXPLORE, iter3 EXPLORE, iter4 EXPLORE, iter5 EXPLORE, iter6 EXPLORE, iter7 EXPLORE,
+                 iter8 EXPLORE, iter9 EXPLORE, iter10 EXPLORE, iter11 EXPLORE, iter12 EXPLORE, iter13 EXPLORE, iter14 EXPLORE, iter15 STALL
+                 EXPLORE=14, STALL=1
+
+         Total = 44
+         EXPLORE: 13+2+14 = 29
+         EXTRACT: 1+5+0 = 6
+         DELEGATE: 0+4+0 = 4
+         PLAN: 0+1+0 = 1
+         VERIFY: 0+1+0 = 1
+         RETURN: 0+1+0 = 1
+         STALL: 1+0+1 = 2
+         ERROR: 0
+    -->
+    <div class="dist-panel">
+      <h3 style="color: var(--accent-green);">Run 19 &mdash; All Plugins (44 iterations)</h3>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">EXPLORE</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-EXPLORE" style="width: 65.9%;">29</div>
+        </div>
+        <div class="dist-bar-pct">65.9%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">EXTRACT</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-EXTRACT" style="width: 13.6%;">6</div>
+        </div>
+        <div class="dist-bar-pct">13.6%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">DELEGATE</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-DELEGATE" style="width: 9.1%;">4</div>
+        </div>
+        <div class="dist-bar-pct">9.1%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">STALL</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-STALL" style="width: 4.5%;">2</div>
+        </div>
+        <div class="dist-bar-pct">4.5%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">PLAN</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-PLAN" style="width: 2.3%;">1</div>
+        </div>
+        <div class="dist-bar-pct">2.3%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">VERIFY</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-VERIFY" style="width: 2.3%;">1</div>
+        </div>
+        <div class="dist-bar-pct">2.3%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">RETURN</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-RETURN" style="width: 2.3%;">1</div>
+        </div>
+        <div class="dist-bar-pct">2.3%</div>
+      </div>
+      <div class="dist-bar-row">
+        <div class="dist-bar-label">ERROR</div>
+        <div class="dist-bar-track">
+          <div class="dist-bar-fill phase-ERROR" style="width: 0%"></div>
+        </div>
+        <div class="dist-bar-pct">0.0%</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.82rem; color: var(--text-secondary);">
+    <strong>Key insight:</strong> Both runs are dominated by EXPLORE (~66-69%), but plugins enabled the successful trajectory (17000211) to achieve balanced phase usage: EXPLORE &rarr; EXTRACT &rarr; PLAN &rarr; DELEGATE &rarr; EXTRACT &rarr; VERIFY &rarr; RETURN. The other two plugin trajectories (17000210, 17000212) fell into the same EXPLORE trap as no-plugins, never reaching DELEGATE. The phase distribution improvement is entirely driven by one successful task.
+  </div>
+</div>
+
+
+<!-- VIZ 4: Pattern Heatmap -->
+<div class="viz-section">
+  <h2>4. Pattern Heatmap</h2>
+  <p class="viz-subtitle">Behavioral patterns observed in each trajectory. Columns are patterns; rows are tasks grouped by run. Filled cells indicate the pattern was observed.</p>
+
+  <div class="heatmap-container">
+    <table class="heatmap-table">
+      <thead>
+        <tr>
+          <th class="row-header"></th>
+          <th>format-discovery</th>
+          <th>multi-block-hallucination</th>
+          <th>hallucinated-reasoning</th>
+          <th>wrong-format-assumption</th>
+          <th>prior-knowledge-rescue</th>
+          <th>no-verification</th>
+          <th>multi-strategy</th>
+          <th>delegation-llm</th>
+          <th>parallel-fanout</th>
+          <th>chunking</th>
+          <th>anchoring</th>
+          <th>ignored-own-output</th>
+          <th>json-parse-on-plaintext</th>
+          <th>premature-return-on-error</th>
+          <th>error-recovery</th>
+          <th>sampling</th>
+          <th>prompt-crafting</th>
+          <th>label-not-in-data</th>
+          <th>exhaustive-search</th>
+          <th>data-structure-confusion</th>
+          <th>no-delegation</th>
+          <th>spinning</th>
+          <th>incremental-refinement</th>
+          <th>self-correction</th>
+          <th>verification</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Run 18 Header -->
+        <tr class="heatmap-run-divider">
+          <td colspan="26"><span class="heatmap-run-label" style="color: var(--accent-red);">Run 18 &mdash; No Plugins</span></td>
+        </tr>
+
+        <!-- 17000208: multi-block-hallucination, format-discovery, wrong-format-assumption -->
+        <tr>
+          <th class="row-header">17000208</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-active"></td><!-- multi-block-hallucination -->
+          <td class="heatmap-cell heatmap-inactive"></td><!-- hallucinated-reasoning -->
+          <td class="heatmap-cell heatmap-active"></td><!-- wrong-format-assumption -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- 17000209: format-discovery, multi-block-hallucination, prior-knowledge-rescue, no-verification -->
+        <tr>
+          <th class="row-header">17000209</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-active"></td><!-- multi-block-hallucination -->
+          <td class="heatmap-cell heatmap-inactive"></td><!-- hallucinated-reasoning -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- prior-knowledge-rescue -->
+          <td class="heatmap-cell heatmap-active"></td><!-- no-verification -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- 17000210 (no plugins): format-discovery, multi-strategy, delegation-llm, parallel-fanout, chunking, hallucinated-reasoning, anchoring, ignored-own-output -->
+        <tr>
+          <th class="row-header">17000210</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td><!-- multi-block-hallucination -->
+          <td class="heatmap-cell heatmap-active"></td><!-- hallucinated-reasoning -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- multi-strategy -->
+          <td class="heatmap-cell heatmap-active"></td><!-- delegation-llm -->
+          <td class="heatmap-cell heatmap-active"></td><!-- parallel-fanout -->
+          <td class="heatmap-cell heatmap-active"></td><!-- chunking -->
+          <td class="heatmap-cell heatmap-active"></td><!-- anchoring -->
+          <td class="heatmap-cell heatmap-active"></td><!-- ignored-own-output -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- 17000211 (no plugins): format-discovery, json-parse-on-plaintext, premature-return-on-error, no-verification, error-recovery -->
+        <tr>
+          <th class="row-header">17000211</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- no-verification -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- json-parse-on-plaintext -->
+          <td class="heatmap-cell heatmap-active"></td><!-- premature-return-on-error -->
+          <td class="heatmap-cell heatmap-active"></td><!-- error-recovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- 17000212 (no plugins): format-discovery, sampling, delegation-llm, chunking, prompt-crafting, label-not-in-data -->
+        <tr>
+          <th class="row-header">17000212</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- delegation-llm -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- chunking -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- sampling -->
+          <td class="heatmap-cell heatmap-active"></td><!-- prompt-crafting -->
+          <td class="heatmap-cell heatmap-active"></td><!-- label-not-in-data -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- Run 19 Header -->
+        <tr class="heatmap-run-divider">
+          <td colspan="26"><span class="heatmap-run-label" style="color: var(--accent-green);">Run 19 &mdash; All Plugins</span></td>
+        </tr>
+
+        <!-- 17000210 (plugins): format-discovery, exhaustive-search, data-structure-confusion, no-delegation, spinning -->
+        <tr>
+          <th class="row-header">17000210</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- exhaustive-search -->
+          <td class="heatmap-cell heatmap-active"></td><!-- data-structure-confusion -->
+          <td class="heatmap-cell heatmap-active"></td><!-- no-delegation -->
+          <td class="heatmap-cell heatmap-active"></td><!-- spinning -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+
+        <!-- 17000211 (plugins): format-discovery, chunking, delegation-llm, parallel-fanout, prompt-crafting, incremental-refinement, self-correction, verification -->
+        <tr>
+          <th class="row-header">17000211</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- delegation-llm -->
+          <td class="heatmap-cell heatmap-active"></td><!-- parallel-fanout -->
+          <td class="heatmap-cell heatmap-active"></td><!-- chunking -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- prompt-crafting -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- incremental-refinement -->
+          <td class="heatmap-cell heatmap-active"></td><!-- self-correction -->
+          <td class="heatmap-cell heatmap-active"></td><!-- verification -->
+        </tr>
+
+        <!-- 17000212 (plugins): format-discovery, exhaustive-search, data-structure-confusion, no-delegation, spinning -->
+        <tr>
+          <th class="row-header">17000212</th>
+          <td class="heatmap-cell heatmap-active"></td><!-- format-discovery -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-active"></td><!-- exhaustive-search -->
+          <td class="heatmap-cell heatmap-active"></td><!-- data-structure-confusion -->
+          <td class="heatmap-cell heatmap-active"></td><!-- no-delegation -->
+          <td class="heatmap-cell heatmap-active"></td><!-- spinning -->
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+          <td class="heatmap-cell heatmap-inactive"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.82rem; color: var(--text-secondary);">
+    <strong>Key patterns:</strong> <code style="color: var(--accent-blue);">format-discovery</code> is universal (8/8 tasks). The no-plugins run shows hallucination patterns (<code>multi-block-hallucination</code>, <code>hallucinated-reasoning</code>, <code>anchoring</code>). The plugins run eliminates hallucination but introduces <code>exhaustive-search</code> + <code>no-delegation</code> + <code>spinning</code> in 2/3 tasks. Only the successful plugins task (17000211) shows the productive pattern cluster: <code>delegation-llm</code> + <code>parallel-fanout</code> + <code>incremental-refinement</code> + <code>self-correction</code> + <code>verification</code>.
+  </div>
+</div>
+
+
+<!-- VIZ 5: Iteration Efficiency -->
+<div class="viz-section">
+  <h2>5. Iteration Efficiency</h2>
+  <p class="viz-subtitle">Useful iterations (EXTRACT, PLAN, DELEGATE, VERIFY, RETURN) vs wasted iterations (EXPLORE beyond iter 3 for tasks that never found labels, STALL, ERROR). The max bar width represents 15 iterations.</p>
+
+  <div class="efficiency-legend">
+    <div class="eff-legend-item"><div class="eff-legend-swatch eff-useful-swatch"></div>Useful (EXTRACT, PLAN, DELEGATE, VERIFY, RETURN)</div>
+    <div class="eff-legend-item"><div class="eff-legend-swatch eff-wasted-swatch"></div>Wasted (excess EXPLORE, STALL, ERROR)</div>
+  </div>
+
+  <div class="run-group">
+    <div class="run-label no-plugins">Run 18 &mdash; No Plugins</div>
+
+    <!-- 17000208: 1 iter. EXPLORE(1) - 0 useful, 1 wasted (hallucinated single iter) -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000208</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-wasted" style="width: 6.67%;">1</div>
+      </div>
+      <div class="efficiency-meta">0 useful / 1 wasted</div>
+    </div>
+
+    <!-- 17000209: 2 iters. EXTRACT(1)+EXPLORE(1). Score=1 but via hallucination. 1 useful (EXTRACT), 1 wasted (EXPLORE hallucinated) -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000209</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 6.67%;">1</div>
+        <div class="efficiency-wasted" style="width: 6.67%;">1</div>
+      </div>
+      <div class="efficiency-meta">1 useful / 1 wasted</div>
+    </div>
+
+    <!-- 17000210 (NP): 6 iters. EXPLORE(3), DELEGATE(1), EXTRACT(1), RETURN(1).
+         Useful: DELEGATE + EXTRACT + RETURN = 3. EXPLORE first 3 are useful format discovery = 3 useful total...
+         Actually: EXPLORE(1-3) are initial format discovery = useful up to 3. DELEGATE(4)=useful, EXTRACT(5)=useful, RETURN(6)=useful but wrong direction.
+         Let's say: useful=DELEGATE+EXTRACT+RETURN=3, wasted=EXPLORE(3)=3. But EXPLORE(1-3) was productive format discovery.
+         Better classification: first 3 EXPLORE = needed. DELEGATE=useful. EXTRACT=useful. RETURN=useful (executed, just wrong).
+         Useful: 6, Wasted: 0. But the answer was wrong due to hallucination. Let's keep it simple with the phase-based classification. -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000210</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 20%;">3</div>
+        <div class="efficiency-wasted" style="width: 20%;">3</div>
+      </div>
+      <div class="efficiency-meta">3 useful / 3 wasted</div>
+    </div>
+
+    <!-- 17000211 (NP): 2 iters. EXPLORE(1), ERROR(1). Useful: 0, Wasted: 2 -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000211</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-wasted" style="width: 13.33%;">2</div>
+      </div>
+      <div class="efficiency-meta">0 useful / 2 wasted</div>
+    </div>
+
+    <!-- 17000212 (NP): 15 iters. EXPLORE(12), EXTRACT(1), DELEGATE(1), STALL(1).
+         Useful: EXTRACT(1) + DELEGATE(1) = 2. Wasted: EXPLORE(12) + STALL(1) = 13.
+         But first 3 EXPLORE were needed. So useful=2+3=5, wasted=9+1=10. Let me use the simpler rule:
+         EXPLORE beyond iter 3 = wasted for tasks that never found labels. This task never found labels.
+         Useful: EXTRACT(13) + DELEGATE(14) + first 3 EXPLORE = 5. Wasted: EXPLORE(4-12)=9 + STALL(1)=10. -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000212</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 33.33%;">5</div>
+        <div class="efficiency-wasted" style="width: 66.67%;">10</div>
+      </div>
+      <div class="efficiency-meta">5 useful / 10 wasted</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="run-group">
+    <div class="run-label plugins">Run 19 &mdash; All Plugins</div>
+
+    <!-- 17000210 (P): 15 iters. EXPLORE(13), EXTRACT(1), STALL(1). Never found labels, no delegation.
+         Useful: EXTRACT(4) + first 3 EXPLORE = 4. Wasted: EXPLORE(5-14)=10 + STALL(1)=11. -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000210</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 26.67%;">4</div>
+        <div class="efficiency-wasted" style="width: 73.33%;">11</div>
+      </div>
+      <div class="efficiency-meta">4 useful / 11 wasted</div>
+    </div>
+
+    <!-- 17000211 (P): 14 iters. EXPLORE(2), EXTRACT(5), PLAN(1), DELEGATE(4), VERIFY(1), RETURN(1).
+         Useful: EXPLORE(1-2)=2 + EXTRACT(5)=5 + PLAN(1)=1 + DELEGATE(4)=4 + VERIFY(1)=1 + RETURN(1)=1 = 14.
+         All useful! Score=1.0. -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000211</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 93.33%;">14</div>
+      </div>
+      <div class="efficiency-meta">14 useful / 0 wasted</div>
+    </div>
+
+    <!-- 17000212 (P): 15 iters. EXPLORE(14), STALL(1). Never found labels, no delegation.
+         Useful: first 3 EXPLORE = 3. Wasted: EXPLORE(4-14)=11 + STALL(1)=12. -->
+    <div class="efficiency-row">
+      <div class="efficiency-task-id">oolong-17000212</div>
+      <div class="efficiency-bar-track" style="max-width: 600px;">
+        <div class="efficiency-useful" style="width: 20%;">3</div>
+        <div class="efficiency-wasted" style="width: 80%;">12</div>
+      </div>
+      <div class="efficiency-meta">3 useful / 12 wasted</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.82rem; color: var(--text-secondary);">
+    <strong>Standout:</strong> The plugins trajectory for 17000211 achieved <strong>100% iteration efficiency</strong> (14/14 useful) with a perfect score. Every other trajectory wasted 50-100% of iterations on fruitless EXPLORE or STALL phases. The core problem: without the conceptual leap to LLM delegation, EXPLORE loops are unbounded.
+  </div>
+</div>
+
+
+<div style="text-align: center; padding: 2rem 0 1rem; color: var(--text-muted); font-size: 0.75rem;">
+  Generated from trajectory analysis of RLM eval runs 18 &amp; 19. Data extracted from YAML frontmatter and Control Flow sections of 8 trajectory markdown files.
+</div>
+
+</body>
+</html>
