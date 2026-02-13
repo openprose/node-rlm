@@ -42,6 +42,10 @@ on:
       max-blocks-per-iteration:
         description: "Max code blocks per iteration (for single-block enforcement, use 1)"
         required: false
+      attempts:
+        description: "Attempts per task for pass@N (default: 1)"
+        required: false
+        default: "1"
       analyze:
         description: Run trajectory analysis after eval
         type: boolean
@@ -108,6 +112,9 @@ jobs:
           fi
           if [ -n "${{ inputs.max-blocks-per-iteration }}" ]; then
             ARGS="$ARGS --max-blocks-per-iteration ${{ inputs.max-blocks-per-iteration }}"
+          fi
+          if [ "${{ inputs.attempts }}" != "1" ] && [ "${{ inputs.attempts }}" != "" ]; then
+            ARGS="$ARGS --attempts ${{ inputs.attempts }}"
           fi
           npx tsx eval/run.ts $ARGS
 

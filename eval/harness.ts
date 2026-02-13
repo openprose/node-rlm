@@ -34,6 +34,8 @@ export interface HarnessConfig {
 	maxBlocksPerIteration?: number;
 	/** Raw --filter string for resumability tracking. */
 	filter?: string;
+	/** Number of attempts per task for pass@N evaluation (default: 1). */
+	attempts?: number;
 	/** Progress callback, called after each task completes. */
 	onProgress?: (completed: number, total: number, result: EvalResult) => void;
 }
@@ -48,6 +50,7 @@ export async function runEval(
 	const maxIterations = config.maxIterations ?? 15;
 	const maxDepth = config.maxDepth ?? 2;
 	const concurrency = config.concurrency ?? 5;
+	const attempts = config.attempts ?? 1;
 	const resultsDir = config.resultsDir ?? DEFAULT_RESULTS_DIR;
 
 	mkdirSync(resultsDir, { recursive: true });
@@ -65,47 +68,81 @@ export async function runEval(
 		concurrency,
 		filter: config.filter,
 	});
-	const completedIds = new Set(completedResults.map((r) => r.taskId));
+	// When using multiple attempts, re-run tasks that scored < 1.0 (imperfect)
+	const completedIds = new Set(
+		completedResults
+			.filter((r) => attempts <= 1 || r.score >= 1.0)
+			.map((r) => r.taskId),
+	);
 
 	const pendingTasks = tasks.filter((t) => !completedIds.has(t.id));
-	const results: EvalResult[] = [...completedResults];
+	// Only carry forward results for tasks we're not re-running
+	const results: EvalResult[] = completedResults.filter((r) => completedIds.has(r.taskId));
 
-	if (completedResults.length > 0) {
-		console.log(`Resuming: ${completedResults.length} tasks already completed, ${pendingTasks.length} remaining.`);
+	if (results.length > 0) {
+		console.log(`Resuming: ${results.length} tasks already completed, ${pendingTasks.length} remaining.`);
 	}
 
 	// Run tasks with concurrency control using a reliable pool pattern.
 	// Each promise in the pool removes itself when it settles.
 	const startTime = Date.now();
-	let completed = completedResults.length;
+	let completed = results.length;
 
 	const pool = new Set<Promise<void>>();
 
 	const handleTask = (task: EvalTask): Promise<void> => {
-		const p = runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration)
-			.then((result) => {
-				results.push(result);
-				completed++;
-				config.onProgress?.(completed, tasks.length, result);
-				saveResults(resultsFile, buildBenchmarkResult(config, tasks.length, results, maxIterations, maxDepth, concurrency));
-			})
-			.catch((err) => {
-				const failedResult: EvalResult = {
-					taskId: task.id,
-					answer: "",
-					expected: task.expected,
-					score: 0,
-					iterations: 0,
-					trace: [],
-					wallTimeMs: 0,
-					charCount: { input: 0, output: 0 },
-					error: err instanceof Error ? err.message : String(err),
-				};
-				results.push(failedResult);
-				completed++;
-				config.onProgress?.(completed, tasks.length, failedResult);
-				saveResults(resultsFile, buildBenchmarkResult(config, tasks.length, results, maxIterations, maxDepth, concurrency));
-			})
+		const p = (async () => {
+			let bestResult: EvalResult | null = null;
+			const attemptScores: number[] = [];
+
+			for (let attempt = 0; attempt < attempts; attempt++) {
+				if (attempts > 1) {
+					console.log(`  [${task.id}] attempt ${attempt + 1}/${attempts}...`);
+				}
+
+				try {
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration);
+					attemptScores.push(result.score);
+
+					if (!bestResult || result.score > bestResult.score) {
+						bestResult = result;
+					}
+
+					// Short-circuit: perfect score, no need for more attempts
+					if (result.score >= 1.0) break;
+				} catch (err) {
+					const failedResult: EvalResult = {
+						taskId: task.id,
+						answer: "",
+						expected: task.expected,
+						score: 0,
+						iterations: 0,
+						trace: [],
+						wallTimeMs: 0,
+						charCount: { input: 0, output: 0 },
+						error: err instanceof Error ? err.message : String(err),
+					};
+					attemptScores.push(0);
+
+					if (!bestResult || failedResult.score > bestResult.score) {
+						bestResult = failedResult;
+					}
+				}
+			}
+
+			// Add attempt metadata when using multiple attempts
+			if (attempts > 1 && bestResult) {
+				bestResult.attempts = attemptScores.length;
+				bestResult.attemptScores = attemptScores;
+				bestResult.bestAttempt = attemptScores.indexOf(bestResult.score);
+			}
+
+			const finalResult = bestResult!;
+			results.push(finalResult);
+			completed++;
+			config.onProgress?.(completed, tasks.length, finalResult);
+			saveResults(resultsFile, buildBenchmarkResult(config, tasks.length, results, maxIterations, maxDepth, concurrency));
+		})()
 			.finally(() => {
 				pool.delete(p);
 			});
@@ -241,7 +278,13 @@ function buildBenchmarkResult(
 	return {
 		benchmark: config.benchmark,
 		model: config.model,
-		config: { maxIterations, maxDepth, concurrency, ...(config.filter ? { filter: config.filter } : {}) },
+		config: {
+			maxIterations,
+			maxDepth,
+			concurrency,
+			...(config.filter ? { filter: config.filter } : {}),
+			...((config.attempts ?? 1) > 1 ? { attempts: config.attempts } : {}),
+		},
 		timestamp: new Date().toISOString(),
 		results,
 		aggregate: {

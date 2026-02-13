@@ -18,12 +18,18 @@ export interface EvalResult {
 	wallTimeMs: number;
 	charCount: { input: number; output: number };
 	error?: string;
+	/** Number of attempts made (pass@N). Only present when attempts > 1. */
+	attempts?: number;
+	/** Score from each attempt (pass@N). Only present when attempts > 1. */
+	attemptScores?: number[];
+	/** 0-based index of the attempt that produced the best score. Only present when attempts > 1. */
+	bestAttempt?: number;
 }
 
 export interface BenchmarkResult {
 	benchmark: string;
 	model: string;
-	config: { maxIterations: number; maxDepth: number; concurrency: number; filter?: string };
+	config: { maxIterations: number; maxDepth: number; concurrency: number; filter?: string; attempts?: number };
 	timestamp: string;
 	results: EvalResult[];
 	aggregate: {

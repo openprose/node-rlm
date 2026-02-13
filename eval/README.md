@@ -35,6 +35,10 @@ npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
 npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
   --selected-problems "0934a4d8,135a2760,136b0064" --max-iterations 30
 
+# ARC: pass@2 (run each problem twice, keep best score)
+npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
+  --max-iterations 20 --max-depth 2 --attempts 2
+
 # With options
 npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-20250514 \
   --concurrency 10 --max-iterations 10 --max-depth 3 --tasks-per-length 4
@@ -57,6 +61,7 @@ The plugin system has three kinds of plugins:
 | `--profile <name>` | Load a named driver profile (e.g., `gemini-3-flash`) |
 | `--app <name>` | Load a named app plugin (e.g., `structured-data-aggregation`) |
 | `--drivers <list>` | Comma-separated extra driver names (appended after profile drivers) |
+| `--attempts <n>` | Attempts per task for pass@N evaluation (default: 1) |
 | `--model-alias <spec>` | Register a model alias: `name=model:tag1,tag2` (repeatable) |
 
 ### Auto-detection

@@ -1,8 +1,8 @@
 ---
 name: hypothesis-budget
 kind: driver
-version: 0.2.0
-description: Limit hypothesis count, force comparison, trigger reframing after churn
+version: 0.1.0
+description: Limit hypothesis count and force systematic comparison before switching
 author: sl
 tags: [strategy, pacing, arc]
 requires: []
@@ -28,22 +28,17 @@ DECISION: Refine #2. It fails on Train 2 — investigate why.
 
 **Refinement phase:** All remaining iterations go toward debugging and improving your best-scoring hypothesis. Investigate WHY it fails on specific examples. Print the diff. Look at the failing example's structure. Adjust the transform.
 
-### The reframing trigger (5 rejected hypotheses)
+### When partial scores tie
 
-If you have tested 5 hypotheses and **none** passes all training examples, STOP. Do not generate hypothesis 6 on the same framing. Instead:
-
-1. Ask: **"What assumption do all 5 hypotheses share?"** (e.g., all assume sorting, all assume reflection, all assume pairing)
-2. List that shared assumption explicitly.
-3. Try a hypothesis that **violates** that assumption.
-
-Example: if hypotheses 1-5 all asked "how are blocks sorted?", hypothesis 6 should ask "what if this is NOT a sorting task? What if blocks are selected/filtered/transformed rather than reordered?"
+If two hypotheses score the same, prefer the simpler one. If they are equally simple, compare which failing examples they get wrong — they may capture complementary aspects of the rule. Consider whether combining elements from both yields a better transform.
 
 ### What this prevents
 
-- Cycling through 10 hypotheses all on the same framing (arc-78332cb0: 10 sorting hypotheses)
+- Cycling through 7+ hypotheses at 60% accuracy each without converging
 - Abandoning a 3/4 hypothesis because it's "not perfect" and starting fresh
 - Spending all iterations on breadth (new ideas) instead of depth (fixing the best idea)
+- Losing track of which hypothesis performed best
 
 ### The exception
 
-If all 3 hypotheses score 0/N, you may generate a 4th. But first, re-examine the training examples — print a detailed cell-by-cell diff between one input and its output before hypothesizing again.
+If all 3 hypotheses score 0/N, you may generate a 4th. But first, re-examine the training examples — you likely misidentified the transformation type entirely. Print a detailed diff (cell-by-cell) between one input and its output before hypothesizing again.

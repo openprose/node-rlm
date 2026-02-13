@@ -1,50 +1,50 @@
 ---
 name: exploration-budget
 kind: driver
-version: 0.2.0
-description: Hard ceiling on exploration — must attempt implementation by iteration 12
+version: 0.1.0
+description: Caps exploration phase and forces transition to execution
 author: sl
-tags: [strategy, pacing, stall-recovery, arc]
+tags: [strategy, pacing, stall-recovery]
 requires: []
 ---
 
 ## Exploration Budget
 
-Your iterations are finite. Exploration without implementation is worthless.
-
-### The hard ceiling
-
-**By iteration 12, you MUST have written and tested at least one complete `transform()` or `solve()` function against all training examples.** This is not a suggestion. If you reach iteration 12 without a single implementation attempt, you are failing.
+Your iterations are finite. Spend them deliberately.
 
 ### Phase structure
 
-**Phase 1 — Orient (iterations 0-3):** Parse inputs, visualize grids, identify structural elements (colors, regions, separators, objects). By iteration 3, you should have a structural model of the data.
+**Phase 1 — Orient (iterations 1-2):** Read the question. Understand what answer is needed (a number? a comparison? a label?). Then probe the data: type, length, structure, a small sample.
 
-**Phase 2 — Hypothesize and test (iterations 4-8):** Form hypotheses. Test each against ALL training examples with code. Track your scoreboard. By iteration 8, you should have a leading hypothesis.
+**Phase 2 — Commit (iteration 3):** You now know the question and the data shape. Decide your approach. Write it as a comment before writing code:
 
-**Phase 3 — Implement and refine (iterations 9-16):** Write a complete transform function. Run it on all training examples. Debug failures. Iterate on the implementation. Each iteration should produce a measurable improvement (fewer diffs, more examples passing).
-
-**Phase 4 — Verify and return (iterations 17+):** Final verification pass on all training examples. Apply to test. Return.
-
-### Iteration checkpoint
-
-At every iteration, log:
-
-```
-Iteration X/N. Phase: [orient|hypothesize|implement|verify]. Implementation attempts: Y.
+```javascript
+// APPROACH: [extraction / computation / classification-via-delegation]
+// The data has [X items] in [format]. The question asks for [Y].
+// I will [specific plan].
 ```
 
-If X >= 12 and Y == 0, you are in violation. Stop exploring. Implement your best hypothesis NOW, even if imperfect. A wrong answer scores the same as a timeout, but implementation attempts generate diagnostic information.
+**Phase 3 — Execute (iterations 4+):** Build, run, debug, refine. If delegating, use `Promise.all()` — never sequential `llm()` loops across iterations.
 
-### The midpoint gut-check (iteration 10)
+**Phase 4 — Verify and return:** Log your candidate answer, confirm it in output, then `return()`.
 
-> Do I have a hypothesis that passes at least 1 training example?
+### The 3-strike rule
 
-- **Yes:** Refine it. You are on track.
-- **No:** You have 2 iterations to find one. Simplify. Look for the most obvious regularity. Try the simplest possible transform.
+If you search for something and don't find it:
+- Strike 1: try a different search method
+- Strike 2: try a different location in the data
+- Strike 3: **it's not there.** Stop searching. Reframe the problem.
 
-### What this prevents
+Do not spend a 4th iteration looking for something you failed to find in 3 attempts. The data does not have hidden fields, secret encodings, or invisible delimiters. If 3 careful searches found nothing, change your approach.
 
-- 19 explore iterations with 0 extract iterations (arc-446ef5d2 failure mode)
-- Correct pattern discovered at iter 19, no time to implement (arc-aa4ec2a5 baseline failure)
-- Understanding the pattern perfectly but never writing code (5/5 drivers-help task baseline failures)
+### Midpoint check
+
+At iteration 7 (or halfway through your budget), ask yourself:
+
+> Am I making progress toward an answer, or am I still trying to understand the data?
+
+If you are still exploring at the midpoint, you are stuck. Stop. Re-read the question. Consider whether your approach is wrong, not whether you're searching hard enough.
+
+### Common stall: "I can't find the labels"
+
+If the question asks about labels, categories, or classifications, and you've confirmed they're not annotated in the data — **you need to generate them.** This is a classification task, not an extraction task. Use `llm()` to classify items into the categories mentioned in the question, then compute on the results.

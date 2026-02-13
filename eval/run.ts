@@ -20,6 +20,7 @@ process.on("unhandledRejection", (reason) => {
  *   --max-iterations <n>   Max REPL iterations per task (default: 15)
  *   --max-depth <n>        Max recursion depth (default: 2)
  *   --max-tasks <n>        Limit number of tasks (default: all)
+ *   --attempts <n>         Attempts per task for pass@N (default: 1)
  *   --dataset-filter <s>   OOLONG: filter by dataset field (default: trec_coarse)
  *   --context-len <n>      OOLONG: filter by context_len (default: 131072)
  *   --tasks-per-length <n> S-NIAH: tasks per context length (default: 8)
@@ -82,6 +83,7 @@ interface CliArgs {
 	selectedProblems: string[];
 	modelAliases: string[];
 	maxBlocksPerIteration: number | null;
+	attempts: number;
 }
 
 function usage(): never {
@@ -108,6 +110,7 @@ Options:
   --context-len <n>        OOLONG: context_len filter (default: 131072)
   --tasks-per-length <n>   S-NIAH: tasks per context length (default: 8)
   --selected-problems <ids> ARC: comma-separated problem IDs to run
+  --attempts <n>           Attempts per task for pass@N (default: 1)
   --rate-limit <n>         Requests per second (default: 5, 0 to disable)
   --rate-burst <n>         Burst capacity (default: 10)
   --with-labels            OOLONG: use labeled context (context_window_text_with_labels)
@@ -184,6 +187,7 @@ function parseArgs(argv: string[]): CliArgs {
 			: [],
 		modelAliases,
 		maxBlocksPerIteration: args["max-blocks-per-iteration"] ? parseInt(args["max-blocks-per-iteration"], 10) : null,
+		attempts: parseInt(args.attempts ?? "1", 10),
 	};
 }
 
@@ -374,7 +378,7 @@ function printFinalResults(result: import("./types.js").BenchmarkResult): void {
 	console.log();
 	console.log(`  Benchmark:     ${result.benchmark}`);
 	console.log(`  Model:         ${result.model}`);
-	console.log(`  Config:        maxIter=${result.config.maxIterations}, maxDepth=${result.config.maxDepth}, concurrency=${result.config.concurrency}${result.config.filter ? `, filter=${result.config.filter}` : ""}`);
+	console.log(`  Config:        maxIter=${result.config.maxIterations}, maxDepth=${result.config.maxDepth}, concurrency=${result.config.concurrency}${result.config.attempts ? `, attempts=${result.config.attempts}` : ""}${result.config.filter ? `, filter=${result.config.filter}` : ""}`);
 	console.log(`  Timestamp:     ${result.timestamp}`);
 	console.log();
 	console.log("  --- Scores ---");
@@ -425,6 +429,9 @@ async function main(): Promise<void> {
 	}
 	if (args.withLabels) {
 		console.log(`With Labels:     yes (using context_window_text_with_labels)`);
+	}
+	if (args.attempts > 1) {
+		console.log(`Attempts:        ${args.attempts} (pass@${args.attempts})`);
 	}
 	if (args.rateLimit > 0) {
 		console.log(`Rate Limit:      ${args.rateLimit} req/s (burst: ${args.rateBurst})`);
@@ -517,6 +524,7 @@ async function main(): Promise<void> {
 		pluginBodies,
 		models,
 		...(args.maxBlocksPerIteration && { maxBlocksPerIteration: args.maxBlocksPerIteration }),
+		...(args.attempts > 1 && { attempts: args.attempts }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

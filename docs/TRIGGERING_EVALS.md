@@ -6,6 +6,34 @@ For local runs, CLI options, plugin system, and result analysis, see [eval/READM
 For dataset management, see [docs/EVAL_DATA.md](EVAL_DATA.md).
 For past run analyses, see [eval/analyses/README.md](../eval/analyses/README.md).
 
+## Best known configuration (65% — run-026)
+
+```bash
+gh workflow run eval.yml \
+  -f benchmark=arc \
+  -f model="anthropic/claude-opus-4-6" \
+  -f max-iterations=20 \
+  -f max-depth=2 \
+  -f max-tasks=20 \
+  -f concurrency=5 \
+  -f max-blocks-per-iteration=1 \
+  -f analyze=true \
+  -f drivers="one-block-per-iteration,deadline-return,verify-all-examples,verify-before-return,hypothesis-budget,exploration-budget,arc-helper-library,overlap-testing,json-stringify-return" \
+  -f selected-problems="0934a4d8,135a2760,136b0064,195c6913,247ef758,2ba387bc,36a08778,446ef5d2,4e34c42c,5961cc34,6e453dd6,78332cb0,7ed72f31,89565ca0,8f3a5a89,a251c730,aa4ec2a5,b99e7126,cbebaa4b,db695cfb"
+```
+
+| Parameter | Value |
+|---|---|
+| Drivers (9) | one-block-per-iteration, deadline-return, verify-all-examples, verify-before-return, hypothesis-budget, exploration-budget, arc-helper-library, overlap-testing, json-stringify-return |
+| Model | claude-opus-4-6 |
+| Iterations | 20 |
+| Max depth | 2 |
+| Concurrency | 5 |
+| Blocks/iteration | 1 |
+| Score | **13/20 (65%)** |
+| Commit | `e40547e` |
+| Run ID | `21996621690` |
+
 ## Basic syntax
 
 ```bash
@@ -26,6 +54,7 @@ gh workflow run eval.yml -f benchmark=<bench> -f model=<model> [flags...]
 | `app` | no | — | App plugin name |
 | `selected-problems` | no | all | ARC: comma-separated problem IDs |
 | `max-blocks-per-iteration` | no | — | Use `1` for single-block enforcement |
+| `attempts` | no | `1` | Attempts per task for pass@N (e.g., `2` for pass@2) |
 | `analyze` | no | `true` | Run trajectory distillation after eval |
 
 ## ARC task IDs
