@@ -1,0 +1,48 @@
+npm warn exec The following package was not found and will be installed: tsx@4.21.0
+
+========================================================================
+  arc | anthropic/claude-opus-4.6 | 2026-02-13T13:55:40.481Z
+  20 tasks | cost: $13.38
+========================================================================
+
+ITERATION & CODE VOLUME
+           metric |   mean |    p20 | median |    p80 |   min |    max 
+------------------+--------+--------+--------+--------+-------+--------
+       iterations |  15.75 |     11 |     18 |     19 |     7 |     20 
+ code blocks/task |  15.75 |     11 |     18 |     19 |     7 |     20 
+  code lines/task | 871.85 |  559.6 |  835.5 | 1203.4 |   246 |   1701 
+ blocks/iteration |      1 |      1 |      1 |      1 |     1 |      1 
+    wall time (s) | 247.74 | 148.59 | 240.97 | 325.67 | 77.33 | 465.55 
+
+BEHAVIORAL PATTERNS
+               pattern | count | rate |                            notes 
+-----------------------+-------+------+----------------------------------
+ eager return (iter 1) |    17 |  85% |            8 failed, 9 succeeded 
+        self-corrected |     9 |  45% |    score > 0 with iterations > 1 
+            used rlm() |     2 |  10% |                    2 total calls 
+      used console.log |    20 | 100% |                                  
+        used let/const |    20 | 100% | risk of cross-block scoping bugs 
+            had errors |     3 |  15% |                   3 total errors 
+             score = 0 |    11 |  55% |                                  
+
+SCORE DISTRIBUTION
+ score | count | rate 
+-------+-------+------
+   0.0 |    11 |  55% 
+   1.0 |     9 |  45% 
+
+ITERATION DISTRIBUTION
+ iterations | count | succeeded | success rate 
+------------+-------+-----------+--------------
+          7 |     1 |         1 |         100% 
+          8 |     1 |         0 |           0% 
+          9 |     1 |         1 |         100% 
+         11 |     2 |         2 |         100% 
+         13 |     1 |         1 |         100% 
+         15 |     1 |         1 |         100% 
+         16 |     1 |         1 |         100% 
+         17 |     1 |         0 |           0% 
+         18 |     2 |         1 |          50% 
+         19 |     8 |         1 |        12.5% 
+         20 |     1 |         0 |           0% 
+

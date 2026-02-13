@@ -1,0 +1,46 @@
+
+========================================================================
+  arc | anthropic/claude-opus-4.6 | 2026-02-13T14:02:00.611Z
+  20 tasks | cost: $10.98
+========================================================================
+
+ITERATION & CODE VOLUME
+           metric |   mean |    p20 | median |    p80 |  min |   max 
+------------------+--------+--------+--------+--------+------+-------
+       iterations |  14.05 |      9 |     15 |     20 |    1 |    20 
+ code blocks/task |  14.05 |      9 |     15 |     20 |    1 |    20 
+  code lines/task | 819.55 |  444.4 |    779 | 1208.8 |   21 |  1987 
+ blocks/iteration |      1 |      1 |      1 |      1 |    1 |     1 
+    wall time (s) | 289.79 | 146.81 | 264.17 | 387.39 | 95.8 | 666.6 
+
+BEHAVIORAL PATTERNS
+               pattern | count | rate |                            notes 
+-----------------------+-------+------+----------------------------------
+ eager return (iter 1) |     0 |   0% |            0 failed, 0 succeeded 
+        self-corrected |    10 |  50% |    score > 0 with iterations > 1 
+            used rlm() |     0 |   0% |                    0 total calls 
+      used console.log |    20 | 100% |                                  
+        used let/const |    20 | 100% | risk of cross-block scoping bugs 
+            had errors |     4 |  20% |                   4 total errors 
+             score = 0 |    10 |  50% |                                  
+
+SCORE DISTRIBUTION
+ score | count | rate 
+-------+-------+------
+   0.0 |    10 |  50% 
+   1.0 |    10 |  50% 
+
+ITERATION DISTRIBUTION
+ iterations | count | succeeded | success rate 
+------------+-------+-----------+--------------
+          1 |     1 |         0 |           0% 
+          2 |     1 |         0 |           0% 
+          9 |     3 |         2 |        66.7% 
+         11 |     2 |         2 |         100% 
+         13 |     2 |         2 |         100% 
+         14 |     1 |         1 |         100% 
+         16 |     1 |         1 |         100% 
+         17 |     2 |         1 |          50% 
+         19 |     1 |         0 |           0% 
+         20 |     6 |         1 |        16.7% 
+
