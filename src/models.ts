@@ -19,7 +19,7 @@ export const DEFAULT_MODEL_ALIASES: Record<string, ModelAliasDefinition> = {
 		description: "Gemini 3 Flash — fast and cheap",
 	},
 	orchestrator: {
-		modelId: "openrouter/anthropic/claude-sonnet-4-5-20250929",
+		modelId: "openrouter/anthropic/claude-sonnet-4.5",
 		tags: ["orchestrator", "medium"],
 		description: "Claude Sonnet 4.5 — balanced orchestration",
 	},

@@ -17,6 +17,13 @@ export interface RlmOptions {
 	pluginBodies?: string;
 	/** Named model aliases available for child delegation. */
 	models?: Record<string, ModelEntry>;
+	/**
+	 * Maximum code blocks to execute per LLM response.
+	 * When set to 1, only the first code block is executed and extra blocks
+	 * are discarded with a warning appended to the output.
+	 * Default: undefined (no limit).
+	 */
+	maxBlocksPerIteration?: number;
 }
 
 export interface RlmResult {
@@ -131,6 +138,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		maxDepth: options.maxDepth ?? 3,
 		pluginBodies: options.pluginBodies,
 		models: options.models,
+		maxBlocksPerIteration: options.maxBlocksPerIteration,
 	};
 
 	const modelTable = buildModelTable(opts.models);
@@ -319,6 +327,17 @@ export async function rlm(query: string, context: string | undefined, options: R
 				}
 			}
 
+			// Enforce max blocks per iteration (discard extra blocks with a warning)
+			let blocksDiscardedWarning: string | undefined;
+			if (opts.maxBlocksPerIteration && codeBlocks.length > opts.maxBlocksPerIteration) {
+				const discarded = codeBlocks.length - opts.maxBlocksPerIteration;
+				codeBlocks = codeBlocks.slice(0, opts.maxBlocksPerIteration);
+				blocksDiscardedWarning =
+					`[WARNING] ${discarded} extra code block(s) were discarded. ` +
+					`Only the first block was executed. Write ONE code block per response ` +
+					`and wait for real output before writing the next step.`;
+			}
+
 			let combinedOutput = "";
 			let combinedError: string | null = null;
 
@@ -375,10 +394,15 @@ export async function rlm(query: string, context: string | undefined, options: R
 							`[early return intercepted] You returned: ${String(returnValue)}\nVerify this is correct by examining the data before returning.`;
 						break;
 					}
-					const answer = String(returnValue);
+					const answer = typeof returnValue === "object" ? JSON.stringify(returnValue) : String(returnValue);
 					trace.push({ reasoning: response, code: codeBlocks, output: combinedOutput, error: combinedError });
 					return { answer, iterations: iteration + 1, trace };
 				}
+			}
+
+			// Append block-discard warning so the model knows extra blocks were dropped
+			if (blocksDiscardedWarning) {
+				combinedOutput += (combinedOutput ? "\n" : "") + blocksDiscardedWarning;
 			}
 
 			trace.push({ reasoning: response, code: codeBlocks, output: combinedOutput, error: combinedError });

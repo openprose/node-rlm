@@ -30,6 +30,8 @@ export interface HarnessConfig {
 	pluginBodies?: string;
 	/** Named model aliases available for child delegation. */
 	models?: Record<string, ModelEntry>;
+	/** Max code blocks to execute per LLM response (1 = enforce single-block). */
+	maxBlocksPerIteration?: number;
 	/** Raw --filter string for resumability tracking. */
 	filter?: string;
 	/** Progress callback, called after each task completes. */
@@ -80,7 +82,7 @@ export async function runEval(
 	const pool = new Set<Promise<void>>();
 
 	const handleTask = (task: EvalTask): Promise<void> => {
-		const p = runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models)
+		const p = runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration)
 			.then((result) => {
 				results.push(result);
 				completed++;
@@ -149,6 +151,7 @@ async function runSingleTask(
 	maxDepth: number,
 	pluginBodies?: string,
 	models?: Record<string, ModelEntry>,
+	maxBlocksPerIteration?: number,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -174,6 +177,7 @@ async function runSingleTask(
 			maxDepth,
 			pluginBodies,
 			...(models && { models }),
+			...(maxBlocksPerIteration && { maxBlocksPerIteration }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;

@@ -81,6 +81,7 @@ interface CliArgs {
 	filter: string | null;
 	selectedProblems: string[];
 	modelAliases: string[];
+	maxBlocksPerIteration: number | null;
 }
 
 function usage(): never {
@@ -182,6 +183,7 @@ function parseArgs(argv: string[]): CliArgs {
 			? args["selected-problems"].split(",").map((s) => s.trim())
 			: [],
 		modelAliases,
+		maxBlocksPerIteration: args["max-blocks-per-iteration"] ? parseInt(args["max-blocks-per-iteration"], 10) : null,
 	};
 }
 
@@ -212,6 +214,12 @@ function parseFilter(raw: string): Record<string, string[]> {
 	return result;
 }
 
+/** Return model-specific overrides for output headroom and timeout. */
+function modelOverrides(model: string): { maxTokens?: number; timeoutMs?: number } {
+	if (/opus/i.test(model)) return { maxTokens: 8192, timeoutMs: 120_000 };
+	return {};
+}
+
 function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string } {
 	const parts = spec.split("/");
 	if (parts.length < 2) {
@@ -226,15 +234,17 @@ function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string }
 		process.exit(1);
 	}
 
+	const overrides = modelOverrides(spec);
+
 	// If model spec starts with "openrouter/", strip the prefix —
 	// OpenRouter expects just "provider/model" (e.g. "google/gemini-3-flash-preview").
 	if (parts[0] === "openrouter") {
 		const modelWithoutPrefix = parts.slice(1).join("/");
-		return { callLLM: fromOpenRouter(modelWithoutPrefix, apiKey), displayName: `${modelWithoutPrefix} (openrouter)` };
+		return { callLLM: fromOpenRouter(modelWithoutPrefix, apiKey, overrides), displayName: `${modelWithoutPrefix} (openrouter)` };
 	}
 
 	// Otherwise pass the full spec directly — OpenRouter accepts "provider/model" natively.
-	return { callLLM: fromOpenRouter(spec, apiKey), displayName: `${spec} (openrouter)` };
+	return { callLLM: fromOpenRouter(spec, apiKey, overrides), displayName: `${spec} (openrouter)` };
 }
 
 function buildModelAliases(aliases: string[], apiKey: string): Record<string, ModelEntry> | undefined {
@@ -503,6 +513,7 @@ async function main(): Promise<void> {
 		concurrency: args.concurrency,
 		pluginBodies,
 		models,
+		...(args.maxBlocksPerIteration && { maxBlocksPerIteration: args.maxBlocksPerIteration }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

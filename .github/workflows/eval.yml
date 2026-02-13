@@ -39,6 +39,9 @@ on:
       selected-problems:
         description: "ARC: comma-separated problem IDs (default: all)"
         required: false
+      max-blocks-per-iteration:
+        description: "Max code blocks per iteration (for single-block enforcement, use 1)"
+        required: false
       analyze:
         description: Run trajectory analysis after eval
         type: boolean
@@ -102,6 +105,9 @@ jobs:
           fi
           if [ -n "${{ inputs.selected-problems }}" ]; then
             ARGS="$ARGS --selected-problems ${{ inputs.selected-problems }}"
+          fi
+          if [ -n "${{ inputs.max-blocks-per-iteration }}" ]; then
+            ARGS="$ARGS --max-blocks-per-iteration ${{ inputs.max-blocks-per-iteration }}"
           fi
           npx tsx eval/run.ts $ARGS
 
