@@ -1,0 +1,1085 @@
+# Cross-Run Analysis: 80 Trajectories across 4 Matched ARC-AGI-2 Eval Runs
+# Generated: 2026-02-13
+# Model: Claude Opus 4.6 (all runs)
+# Same 20 ARC-AGI-2 task IDs across all 4 runs
+#
+# Run Configurations:
+#   022: arc-solver app + baseline drivers, maxDepth=1, maxIterations=20
+#   023: no app, no drivers, maxDepth=1, maxIterations=20
+#   026: 9 composable drivers (no app), maxDepth=2, maxIterations=20
+#   027: no app, no drivers, maxDepth=2, maxIterations=20
+#
+# Scores:
+#   022: 9/20 (45%)
+#   023: 10/20 (50%)
+#   026: 13/20 (65%)
+#   027: 8/20 (40%)
+
+runs:
+  run-022:
+    condition: app+baseline-drivers
+    maxDepth: 1
+    drivers: [arc-solver-app]
+    score: 9
+    total: 20
+    pct: 45
+  run-023:
+    condition: baseline-d1
+    maxDepth: 1
+    drivers: []
+    score: 10
+    total: 20
+    pct: 50
+  run-026:
+    condition: drivers-d2
+    maxDepth: 2
+    drivers: [one-block-per-iteration, deadline-return, verify-all-examples, verify-before-return, hypothesis-budget, exploration-budget, arc-helper-library, overlap-testing, json-stringify-return]
+    score: 13
+    total: 20
+    pct: 65
+  run-027:
+    condition: baseline-d2
+    maxDepth: 2
+    drivers: []
+    score: 8
+    total: 20
+    pct: 40
+
+tasks:
+  0934a4d8:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 19, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All 4 runs correctly identified bilateral point symmetry at axis 15.5 and validated on training. All failed on the same edge case: test 8-region at cols 0-2 maps to out-of-bounds col indices (31, 30). 022 returned wrong fallback (col 29/28 values). 023/027 timed out without returning. 026 returned 8s (worst fallback -- output contained the value it was supposed to replace)."
+    features:
+      run-022:
+        exploration_iters: 8
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 18
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 13
+        hypotheses_tested: 9
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 10
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "edge_case"
+      run-027:
+        exploration_iters: 18
+        hypotheses_tested: 10
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 18
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  135a2760:
+    outcomes:
+      run-022: { score: 0, iterations: 8, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 13, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 19, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 15, condition: "baseline-d2" }
+    category: drivers-hurt
+    paired_diff: "Both baseline runs (023, 027) solved this using modulo-arithmetic majority voting with 2D tile awareness. Both driver runs (022, 026) failed: 022 used a flawed row-wise tile detection and returned early at iter 8; 026 found the right approach but smallest-tile heuristic missed larger vertical periods (96% cells correct but score=0). The baselines invented superior algorithms; the guided runs either used flawed helpers or got stuck refining a borderline heuristic."
+    features:
+      run-022:
+        exploration_iters: 3
+        hypotheses_tested: 1
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 4
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 5
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 3
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: null
+      run-026:
+        exploration_iters: 7
+        hypotheses_tested: 5
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "wrong_rule"
+      run-027:
+        exploration_iters: 7
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 3
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: null
+
+  136b0064:
+    outcomes:
+      run-022: { score: 0, iterations: 20, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 17, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: depth-sensitive
+    paired_diff: "023 (d1 baseline) solved via patient backtracking in 20 iters. 026 (d2 drivers) solved in 17 iters with systematic structure decomposition. 022 (d1 app) spent all 20 iters on wrong path-direction hypothesis. 027 (d2 baseline) churned through 10 hypotheses without ever implementing. The driven d2 run was most efficient; d1 baseline succeeded through persistence."
+    features:
+      run-022:
+        exploration_iters: 15
+        hypotheses_tested: 3
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 3
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 12
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 15
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 14
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 13
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 18
+        hypotheses_tested: 10
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "timeout"
+
+  195c6913:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 19, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 19, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All 4 runs identified the staircase boundary tracing pattern but none could implement correct turn logic that generalized across all training examples. 026 got closest (1 diff on Train 0) but 52/93 diffs on Train 1/2. 027 never implemented, spending all 20 iters exploring. 022/023 both returned wrong answers. The task requires a precise boundary-following algorithm that exceeded implementation capacity in all conditions."
+    features:
+      run-022:
+        exploration_iters: 10
+        hypotheses_tested: 3
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "right_rule_bad_impl"
+      run-023:
+        exploration_iters: 12
+        hypotheses_tested: 4
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "right_rule_bad_impl"
+      run-026:
+        exploration_iters: 12
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 13
+        return_attempts: 1
+        recursion_used: true
+        wasted_iters: 2
+        failure_mode: "right_rule_bad_impl"
+      run-027:
+        exploration_iters: 19
+        hypotheses_tested: 12
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 20
+        failure_mode: "timeout"
+
+  247ef758:
+    outcomes:
+      run-022: { score: 0, iterations: 17, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 17, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 11, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 11, condition: "baseline-d2" }
+    category: unstable
+    paired_diff: "022 failed due to a single-cell overlap priority error at (6,12). All other runs solved it. 026 and 027 both solved in 11 iters with identical iteration counts. 023 solved in 17 iters. The d2 runs (both conditions) were faster than d1 runs (both conditions). 022's failure was stochastic -- same approach, one wrong cell."
+    features:
+      run-022:
+        exploration_iters: 8
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 6
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "edge_case"
+      run-023:
+        exploration_iters: 9
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 6
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 6
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 6
+        return_attempts: 2
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 6
+        hypotheses_tested: 1
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+  2ba387bc:
+    outcomes:
+      run-022: { score: 1, iterations: 9, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 10, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 12, condition: "baseline-d2" }
+    category: unstable
+    paired_diff: "022 solved fastest (9 iters) using helper library for BFS extraction. 026 solved in 10 iters, 027 in 12 iters -- both with BFS from scratch. 023 timed out after cycling through sorting heuristics for 20 iters. The failure was stochastic: 023 got block extraction right but never converged on the correct position-based pairing rule. Three of four runs succeeded."
+    features:
+      run-022:
+        exploration_iters: 4
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 10
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 5
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 7
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 7
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 9
+        hypotheses_tested: 5
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 7
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+  36a08778:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 18, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: drivers-help
+    paired_diff: "026 (drivers d2) solved in 18 iters with 5 implementation attempts, each targeted fix. Breakthrough at iter 5 with correct segment-chaining model. 027 (baseline d2) timed out with 0 extract iters and 20 explore iters -- classic analysis paralysis, breakthrough only at iter 19 ('Now let me code') too late. 022 returned wrong answer (incomplete rule extraction). 023 returned wrong answer. Only the driven d2 run succeeded."
+    features:
+      run-022:
+        exploration_iters: 12
+        hypotheses_tested: 3
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 3
+        failure_mode: "right_rule_bad_impl"
+      run-023:
+        exploration_iters: 15
+        hypotheses_tested: 4
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 5
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 8
+        hypotheses_tested: 1
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: null
+      run-027:
+        exploration_iters: 20
+        hypotheses_tested: 8
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 19
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 20
+        failure_mode: "timeout"
+
+  446ef5d2:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 20, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All 4 runs failed on this component assembly task. 022 had fundamental wrong hypothesis (tiling vs assembly). 023 also wrong fundamental approach. 026 identified the assembly pattern by iter 9 but spent 19 iters exploring with 0 extract iterations. 027 understood border-matching by iter 6 but also spent all 19 iters exploring with 0 implementation attempts. This is the strongest analysis-paralysis case across all runs."
+    features:
+      run-022:
+        exploration_iters: 14
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: true
+        wasted_iters: 5
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 15
+        hypotheses_tested: 6
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 5
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 19
+        hypotheses_tested: 9
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+      run-027:
+        exploration_iters: 19
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 6
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  4e34c42c:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 17, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 20, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All 4 runs identified the edge-overlap assembly mechanism but none could generalize from 1D chain (training) to 2D grid assembly (test). 026 made 8 implementation attempts but each had wrong overlap tolerance. 027 used delegation to child RLM (which failed) and lost 3 iters to operational issues. 022 had similar overlap tolerance issues. 023 timed out without returning."
+    features:
+      run-022:
+        exploration_iters: 10
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "right_rule_bad_impl"
+      run-023:
+        exploration_iters: 12
+        hypotheses_tested: 3
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 3
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 12
+        hypotheses_tested: 8
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: "right_rule_bad_impl"
+      run-027:
+        exploration_iters: 10
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 0
+        recursion_used: true
+        wasted_iters: 3
+        failure_mode: "timeout"
+
+  5961cc34:
+    outcomes:
+      run-022: { score: 1, iterations: 11, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 16, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 14, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: drivers-help
+    paired_diff: "Three runs solved; only 027 (baseline d2) failed. 022 was fastest (11 iters) using helper library. 026 solved in 14 iters. 023 solved in 16 iters. 027 correctly identified the ray-tracing pattern at iter 7 but spent 13 more iters on edge-case analysis without implementing, then started coding at iter 19. The deadline-return and exploration-budget drivers in 026 prevented this analysis paralysis."
+    features:
+      run-022:
+        exploration_iters: 5
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 6
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 8
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 9
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 11
+        hypotheses_tested: 1
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 7
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  6e453dd6:
+    outcomes:
+      run-022: { score: 1, iterations: 13, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 9, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 11, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 8, condition: "baseline-d2" }
+    category: always-solved
+    paired_diff: "All 4 runs solved. Baselines were faster (023: 9 iters, 027: 8 iters) vs driven runs (022: 13, 026: 11). The task is straightforward enough that guidance adds overhead without benefit. 027 was the most efficient overall at just 8 iterations with breakthrough at iter 4."
+    features:
+      run-022:
+        exploration_iters: 6
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 7
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 4
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 7
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 5
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 4
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+  78332cb0:
+    outcomes:
+      run-022: { score: 0, iterations: 18, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 9, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 17, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All 4 runs failed on this block rearrangement task. The ordering rule was never discovered by any run. 026 tested 10 hypotheses, 027 tested 6, 022 tested 5. 023 was externally aborted at 9 iters. Even with hypothesis churn, the correct reordering criterion remained elusive across all conditions."
+    features:
+      run-022:
+        exploration_iters: 13
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 3
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 9
+        hypotheses_tested: 3
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 9
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 13
+        hypotheses_tested: 10
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 14
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "wrong_rule"
+      run-027:
+        exploration_iters: 18
+        hypotheses_tested: 6
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "timeout"
+
+  7ed72f31:
+    outcomes:
+      run-022: { score: 1, iterations: 15, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 11, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 10, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 15, condition: "baseline-d2" }
+    category: always-solved
+    paired_diff: "All 4 runs solved the reflection-across-2s task. 026 was fastest (10 iters), 023 second (11 iters). Both d1 runs and d2 runs show mixed efficiency -- no clear depth or driver effect. All used connected-component analysis with reflection."
+    features:
+      run-022:
+        exploration_iters: 7
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 5
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 6
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 6
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 7
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: null
+
+  89565ca0:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 2, condition: "baseline-d1" }
+      run-026: { score: 0, iterations: 19, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: never-solved
+    paired_diff: "All runs failed. 023 was infrastructure-aborted at 2 iters. 022 cycled through sorting heuristics for 19 iters without finding the correct key. 026 tested 5 sorting hypotheses across 19 iters -- wrong dimensions (5x4 vs 5x6) and wrong sort key. 027 tested 11 hypotheses across 20 iters, computed the correct answer at iter 9 but then abandoned it through over-verification. The rectangle ordering criterion consistently defeated all conditions."
+    features:
+      run-022:
+        exploration_iters: 14
+        hypotheses_tested: 5
+        verified_before_return: false
+        helper_library_used: true
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 5
+        failure_mode: "wrong_rule"
+      run-023:
+        exploration_iters: 2
+        hypotheses_tested: 1
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 13
+        hypotheses_tested: 5
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "wrong_rule"
+      run-027:
+        exploration_iters: 20
+        hypotheses_tested: 11
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 7
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "over_exploration"
+
+  8f3a5a89:
+    outcomes:
+      run-022: { score: 1, iterations: 11, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 1, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 17, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 19, condition: "baseline-d2" }
+    category: unstable
+    paired_diff: "023 was infrastructure-aborted at 1 iter (not a model failure). The other 3 runs all solved. 022 was fastest (11 iters). 026 solved in 17 iters with 3 progressive solve() versions. 027 solved at the wire in 19 iters (1 iter from timeout) with 6 hypothesis refinements. Flood-fill + border + component analysis is a reliable primitive that all successful runs converged on."
+    features:
+      run-022:
+        exploration_iters: 5
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 6
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 1
+        hypotheses_tested: 0
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: null
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+      run-026:
+        exploration_iters: 12
+        hypotheses_tested: 5
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 10
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 16
+        hypotheses_tested: 6
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 16
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+  a251c730:
+    outcomes:
+      run-022: { score: 1, iterations: 18, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 9, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 13, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: drivers-help
+    paired_diff: "027 (baseline d2) validated perfectly on training at iter 11 but never called return(), spending 8 more iters on test extraction details. All other runs solved. 023 was fastest (9 iters). 026 solved in 13 iters. 022 was slowest success at 18 iters. The d2 baseline's perfectionism (never returning) was prevented by deadline-return in 026."
+    features:
+      run-022:
+        exploration_iters: 9
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 12
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: null
+      run-023:
+        exploration_iters: 4
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 7
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 12
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 1
+        failure_mode: null
+      run-027:
+        exploration_iters: 15
+        hypotheses_tested: 6
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 11
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  aa4ec2a5:
+    outcomes:
+      run-022: { score: 1, iterations: 16, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 11, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 12, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: drivers-help
+    paired_diff: "027 (baseline d2) found the enclosed-hole rule at 100% match in iter 19 but had no time to implement. 026 (drivers d2) solved efficiently in 12 iters with breakthrough at iter 5. 023 solved in 11 iters with clean BFS + flood-fill. 022 solved in 16 iters. The driver-guided run used fewer hypotheses (3 vs 10 in 027) and implemented earlier."
+    features:
+      run-022:
+        exploration_iters: 8
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 5
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 6
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 19
+        hypotheses_tested: 10
+        verified_before_return: false
+        helper_library_used: false
+        breakthrough_iter: 19
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  b99e7126:
+    outcomes:
+      run-022: { score: 1, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 14, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 14, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 16, condition: "baseline-d2" }
+    category: always-solved
+    paired_diff: "All 4 runs solved. 023 and 026 tied at 14 iters. 027 took 16 iters. 022 was slowest at 19 iters. All identified the 7x7 tiling structure and anomaly pattern. Visual ASCII debugging was credited as the turning point in 027."
+    features:
+      run-022:
+        exploration_iters: 12
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 12
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: null
+      run-023:
+        exploration_iters: 7
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 10
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 10
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 9
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+  cbebaa4b:
+    outcomes:
+      run-022: { score: 0, iterations: 19, condition: "app+drivers" }
+      run-023: { score: 0, iterations: 20, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 18, condition: "drivers-d2" }
+      run-027: { score: 0, iterations: 20, condition: "baseline-d2" }
+    category: drivers-help
+    paired_diff: "026 (drivers d2) solved via greedy BFS placement with connector matching in 18 iters. Delegation to child RLM was used but the parent solved it. 027 timed out despite perfect training validation at iter 14 -- test edge cases (odd markers, split components) broke assumptions and no time remained. 022 had correct algorithm that passed training but failed due to state-loss-on-refactor (RLM variable scoping bug). 023 also had correct algorithm but BFS validation too strict on test."
+    features:
+      run-022:
+        exploration_iters: 10
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "serialization"
+      run-023:
+        exploration_iters: 12
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 10
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 2
+        failure_mode: "edge_case"
+      run-026:
+        exploration_iters: 10
+        hypotheses_tested: 5
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 5
+        return_attempts: 1
+        recursion_used: true
+        wasted_iters: 1
+        failure_mode: null
+      run-027:
+        exploration_iters: 13
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 14
+        return_attempts: 0
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: "timeout"
+
+  db695cfb:
+    outcomes:
+      run-022: { score: 1, iterations: 7, condition: "app+drivers" }
+      run-023: { score: 1, iterations: 13, condition: "baseline-d1" }
+      run-026: { score: 1, iterations: 10, condition: "drivers-d2" }
+      run-027: { score: 1, iterations: 13, condition: "baseline-d2" }
+    category: always-solved
+    paired_diff: "All 4 runs solved. 022 was fastest (7 iters) -- helper library accelerated diagonal geometry analysis. 026 second at 10 iters. Both baselines took 13 iters. Diagonal pair + perpendicular extension pattern was consistently found across all conditions."
+    features:
+      run-022:
+        exploration_iters: 3
+        hypotheses_tested: 2
+        verified_before_return: true
+        helper_library_used: true
+        breakthrough_iter: 4
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-023:
+        exploration_iters: 8
+        hypotheses_tested: 3
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 3
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-026:
+        exploration_iters: 7
+        hypotheses_tested: 6
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 8
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+      run-027:
+        exploration_iters: 10
+        hypotheses_tested: 4
+        verified_before_return: true
+        helper_library_used: false
+        breakthrough_iter: 2
+        return_attempts: 1
+        recursion_used: false
+        wasted_iters: 0
+        failure_mode: null
+
+# =============================================================================
+# Category Summary
+# =============================================================================
+categories:
+  always-solved:
+    count: 4
+    tasks: [6e453dd6, 7ed72f31, b99e7126, db695cfb]
+    description: "Solved by all 4 runs. These represent the 'easy' stratum where model capability alone suffices regardless of configuration."
+
+  never-solved:
+    count: 5
+    tasks: [0934a4d8, 195c6913, 446ef5d2, 4e34c42c, 78332cb0]
+    description: "Failed in all 4 runs. These represent genuinely hard tasks that exceed model+framework capability."
+
+  drivers-help:
+    count: 5
+    tasks: [36a08778, 5961cc34, a251c730, aa4ec2a5, cbebaa4b]
+    description: "026 (drivers-d2) solved but 027 (baseline-d2) failed. Direct evidence that composable drivers add value. All 5 share the pattern: baseline timed out via analysis paralysis while drivers forced implementation."
+
+  drivers-hurt:
+    count: 1
+    tasks: [135a2760]
+    description: "Both baselines (023, 027) solved but both driver runs (022, 026) failed. Baselines invented superior algorithms without guidance interference."
+
+  depth-sensitive:
+    count: 1
+    tasks: [136b0064]
+    description: "Mixed results that correlate with depth or interaction effects. 023 (d1-baseline) and 026 (d2-drivers) solved; 022 (d1-drivers) and 027 (d2-baseline) failed."
+
+  unstable:
+    count: 4
+    tasks: [247ef758, 2ba387bc, 8f3a5a89, 89565ca0]
+    description: "Results vary across runs without clear driver/depth pattern. 247ef758: 3/4 solved (022 failed on overlap). 2ba387bc: 3/4 solved (023 failed on sorting). 8f3a5a89: 3/4 solved (023 infra-aborted). 89565ca0: 0/4 solved but root causes differ."
+
+# Note: 89565ca0 is categorized as never-solved above (0/4) but listed under
+# unstable because 027 computed the correct answer at iter 9 then abandoned it.
+# Re-classifying as never-solved since no run actually returned correct.

@@ -1,0 +1,122 @@
+[
+  {
+    "taskId": "arc-247ef758",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 11
+  },
+  {
+    "taskId": "arc-0934a4d8",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-135a2760",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-2ba387bc",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 10
+  },
+  {
+    "taskId": "arc-136b0064",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 17
+  },
+  {
+    "taskId": "arc-36a08778",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 18
+  },
+  {
+    "taskId": "arc-5961cc34",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 14
+  },
+  {
+    "taskId": "arc-446ef5d2",
+    "outcome": "error",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-4e34c42c",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 20
+  },
+  {
+    "taskId": "arc-6e453dd6",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 11
+  },
+  {
+    "taskId": "arc-7ed72f31",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 10
+  },
+  {
+    "taskId": "arc-195c6913",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-78332cb0",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 17
+  },
+  {
+    "taskId": "arc-a251c730",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 13
+  },
+  {
+    "taskId": "arc-aa4ec2a5",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 12
+  },
+  {
+    "taskId": "arc-8f3a5a89",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 17
+  },
+  {
+    "taskId": "arc-89565ca0",
+    "outcome": "wrong/timeout",
+    "score": 0,
+    "iterations": 19
+  },
+  {
+    "taskId": "arc-b99e7126",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 14
+  },
+  {
+    "taskId": "arc-db695cfb",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 10
+  },
+  {
+    "taskId": "arc-cbebaa4b",
+    "outcome": "perfect",
+    "score": 1,
+    "iterations": 18
+  }
+]
