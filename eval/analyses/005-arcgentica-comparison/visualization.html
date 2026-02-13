@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arcgentica ARC-AGI-2 Trajectory Analysis</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; }
+a { color: #58a6ff; text-decoration: none; }
+
+/* Header */
+.header { background: linear-gradient(135deg, #161b22 0%, #0d1117 100%); border-bottom: 1px solid #30363d; padding: 24px 32px; }
+.header h1 { font-size: 24px; font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
+.header .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
+
+/* Score Cards */
+.score-row { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.score-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; flex: 1; min-width: 200px; }
+.score-card.primary { border-left: 4px solid #3fb950; }
+.score-card.info { border-left: 4px solid #58a6ff; }
+.score-card.stat { border-left: 4px solid #bc8cff; }
+.score-card.warn { border-left: 4px solid #d29922; }
+.score-card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 8px; }
+.score-card .big-num { font-size: 36px; font-weight: 700; line-height: 1; }
+.score-card .big-num.green { color: #3fb950; }
+.score-card .big-num.blue { color: #58a6ff; }
+.score-card .big-num.purple { color: #bc8cff; }
+.score-card .big-num.orange { color: #d29922; }
+.score-card .detail { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+/* System Info Panel */
+.system-info { margin-top: 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; }
+.system-info h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 12px; }
+.sys-chips { display: flex; gap: 12px; flex-wrap: wrap; }
+.sys-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 12px; border-radius: 16px; background: rgba(88,166,255,0.08); color: #58a6ff; border: 1px solid rgba(88,166,255,0.2); font-family: 'SF Mono', 'Fira Code', monospace; }
+.sys-chip.green { background: rgba(63,185,80,0.08); color: #3fb950; border-color: rgba(63,185,80,0.2); }
+.sys-chip.purple { background: rgba(188,140,255,0.08); color: #bc8cff; border-color: rgba(188,140,255,0.2); }
+.sys-chip.orange { background: rgba(210,153,34,0.08); color: #d29922; border-color: rgba(210,153,34,0.2); }
+
+/* Nav tabs */
+.nav-tabs { display: flex; gap: 2px; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 32px; }
+.nav-tab { padding: 10px 16px; font-size: 14px; color: #8b949e; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.nav-tab:hover { color: #c9d1d9; }
+.nav-tab.active { color: #f0f6fc; border-bottom-color: #f78166; }
+
+/* Content */
+.content { padding: 24px 32px; max-width: 1600px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Legend */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; padding: 12px 16px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
+.legend-swatch { width: 16px; height: 12px; border-radius: 2px; }
+
+/* Filter/Sort bar */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.filter-btn { padding: 4px 12px; font-size: 12px; border-radius: 16px; border: 1px solid #30363d; background: transparent; color: #8b949e; cursor: pointer; transition: all 0.2s; }
+.filter-btn:hover { border-color: #484f58; color: #c9d1d9; }
+.filter-btn.active { background: #21262d; border-color: #484f58; color: #f0f6fc; }
+.sort-label { font-size: 12px; color: #6e7681; margin-left: 16px; }
+
+/* Task row */
+.task-row { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 8px; overflow: hidden; transition: all 0.2s; }
+.task-row:hover { border-color: #484f58; }
+.task-header { display: grid; grid-template-columns: 220px 1fr; gap: 0; cursor: pointer; user-select: none; }
+.task-id-col { padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid #21262d; }
+.task-id { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; color: #f0f6fc; }
+.task-meta { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+/* Insight badges */
+.insight-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+.insight-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; padding: 1px 6px; border-radius: 8px; font-family: 'SF Mono', monospace; white-space: nowrap; line-height: 1.5; }
+.insight-chip.perfect { background: rgba(63,185,80,0.1); color: #3fb950; }
+.insight-chip.partial { background: rgba(210,153,34,0.1); color: #d29922; }
+.insight-chip.bt-early { background: rgba(31,111,235,0.1); color: #58a6ff; }
+.insight-chip.bt-late { background: rgba(210,153,34,0.1); color: #d29922; }
+.insight-chip.hyp-low { background: rgba(63,185,80,0.08); color: #56d364; }
+.insight-chip.hyp-high { background: rgba(248,81,73,0.08); color: #f85149; }
+.insight-chip.sub-agent { background: rgba(188,140,255,0.08); color: #bc8cff; }
+.insight-chip.attempt { background: rgba(139,148,158,0.1); color: #8b949e; }
+
+/* Run column */
+.run-col { padding: 10px 16px; }
+.run-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; color: #8b949e; }
+.verdict-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
+.verdict-badge.perfect, .verdict-badge.train-perfect { background: rgba(63,185,80,0.2); color: #3fb950; }
+.verdict-badge.partial-credit { background: rgba(210,153,34,0.2); color: #d29922; }
+.verdict-badge.wrong-answer { background: rgba(248,81,73,0.2); color: #f85149; }
+.verdict-badge.timeout { background: rgba(210,153,34,0.2); color: #d29922; }
+.run-stats { font-size: 11px; color: #8b949e; margin-bottom: 6px; }
+
+/* Swimlane */
+.swimlane { display: flex; gap: 2px; height: 28px; align-items: stretch; }
+.swim-block { border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.8); min-width: 4px; flex-shrink: 0; position: relative; cursor: default; transition: transform 0.1s; }
+.swim-block:hover { transform: scaleY(1.15); z-index: 2; }
+.swim-block .swim-tip { display: none; position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%); background: #1c2128; border: 1px solid #484f58; border-radius: 6px; padding: 6px 10px; font-size: 11px; white-space: nowrap; z-index: 100; color: #c9d1d9; font-weight: 400; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.swim-block:hover .swim-tip { display: block; }
+
+/* Phase colors */
+.phase-EXPLORE { background: #1f6feb; }
+.phase-EXTRACT { background: #3fb950; }
+.phase-VERIFY { background: #bc8cff; }
+.phase-RETURN { background: #f0f6fc; color: #0d1117 !important; }
+.phase-ERROR { background: #f85149; }
+.phase-PLAN { background: #d29922; }
+.phase-STALL { background: #6e7681; }
+.phase-DELEGATE { background: #f0883e; }
+.phase-TIMEOUT { background: #484f58; border: 1px dashed #6e7681; }
+
+/* Outcome dots */
+.outcome-dot { width: 5px; height: 5px; border-radius: 50%; position: absolute; top: 2px; right: 2px; }
+.outcome-dot.success { background: #3fb950; }
+.outcome-dot.failure { background: #f85149; }
+.outcome-dot.partial { background: #d29922; }
+
+/* Breakthrough marker */
+.breakthrough-marker { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid #f0883e; }
+
+/* Iter timeline scale */
+.iter-scale { display: flex; gap: 2px; height: 12px; margin-top: 2px; }
+.iter-num { text-align: center; font-size: 8px; color: #484f58; min-width: 4px; flex-shrink: 0; }
+
+/* Detail panel */
+.task-detail { display: none; border-top: 1px solid #21262d; padding: 16px; background: #0d1117; }
+.task-detail.open { display: block; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detail-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px; }
+.detail-section.full-width { grid-column: 1 / -1; }
+.detail-section h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; margin-bottom: 8px; }
+.detail-section p { font-size: 13px; color: #c9d1d9; line-height: 1.6; }
+.detail-section .stat-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #21262d; }
+.detail-section .stat-row:last-child { border-bottom: none; }
+.detail-section .stat-label { color: #8b949e; }
+.detail-section .stat-val { color: #f0f6fc; font-weight: 600; font-family: 'SF Mono', monospace; }
+
+/* Hypothesis table */
+.hyp-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.hyp-table th { text-align: left; font-weight: 600; color: #8b949e; padding: 4px 8px; border-bottom: 1px solid #30363d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.hyp-table td { padding: 4px 8px; border-bottom: 1px solid #21262d; color: #c9d1d9; }
+.hyp-table .accepted { color: #3fb950; font-weight: 600; }
+.hyp-table .rejected { color: #f85149; }
+.hyp-table .superseded { color: #d29922; }
+
+/* Aggregate Stats */
+.agg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-top: 16px; }
+.agg-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+.agg-card h3 { font-size: 14px; color: #f0f6fc; margin-bottom: 12px; }
+.agg-card canvas { width: 100% !important; max-height: 240px; }
+
+/* Key Findings panel */
+.key-findings { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+.key-findings h3 { font-size: 14px; color: #f0f6fc; margin-bottom: 14px; }
+.findings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.finding-card { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px; }
+.finding-card .finding-stat { font-size: 28px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
+.finding-card .finding-stat.green { color: #3fb950; }
+.finding-card .finding-stat.red { color: #f85149; }
+.finding-card .finding-stat.blue { color: #58a6ff; }
+.finding-card .finding-stat.purple { color: #bc8cff; }
+.finding-card .finding-stat.orange { color: #f0883e; }
+.finding-card .finding-label { font-size: 12px; color: #8b949e; line-height: 1.4; }
+.finding-card .finding-detail { font-size: 11px; color: #6e7681; margin-top: 4px; }
+
+/* Expand icon */
+.expand-icon { font-size: 14px; color: #484f58; transition: transform 0.2s; display: inline-block; margin-left: 6px; }
+.task-row.expanded .expand-icon { transform: rotate(90deg); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Bar chart in HTML */
+.bar-chart { display: flex; flex-direction: column; gap: 4px; }
+.bar-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.bar-label { width: 80px; text-align: right; color: #8b949e; flex-shrink: 0; font-family: 'SF Mono', monospace; font-size: 11px; }
+.bar-container { flex: 1; height: 20px; background: #21262d; border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; display: flex; align-items: center; padding-left: 6px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.9); min-width: 1px; transition: width 0.3s; }
+.bar-val { width: 30px; text-align: right; color: #f0f6fc; font-weight: 600; font-family: monospace; font-size: 11px; flex-shrink: 0; }
+
+/* Stacked bar */
+.stacked-bar { display: flex; height: 24px; border-radius: 3px; overflow: hidden; margin-bottom: 2px; }
+.stacked-segment { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.8); min-width: 1px; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .task-header { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .score-row { flex-direction: column; }
+  .header { padding: 16px; }
+  .content { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Arcgentica ARC-AGI-2 Trajectory Analysis</h1>
+  <div class="subtitle">20 tasks &mdash; Claude Opus 4.6 &mdash; Python + scipy &mdash; pass@2</div>
+
+  <div class="score-row">
+    <div class="score-card primary">
+      <h3>Overall Score</h3>
+      <div class="big-num green">97.5%</div>
+      <div class="detail">19.5 / 20 tasks &bull; 19 perfect + 1 partial (0.5) &bull; 0 failures</div>
+    </div>
+    <div class="score-card info">
+      <h3>Training Accuracy</h3>
+      <div class="big-num blue">100%</div>
+      <div class="detail">20/20 tasks achieved perfect training scores</div>
+    </div>
+    <div class="score-card stat">
+      <h3>Avg Iterations</h3>
+      <div class="big-num purple">21.7</div>
+      <div class="detail">Median: 9 &bull; Range: 5&ndash;109 &bull; Total: 434</div>
+    </div>
+    <div class="score-card warn">
+      <h3>Avg Wall Time</h3>
+      <div class="big-num orange">16.2m</div>
+      <div class="detail">Median: 13.6m &bull; Range: 1.6m&ndash;42.6m &bull; 3 tasks without timing data</div>
+    </div>
+  </div>
+
+  <div class="system-info">
+    <h3>System Configuration</h3>
+    <div class="sys-chips">
+      <span class="sys-chip">arcgentica</span>
+      <span class="sys-chip green">Python 3.12</span>
+      <span class="sys-chip purple">Claude Opus 4.6</span>
+      <span class="sys-chip">scipy + numpy</span>
+      <span class="sys-chip orange">pass@2 (best of 2 attempts)</span>
+      <span class="sys-chip">Generic prompt (no task-specific drivers)</span>
+      <span class="sys-chip green">Sub-agents: 3/20 tasks</span>
+    </div>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="trajectories">Trajectories</div>
+  <div class="nav-tab" data-tab="aggregate">Aggregate Stats</div>
+</div>
+
+<div class="content">
+
+<!-- TRAJECTORIES TAB -->
+<div class="tab-panel active" id="tab-trajectories">
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch phase-EXPLORE"></div> EXPLORE</div>
+  <div class="legend-item"><div class="legend-swatch phase-EXTRACT"></div> EXTRACT</div>
+  <div class="legend-item"><div class="legend-swatch phase-VERIFY"></div> VERIFY</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f0f6fc"></div> RETURN</div>
+  <div class="legend-item"><div class="legend-swatch phase-DELEGATE"></div> DELEGATE</div>
+  <div class="legend-item"><div class="legend-swatch phase-STALL"></div> STALL</div>
+  <div class="legend-item" style="margin-left:16px">
+    <span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid #f0883e;"></span> Breakthrough
+  </div>
+  <div class="legend-item">
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#3fb950"></span> Success
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#f85149;margin-left:4px"></span> Failure
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d29922;margin-left:4px"></span> Partial
+  </div>
+</div>
+
+<div class="filter-bar" id="filter-bar"></div>
+
+<div id="tasks-container"></div>
+
+</div>
+
+<!-- AGGREGATE TAB -->
+<div class="tab-panel" id="tab-aggregate">
+
+<div class="key-findings">
+  <h3>Key Behavioral Patterns (across 20 arcgentica trajectories)</h3>
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="finding-stat green">97.5%</div>
+      <div class="finding-label">Overall score (19.5/20)</div>
+      <div class="finding-detail">19 perfect + 1 partial credit (0.5)</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat blue">55%</div>
+      <div class="finding-label">Single-hypothesis solves</div>
+      <div class="finding-detail">11/20 tasks solved with 1 hypothesis, zero rejections</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat purple">9</div>
+      <div class="finding-label">Median iterations per task</div>
+      <div class="finding-detail">vs mean 21.7 (skewed by a few complex tasks)</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat orange">3/20</div>
+      <div class="finding-label">Tasks using sub-agents</div>
+      <div class="finding-detail">5 total sub-agents across 3 tasks</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat green">0</div>
+      <div class="finding-label">Complete failures (score = 0)</div>
+      <div class="finding-detail">Every task scored at least 0.5</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat blue">3.5</div>
+      <div class="finding-label">Median breakthrough iteration</div>
+      <div class="finding-detail">75% of breakthroughs by iter 9 (15/20 tasks)</div>
+    </div>
+  </div>
+</div>
+
+<div class="agg-grid" id="agg-charts"></div>
+
+</div>
+
+</div>
+
+<script>
+// ========== EMBEDDED DATA ==========
+const DATA = {
+  "arc-0934a4d8": {
+    taskId: "arc-0934a4d8", score: 1.0, iterations: 60, wallTimeMs: 876000,
+    verdict: "perfect", hasSubAgents: true, subAgentCount: 1, attemptUsed: 1,
+    trainScore: "4/4", hypothesesTested: 6, hypothesesRejected: 4,
+    breakthroughIter: 18, itersExplore: 10, itersExtract: 35, itersVerify: 14, itersWasted: 1,
+    implementationAttempts: 8,
+    patterns: ["symmetry-search","delegation","incremental-refinement","verification"],
+    summary: "30x30 grids with complex nested symmetry. A rectangular region of 8s must be filled by exploiting K=31 double reflection symmetry plus off-diagonal block transpose.",
+    keyInsight: "The grid has a symmetry group generated by three operations: vertical reflection (K=H+1=31), horizontal reflection (K=W+1=31), and off-diagonal block transpose. The K=31 constant (not 30) means axes are between rows/cols 15 and 16.",
+    whatWorked: "Sub-agent delegation at the right moment after 17 failed iterations; quantitative hypothesis testing; layered symmetry resolution.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"hyp-test",hyp:"H1",outcome:"failure"},
+      {iter:4,phase:"EXPLORE",sub:"hyp-test",hyp:"H1",outcome:"failure"},
+      {iter:5,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:6,phase:"EXPLORE",sub:"hyp-test",hyp:"H2",outcome:"failure"},
+      {iter:7,phase:"EXPLORE",sub:"hyp-test",hyp:"H2",outcome:"failure"},
+      {iter:8,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:9,phase:"EXPLORE",sub:"hyp-test",hyp:"H3",outcome:"partial"},
+      {iter:10,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:11,phase:"EXPLORE",sub:"hyp-test",hyp:"H3",outcome:"failure"},
+      {iter:12,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:13,phase:"EXPLORE",sub:"hyp-test",hyp:"H3",outcome:"failure"},
+      {iter:14,phase:"EXPLORE",sub:"hyp-test",hyp:"H4",outcome:"failure"},
+      {iter:15,phase:"EXPLORE",sub:"hyp-test",hyp:"H4",outcome:"failure"},
+      {iter:16,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:17,phase:"STALL",sub:"",outcome:""},
+      {iter:18,phase:"DELEGATE",sub:"sub-agent",hyp:"H5",outcome:""},
+      {iter:19,phase:"EXTRACT",sub:"sub-agent",hyp:"H5",outcome:"",span:28},
+      {iter:47,phase:"EXTRACT",sub:"implement",hyp:"H5",outcome:"success"},
+      {iter:48,phase:"VERIFY",sub:"train-val",hyp:"H5",outcome:"partial"},
+      {iter:49,phase:"EXTRACT",sub:"refine",hyp:"H6",outcome:"",span:5},
+      {iter:54,phase:"VERIFY",sub:"train-val",hyp:"H6",outcome:"success",span:4},
+      {iter:58,phase:"VERIFY",sub:"challenge",hyp:"H6",outcome:"success",span:2},
+      {iter:60,phase:"RETURN",sub:"final",hyp:"H6",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"180-rotation symmetry",iters:"3-4",outcome:"rejected",evidence:"Only ~35% match"},
+      {id:"H2",name:"Simple reflection (H/V-flip, point)",iters:"6-7",outcome:"rejected",evidence:"All below 16% match"},
+      {id:"H3",name:"Transpose / quadrant relationships",iters:"9-14",outcome:"rejected",evidence:"TL.T=63.6% but no clean rule"},
+      {id:"H4",name:"Block-level / value-mapping symmetry",iters:"14-17",outcome:"rejected",evidence:"~56% block transpose, value mapping fails"},
+      {id:"H5",name:"K=31 double reflection (via sub-agent)",iters:"18-48",outcome:"superseded",evidence:"3/4 train pass, OOB on challenge"},
+      {id:"H6",name:"K=31 double reflection + off-diagonal transpose",iters:"49-60",outcome:"accepted",evidence:"4/4 train pass, challenge correct"}
+    ]
+  },
+  "arc-135a2760": {
+    taskId: "arc-135a2760", score: 1.0, iterations: 17, wallTimeMs: 1678000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "2/2", hypothesesTested: 3, hypothesesRejected: 1,
+    breakthroughIter: 3, itersExplore: 3, itersExtract: 8, itersVerify: 6, itersWasted: 0,
+    implementationAttempts: 3,
+    patterns: ["format-discovery","incremental-refinement","verification","brute-force"],
+    summary: "Grids with bordered sections containing repeating 2D tile patterns with corrupted cells. Detect tiles via majority voting and correct errors.",
+    keyInsight: "Scoring function errors + 0.5 * tile_area balances accuracy vs tile complexity. Derived analytically from crossover points between competing tiles.",
+    whatWorked: "Extended reasoning before coding (~22K tokens); challenge output inspection caught failures masked by 100% training accuracy; parametric refinement over rewrites.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:4,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:""},
+      {iter:5,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"VERIFY",sub:"challenge",hyp:"H1",outcome:"partial"},
+      {iter:7,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:8,phase:"EXTRACT",sub:"inspect",hyp:"H1",outcome:""},
+      {iter:9,phase:"EXTRACT",sub:"refine",hyp:"H2",outcome:""},
+      {iter:10,phase:"VERIFY",sub:"train-val",hyp:"H2",outcome:"success"},
+      {iter:11,phase:"VERIFY",sub:"challenge",hyp:"H2",outcome:"partial"},
+      {iter:12,phase:"EXTRACT",sub:"inspect",hyp:"H2",outcome:""},
+      {iter:13,phase:"EXTRACT",sub:"refine",hyp:"H3",outcome:""},
+      {iter:14,phase:"VERIFY",sub:"train-val",hyp:"H3",outcome:"success"},
+      {iter:15,phase:"VERIFY",sub:"challenge",hyp:"H3",outcome:"success"},
+      {iter:16,phase:"VERIFY",sub:"diff-check",hyp:"H3",outcome:"success"},
+      {iter:17,phase:"RETURN",sub:"final",hyp:"H3",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Threshold-based tile selection (error < 0.2)",iters:"3-8",outcome:"superseded",evidence:"2/2 train pass but challenge Box 1 wrong"},
+      {id:"H2",name:"Score-based: errors + 1.0 * tile_area",iters:"9-12",outcome:"superseded",evidence:"2/2 train but Box 2 zigzag lost"},
+      {id:"H3",name:"Score-based: errors + 0.5 * tile_area",iters:"13-17",outcome:"accepted",evidence:"2/2 train, all 4 challenge boxes correct"}
+    ]
+  },
+  "arc-136b0064": {
+    taskId: "arc-136b0064", score: 1.0, iterations: 9, wallTimeMs: 547000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "3/3", hypothesesTested: 3, hypothesesRejected: 1,
+    breakthroughIter: 2, itersExplore: 3, itersExtract: 4, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 3,
+    patterns: ["format-discovery","incremental-refinement","verification","brute-force"],
+    summary: "Same tile-correction task as arc-135a2760 but solved more efficiently. Detect repeating tile patterns, correct corrupted cells via majority voting.",
+    keyInsight: "Scoring function errors + 0.5 * tile_area. Same solution as arc-135a2760, converged independently -- suggesting this is a robust general-purpose tile scoring function.",
+    whatWorked: "Extended reasoning before coding (~22K tokens); challenge output inspection; parametric refinement in 2 steps.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:4,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:""},
+      {iter:5,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"partial"},
+      {iter:6,phase:"EXTRACT",sub:"refine",hyp:"H2",outcome:""},
+      {iter:7,phase:"VERIFY",sub:"train-val",hyp:"H2",outcome:"partial"},
+      {iter:8,phase:"EXTRACT",sub:"refine",hyp:"H3",outcome:""},
+      {iter:9,phase:"RETURN",sub:"final",hyp:"H3",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Threshold-based tile selection (error < 0.2)",iters:"3-5",outcome:"superseded",evidence:"2/2 train but challenge Box 1 wrong"},
+      {id:"H2",name:"Score-based: errors + 1.0 * tile_area",iters:"6-7",outcome:"superseded",evidence:"Box 2 zigzag lost"},
+      {id:"H3",name:"Score-based: errors + 0.5 * tile_area",iters:"8-9",outcome:"accepted",evidence:"All boxes correct"}
+    ]
+  },
+  "arc-195c6913": {
+    taskId: "arc-195c6913", score: 1.0, iterations: 109, wallTimeMs: 1104000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "3/3", hypothesesTested: 3, hypothesesRejected: 1,
+    breakthroughIter: 28, itersExplore: 27, itersExtract: 40, itersVerify: 42, itersWasted: 42,
+    implementationAttempts: 3,
+    patterns: ["format-discovery","incremental-refinement","verification","brute-force"],
+    summary: "Zigzag lines drawn through blob regions. Markers at column 0 initiate RIGHT/UP zigzag paths through colored blobs with repeating pattern and endpoint markers.",
+    keyInsight: "Fixed directions (always RIGHT then UP) -- dynamic direction selection was a regression. The pattern counter is continuous across segments. Paths stop at grid boundary.",
+    whatWorked: "Exhaustive manual analysis (27 iters) before coding yielded near-correct first impl (0.98+ soft accuracy); precise bug identification from diffs.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:5,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:6,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:7,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:8,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:9,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:10,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:11,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:12,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:13,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:14,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:15,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:16,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:17,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:18,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:19,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:20,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:21,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:22,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:23,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:24,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:25,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:26,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:27,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:28,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"",span:37},
+      {iter:65,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"partial"},
+      {iter:66,phase:"EXTRACT",sub:"debug",hyp:"H1",outcome:""},
+      {iter:67,phase:"EXTRACT",sub:"refine",hyp:"H2",outcome:"success"},
+      {iter:68,phase:"VERIFY",sub:"train-val",hyp:"H2",outcome:"success"},
+      {iter:69,phase:"VERIFY",sub:"challenge",hyp:"H2",outcome:"",span:24},
+      {iter:93,phase:"EXTRACT",sub:"refine",hyp:"H3",outcome:""},
+      {iter:94,phase:"VERIFY",sub:"train-val",hyp:"H3",outcome:"partial"},
+      {iter:95,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"failure"},
+      {iter:96,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"failure"},
+      {iter:97,phase:"EXTRACT",sub:"analyze",hyp:"H3",outcome:""},
+      {iter:98,phase:"EXTRACT",sub:"revert",hyp:"H2",outcome:""},
+      {iter:99,phase:"VERIFY",sub:"challenge",hyp:"H2",outcome:"success",span:6},
+      {iter:105,phase:"VERIFY",sub:"challenge",hyp:"H2",outcome:"success",span:3},
+      {iter:108,phase:"VERIFY",sub:"train-val",hyp:"H2",outcome:"success"},
+      {iter:109,phase:"RETURN",sub:"final",hyp:"H2",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Zigzag path with no grid-boundary stop",iters:"28-66",outcome:"superseded",evidence:"0.98+ soft accuracy but overflow past grid boundary"},
+      {id:"H2",name:"Zigzag path with grid-boundary stop (fixed RIGHT+UP)",iters:"67-109",outcome:"accepted",evidence:"3/3 accuracy=1.0, challenge verified"},
+      {id:"H3",name:"Dynamic direction (prefer UP, fallback DOWN)",iters:"93-97",outcome:"rejected",evidence:"Broke Example 1"}
+    ]
+  },
+  "arc-247ef758": {
+    taskId: "arc-247ef758", score: 1.0, iterations: 9, wallTimeMs: 333000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 6, itersExplore: 5, itersExtract: 1, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","incremental-refinement","verification","structural-decomposition"],
+    summary: "Vertical separator divides grid into left (shapes) and right (bordered area with markers). Shapes placed at border marker intersections.",
+    keyInsight: "Colors are keys, border positions are coordinates, shapes are values placed at coordinate intersections. A spatial mapping problem.",
+    whatWorked: "Structural decomposition at divider column; progressive understanding; single-hypothesis efficiency; double verification.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:5,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:6,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:7,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:8,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:9,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Shapes placed at border marker intersections",iters:"5-9",outcome:"accepted",evidence:"3/3 examples 100% first try"}
+    ]
+  },
+  "arc-2ba387bc": {
+    taskId: "arc-2ba387bc", score: 1.0, iterations: 6, wallTimeMs: 93000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "4/4", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 4, itersExplore: 3, itersExtract: 1, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","connected-component-analysis","verification"],
+    summary: "Scattered 4x4 blocks, either hollow or solid. Separate hollow blocks left, solid blocks right, sorted by position.",
+    keyInsight: "Classification-then-sorting: identify hollow vs solid by inspecting interior cells, arrange into two columns sorted by original position.",
+    whatWorked: "Fast pattern recognition in 3 iterations; correct scipy.ndimage.label usage; single-hypothesis, zero rejections.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Separate hollow blocks (left) from solid blocks (right)",iters:"3-6",outcome:"accepted",evidence:"4/4 examples 100% first try"}
+    ]
+  },
+  "arc-36a08778": {
+    taskId: "arc-36a08778", score: 1.0, iterations: 7, wallTimeMs: 1963000,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "6/6", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 3, itersExtract: 2, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","extended-reasoning","incremental-refinement","verification","chain-propagation"],
+    summary: "Seed 6-lines extend downward, drawing borders around 2-bars. Chain propagation via BFS. Massive 88K-token reasoning block before coding.",
+    keyInsight: "Recursive border propagation: seed lines are sources, 2-bars trigger border generation, border endpoints become new sources. A BFS flood-fill that turns 90 degrees at obstacles.",
+    whatWorked: "88K-token deep reasoning before writing code; 6/6 training accuracy first try; correct edge case handling.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:5,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:7,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Seed lines extend, border on bar collision, arms from endpoints",iters:"3-7",outcome:"accepted",evidence:"6/6 examples 100% first try"}
+    ]
+  },
+  "arc-446ef5d2": {
+    taskId: "arc-446ef5d2", score: 1.0, iterations: 83, wallTimeMs: 1769000,
+    verdict: "perfect", hasSubAgents: true, subAgentCount: 2, attemptUsed: 0,
+    trainScore: "2/2", hypothesesTested: 4, hypothesesRejected: 3,
+    breakthroughIter: 75, itersExplore: 30, itersExtract: 40, itersVerify: 8, itersWasted: 5,
+    implementationAttempts: 6,
+    patterns: ["format-discovery","multi-strategy","incremental-refinement","delegation-sub-agent","backtracking","brute-force","verification","jigsaw-assembly","edge-matching"],
+    summary: "Jigsaw puzzle assembly: scattered pieces on background must be assembled into a bordered rectangle with indicator-based anchor positioning.",
+    keyInsight: "Brute-force backtracking with frame-border constraint (outer edges must be frame-colored) is both correct and efficient. Greedy/heuristic approaches fail due to size mismatch ambiguity.",
+    whatWorked: "Sub-agent delegation for parallel analysis; progressive learning from failures (H1->H2->H3->H4); frame-border constraint discovery.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:5,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:6,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:7,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:8,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:9,phase:"DELEGATE",sub:"sub-agents",outcome:""},
+      {iter:10,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:11,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:12,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"partial"},
+      {iter:13,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"failure"},
+      {iter:14,phase:"EXPLORE",sub:"hyp-form",hyp:"H2",outcome:""},
+      {iter:15,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"partial"},
+      {iter:16,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"failure"},
+      {iter:17,phase:"EXPLORE",sub:"diagnose",outcome:""},
+      {iter:18,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"failure"},
+      {iter:19,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"failure"},
+      {iter:20,phase:"EXPLORE",sub:"diagnose",outcome:""},
+      {iter:21,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"failure",span:19},
+      {iter:40,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:"partial"},
+      {iter:41,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:"failure"},
+      {iter:42,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"failure",span:13},
+      {iter:55,phase:"EXPLORE",sub:"diagnose",outcome:""},
+      {iter:56,phase:"EXPLORE",sub:"hyp-form",hyp:"H4",outcome:""},
+      {iter:57,phase:"EXTRACT",sub:"implement",hyp:"H4",outcome:"",span:8},
+      {iter:65,phase:"EXTRACT",sub:"implement",hyp:"H4",outcome:"partial",span:10},
+      {iter:75,phase:"EXTRACT",sub:"implement",hyp:"H4",outcome:"success"},
+      {iter:76,phase:"VERIFY",sub:"train-val",hyp:"H4",outcome:"success"},
+      {iter:77,phase:"VERIFY",sub:"spot-check",hyp:"H4",outcome:"success",span:4},
+      {iter:81,phase:"VERIFY",sub:"train-val",hyp:"H4",outcome:"success"},
+      {iter:82,phase:"EXTRACT",sub:"apply",hyp:"H4",outcome:""},
+      {iter:83,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Outer-edge classification + direct placement",iters:"7-13",outcome:"rejected",evidence:"Fails on compound pieces"},
+      {id:"H2",name:"Split compound pieces + greedy edge matching",iters:"14-19",outcome:"rejected",evidence:"Partial-height matching too permissive"},
+      {id:"H3",name:"BFS canvas placement",iters:"40-41",outcome:"rejected",evidence:"Equal-size only, fails on mixed sizes"},
+      {id:"H4",name:"Backtracking tiling solver with frame-border constraint",iters:"56-83",outcome:"accepted",evidence:"2/2 examples 100%"}
+    ]
+  },
+  "arc-4e34c42c": {
+    taskId: "arc-4e34c42c", score: 0.5, iterations: 22, wallTimeMs: 2557000,
+    verdict: "partial-credit", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "2/2", hypothesesTested: 5, hypothesesRejected: 4,
+    breakthroughIter: 9, itersExplore: 5, itersExtract: 12, itersVerify: 3, itersWasted: 2,
+    implementationAttempts: 5,
+    patterns: ["format-discovery","incremental-refinement","multi-strategy","brute-force","verification","scoring-function-tuning"],
+    summary: "Tile overlap assembly puzzle. Connector patterns on edges match tiles together. Partial credit (0.5) -- 1/2 test challenges correct due to greedy assembly limitations.",
+    keyInsight: "Pixel-count-weighted scoring (rarer values weighted higher) prevents coincidental common-value matches. But greedy assembly fundamentally limited for 2D tree structures.",
+    whatWorked: "Deep diagnostic reasoning; principled scoring improvement; self-correction on priority logic.",
+    failureMode: "incorrect-tile-ordering",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"failure"},
+      {iter:5,phase:"EXTRACT",sub:"refine",hyp:"H2",outcome:"partial"},
+      {iter:6,phase:"EXPLORE",sub:"diagnose",hyp:"H2",outcome:""},
+      {iter:7,phase:"EXPLORE",sub:"diagnose",hyp:"H2",outcome:""},
+      {iter:8,phase:"EXPLORE",sub:"diagnose",outcome:""},
+      {iter:9,phase:"EXTRACT",sub:"refine",hyp:"H3",outcome:"success"},
+      {iter:10,phase:"VERIFY",sub:"train-val",hyp:"H3",outcome:"success"},
+      {iter:11,phase:"VERIFY",sub:"spot-check",hyp:"H3",outcome:"success"},
+      {iter:12,phase:"VERIFY",sub:"spot-check",hyp:"H3",outcome:"success"},
+      {iter:13,phase:"VERIFY",sub:"train-val",hyp:"H3",outcome:"success"},
+      {iter:14,phase:"RETURN",sub:"",hyp:"H3",outcome:"success"},
+      {iter:15,phase:"EXPLORE",sub:"diagnose",outcome:""},
+      {iter:16,phase:"EXTRACT",sub:"refine",hyp:"H4",outcome:"failure"},
+      {iter:17,phase:"EXTRACT",sub:"refine",hyp:"H5",outcome:"success"},
+      {iter:18,phase:"VERIFY",sub:"spot-check",hyp:"H5",outcome:""},
+      {iter:19,phase:"VERIFY",sub:"spot-check",hyp:"H5",outcome:""},
+      {iter:20,phase:"VERIFY",sub:"train-val",hyp:"H5",outcome:"success"},
+      {iter:21,phase:"VERIFY",sub:"train-val",hyp:"H5",outcome:"success"},
+      {iter:22,phase:"RETURN",sub:"",hyp:"H5",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Greedy: adds-content priority",iters:"4",outcome:"rejected",evidence:"0/2 examples"},
+      {id:"H2",name:"Greedy: score-first priority",iters:"5-8",outcome:"rejected",evidence:"1/2 -- coincidental overlaps"},
+      {id:"H3",name:"Score-first + bbox tiebreaker",iters:"9-14",outcome:"superseded",evidence:"2/2 train but 0/2 test"},
+      {id:"H4",name:"Pixel-count weighted + adds-priority",iters:"16",outcome:"rejected",evidence:"0/2 -- wrong priority"},
+      {id:"H5",name:"Pixel-count weighted + bbox tiebreaker",iters:"17-22",outcome:"accepted",evidence:"2/2 train, 1/2 test (0.5)"}
+    ]
+  },
+  "arc-5961cc34": {
+    taskId: "arc-5961cc34", score: 1.0, iterations: 5, wallTimeMs: null,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "4/4", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 2, itersExtract: 1, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","single-shot-implementation","verification"],
+    summary: "Arrow initiates beam chain reaction through shapes. 3-cells indicate beam directions. Activated shapes recolor to 2, unactivated shapes disappear.",
+    keyInsight: "Chain reaction: arrow (4=head, 2=tail) starts beam, shapes with 3-cells propagate beams via BFS. scipy.ndimage.label for connected components.",
+    whatWorked: "Massive front-loaded reasoning (~25K tokens); single-shot correctness (4/4); minimal iteration count (5 total).",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Arrow initiates beam chain through shapes via 3-cells",iters:"2-3",outcome:"accepted",evidence:"4/4 training pass first implementation"}
+    ]
+  },
+  "arc-6e453dd6": {
+    taskId: "arc-6e453dd6", score: 1.0, iterations: 6, wallTimeMs: null,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 2, itersExtract: 1, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","single-shot-implementation","verification"],
+    summary: "Shapes shift right to touch 5-column separator. Rows with interior holes (6-cells between 0-cells) produce 2s on the right side.",
+    keyInsight: "Three-component decomposition: separator detection, shape shifting, hole-based right-side filling. Interior 6-cells flanked by 0-cells define holes.",
+    whatWorked: "Efficient attempt selection (6 vs 10 iters); single-shot implementation; focused 12K-token reasoning.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"RETURN",sub:"",outcome:""},
+      {iter:6,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Shift shapes to separator; holes produce right-side 2s",iters:"3",outcome:"accepted",evidence:"3/3 first implementation"}
+    ]
+  },
+  "arc-78332cb0": {
+    taskId: "arc-78332cb0", score: 1.0, iterations: 7, wallTimeMs: null,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 3, itersExtract: 2, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","single-shot-implementation","verification"],
+    summary: "Rectangular panels separated by 6-lines. Chain panels by matching colored endpoint cells on edges. Output orientation from edge endpoint positions.",
+    keyInsight: "Panel chaining via endpoint matching: exit point of one panel aligns with entry point of next. Orientation determined by which edges have endpoints.",
+    whatWorked: "Front-loaded 16K-token reasoning; single-shot implementation (3/3); efficient 7-iteration budget.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"RETURN",sub:"",outcome:""},
+      {iter:7,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Panels chain by matching colored endpoints on edges",iters:"3",outcome:"accepted",evidence:"3/3 first implementation"}
+    ]
+  },
+  "arc-7ed72f31": {
+    taskId: "arc-7ed72f31", score: 1.0, iterations: 5, wallTimeMs: 191560,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "2/2", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 2, itersExplore: 2, itersExtract: 1, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","single-strategy","verification"],
+    summary: "18x18 grids with colored shapes and red (2) cells forming symmetry axes. Reflect each shape across its red axis (point, horizontal, or vertical).",
+    keyInsight: "Red cells define axis type: single 2 = point rotation, same-row = horizontal reflection, same-column = vertical reflection. scipy.ndimage.label with 8-connectivity.",
+    whatWorked: "Single-pass hypothesis formation; efficient 5-iteration solve; axis type classification.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Reflect shapes across red (2) axis",iters:"2-5",outcome:"accepted",evidence:"2/2 training perfect"}
+    ]
+  },
+  "arc-89565ca0": {
+    taskId: "arc-89565ca0", score: 1.0, iterations: 25, wallTimeMs: 818920,
+    verdict: "perfect", hasSubAgents: true, subAgentCount: 2, attemptUsed: 1,
+    trainScore: "3/3", hypothesesTested: 4, hypothesesRejected: 3,
+    breakthroughIter: 22, itersExplore: 5, itersExtract: 16, itersVerify: 2, itersWasted: 8,
+    implementationAttempts: 6,
+    patterns: ["iterative-refinement","multi-strategy","delegation","deep-reasoning"],
+    summary: "Colored rectangles with internal grid lines divided into compartments. Noise color fills grid line gaps. Output is a staircase sorted by compartment count.",
+    keyInsight: "Detect horizontal lines first, then vertical lines in non-horizontal-line rows only. This prevents cross-contamination in noisy grid line detection.",
+    whatWorked: "Noise color ID via fill ratio; incremental hypothesis refinement (H1->H2->H3->H4); sub-agent delegation for parallel exploration.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"diff",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:5,phase:"DELEGATE",sub:"sub-agents",outcome:""},
+      {iter:6,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:""},
+      {iter:7,phase:"EXTRACT",sub:"debug",hyp:"H1",outcome:"partial"},
+      {iter:8,phase:"EXTRACT",sub:"debug",hyp:"H1",outcome:"failure"},
+      {iter:9,phase:"EXPLORE",sub:"structure",hyp:"H2",outcome:""},
+      {iter:10,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:""},
+      {iter:11,phase:"EXTRACT",sub:"debug",hyp:"H2",outcome:"failure"},
+      {iter:12,phase:"EXTRACT",sub:"debug",hyp:"H2",outcome:"failure"},
+      {iter:13,phase:"EXPLORE",sub:"structure",hyp:"H3",outcome:""},
+      {iter:14,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:""},
+      {iter:15,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:16,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:17,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"failure"},
+      {iter:18,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"failure"},
+      {iter:19,phase:"EXPLORE",sub:"structure",hyp:"H4",outcome:""},
+      {iter:20,phase:"EXTRACT",sub:"implement",hyp:"H4",outcome:""},
+      {iter:21,phase:"EXTRACT",sub:"debug",hyp:"H4",outcome:"partial"},
+      {iter:22,phase:"EXTRACT",sub:"implement",hyp:"H4",outcome:"success"},
+      {iter:23,phase:"VERIFY",sub:"spot-check",hyp:"H4",outcome:"success"},
+      {iter:24,phase:"VERIFY",sub:"challenge",hyp:"H4",outcome:"success"},
+      {iter:25,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Count compartments by row/column sections",iters:"4-8",outcome:"rejected",evidence:"1/3 -- noise gaps break section counting"},
+      {id:"H2",name:"Connected components of interior cells",iters:"9-12",outcome:"rejected",evidence:"Noise gaps merge compartments"},
+      {id:"H3",name:"Explicit line detection + noise fill + CC",iters:"13-18",outcome:"rejected",evidence:"2/3 -- H-lines inflate V-line detection"},
+      {id:"H4",name:"H-lines first, then V-lines excluding H-line rows",iters:"19-25",outcome:"accepted",evidence:"3/3 perfect"}
+    ]
+  },
+  "arc-8f3a5a89": {
+    taskId: "arc-8f3a5a89", score: 1.0, iterations: 7, wallTimeMs: 1023240,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 3, itersExtract: 2, itersVerify: 1, itersWasted: 0,
+    implementationAttempts: 2,
+    patterns: ["deep-reasoning","single-strategy","verification"],
+    summary: "Colored regions separated by walls of 1s. Cell 6 marks room entrance. Add 7s along interior boundary of the room (cells 8-connected to adjacent wall components).",
+    keyInsight: "Room = flood fill from 6 through 8s (4-connected). 7s = room cells 8-connected to wall components touching room boundary. Padded grid handles border walls.",
+    whatWorked: "Diff-first exploration; massive 39K-token reasoning; padded grid technique; minimal debugging (1 fix).",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"diff",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:4,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"partial"},
+      {iter:5,phase:"EXTRACT",sub:"debug",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:7,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Flood fill room + wall adjacency + padded boundary",iters:"3-7",outcome:"accepted",evidence:"3/3 after one fix"}
+    ]
+  },
+  "arc-a251c730": {
+    taskId: "arc-a251c730", score: 1.0, iterations: 24, wallTimeMs: 683640,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "2/2", hypothesesTested: 3, hypothesesRejected: 2,
+    breakthroughIter: 18, itersExplore: 6, itersExtract: 14, itersVerify: 2, itersWasted: 6,
+    implementationAttempts: 8,
+    patterns: ["iterative-refinement","multi-strategy","brute-force-then-optimize"],
+    summary: "Large grids with repeating background pattern. Two embedded rectangles: template (patterns) and target (anchors). Stamp template patterns at anchor positions.",
+    keyInsight: "Brute-force border scanning for rectangle detection in structured backgrounds. Containment filtering removes nested false positives.",
+    whatWorked: "Persistence through 2 failed rectangle detection approaches; brute-force border scanning; CC-based pattern extraction.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"diff",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:5,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"failure"},
+      {iter:6,phase:"EXTRACT",sub:"debug",hyp:"H1",outcome:"failure"},
+      {iter:7,phase:"EXPLORE",sub:"structure",hyp:"H2",outcome:""},
+      {iter:8,phase:"EXTRACT",sub:"implement",hyp:"H2",outcome:"failure"},
+      {iter:9,phase:"EXTRACT",sub:"debug",hyp:"H2",outcome:"failure"},
+      {iter:10,phase:"EXTRACT",sub:"debug",hyp:"H2",outcome:"failure"},
+      {iter:11,phase:"EXPLORE",sub:"structure",hyp:"H3",outcome:""},
+      {iter:12,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:""},
+      {iter:13,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:14,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:15,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:""},
+      {iter:16,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:17,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:18,phase:"EXTRACT",sub:"implement",hyp:"H3",outcome:"partial"},
+      {iter:19,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:20,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"partial"},
+      {iter:21,phase:"EXTRACT",sub:"debug",hyp:"H3",outcome:"success"},
+      {iter:22,phase:"VERIFY",sub:"spot-check",hyp:"H3",outcome:"success"},
+      {iter:23,phase:"VERIFY",sub:"challenge",hyp:"H3",outcome:"success"},
+      {iter:24,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Rectangle detection via background-gap analysis",iters:"4-6",outcome:"rejected",evidence:"Too slow and imprecise"},
+      {id:"H2",name:"Rectangle detection via connected components",iters:"7-10",outcome:"rejected",evidence:"Background gaps create false components"},
+      {id:"H3",name:"Brute-force border scanning + containment filter",iters:"11-24",outcome:"accepted",evidence:"2/2 after extensive debugging"}
+    ]
+  },
+  "arc-aa4ec2a5": {
+    taskId: "arc-aa4ec2a5", score: 1.0, iterations: 9, wallTimeMs: 649647,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 6, itersExplore: 5, itersExtract: 1, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","connected-component-analysis","verification"],
+    summary: "Irregular components of color 1 on background 4. Add border of 2s. Components with holes: body->8, holes->6. Without holes: keep 1s.",
+    keyInsight: "Morphological image processing: ndimage.label, binary_fill_holes for hole detection, binary_dilation for borders. Hole presence triggers recoloring.",
+    whatWorked: "Systematic exploration; correct scipy library choice; single-hypothesis, zero rejections.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"parse",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:5,phase:"EXPLORE",sub:"hyp-form",hyp:"H1",outcome:""},
+      {iter:6,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:7,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:8,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"success"},
+      {iter:9,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Border=2, holes=6, body=8 (with holes) or keep 1s (without)",iters:"5-9",outcome:"accepted",evidence:"3/3 first try"}
+    ]
+  },
+  "arc-b99e7126": {
+    taskId: "arc-b99e7126", score: 1.0, iterations: 6, wallTimeMs: 576004,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "3/3", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 2, itersExtract: 1, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","tiling-analysis","fractal-self-similarity","verification"],
+    summary: "29x29 grid subdivided into 7x7 tile grid. Modified tiles contain a new color matching the spatial arrangement of modified tiles at macro level -- fractal self-similarity.",
+    keyInsight: "Fractal self-similarity: the modified tile internal pattern defines the macro tile arrangement. Translation search to complete the pattern.",
+    whatWorked: "Instant pattern recognition; clean algorithm (tile extraction, majority voting, translation search); 6-iteration budget.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Fractal self-similarity: micro pattern = macro arrangement",iters:"2-6",outcome:"accepted",evidence:"3/3 first try"}
+    ]
+  },
+  "arc-cbebaa4b": {
+    taskId: "arc-cbebaa4b", score: 1.0, iterations: 12, wallTimeMs: 1188340,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 1,
+    trainScore: "2/2", hypothesesTested: 2, hypothesesRejected: 1,
+    breakthroughIter: 9, itersExplore: 4, itersExtract: 4, itersVerify: 3, itersWasted: 0,
+    implementationAttempts: 2,
+    patterns: ["format-discovery","connected-component-analysis","incremental-refinement","self-correction","spatial-assembly","greedy-matching","verification"],
+    summary: "Puzzle pieces with color-2 connector ports. Color-4 central anchor. Assemble by matching connectors via global greedy BFS.",
+    keyInsight: "Global greedy matching (best match count across all shapes) prevents ordering misplacements. Connector directionality inferred from body adjacency.",
+    whatWorked: "Clear structural analysis; self-correction when ordering failed; thorough verification.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:3,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:4,phase:"EXPLORE",sub:"structure",outcome:""},
+      {iter:5,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"partial"},
+      {iter:6,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"success"},
+      {iter:7,phase:"VERIFY",sub:"train-val",hyp:"H1",outcome:"partial"},
+      {iter:8,phase:"EXPLORE",sub:"diagnose",hyp:"H1",outcome:"failure"},
+      {iter:9,phase:"EXTRACT",sub:"refine",hyp:"H2",outcome:"success"},
+      {iter:10,phase:"VERIFY",sub:"train-val",hyp:"H2",outcome:"success"},
+      {iter:11,phase:"VERIFY",sub:"spot-check",hyp:"H2",outcome:"success"},
+      {iter:12,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Per-shape connector matching (first valid match)",iters:"5-8",outcome:"rejected",evidence:"Example 0 pass, Example 1 fail due to ordering"},
+      {id:"H2",name:"Global greedy matching (best match count)",iters:"9-12",outcome:"accepted",evidence:"2/2 examples 100%"}
+    ]
+  },
+  "arc-db695cfb": {
+    taskId: "arc-db695cfb", score: 1.0, iterations: 6, wallTimeMs: 511643,
+    verdict: "perfect", hasSubAgents: false, subAgentCount: 0, attemptUsed: 0,
+    trainScore: "5/5", hypothesesTested: 1, hypothesesRejected: 0,
+    breakthroughIter: 3, itersExplore: 2, itersExtract: 1, itersVerify: 2, itersWasted: 0,
+    implementationAttempts: 1,
+    patterns: ["format-discovery","diagonal-geometry","verification"],
+    summary: "Diagonal lines between paired 1s, with 6s on lines activating perpendicular diagonal extensions. Geometric optics metaphor: beams and prisms.",
+    keyInsight: "Two interacting rules: diagonal line drawing between paired 1s, and 6-activation (perpendicular refraction). Priority: 6s overwrite 1s.",
+    whatWorked: "Simple-to-complex reasoning from easiest example; coordinate geometry; first-shot 5/5 accuracy.",
+    controlFlow: [
+      {iter:1,phase:"EXPLORE",sub:"visualize",outcome:""},
+      {iter:2,phase:"EXPLORE",sub:"structure",hyp:"H1",outcome:""},
+      {iter:3,phase:"EXTRACT",sub:"implement",hyp:"H1",outcome:"success"},
+      {iter:4,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:5,phase:"VERIFY",sub:"spot-check",hyp:"H1",outcome:"success"},
+      {iter:6,phase:"RETURN",sub:"",outcome:"success"}
+    ],
+    hypotheses: [
+      {id:"H1",name:"Pair diagonal 1s, draw lines, activate 6s with perpendicular extension",iters:"2-6",outcome:"accepted",evidence:"5/5 first try"}
+    ]
+  }
+};
+
+// ========== FUNCTIONS ==========
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function fmtTime(ms) {
+  if (!ms) return 'n/a';
+  const sec = ms / 1000;
+  if (sec < 60) return Math.round(sec) + 's';
+  return (sec / 60).toFixed(1) + 'm';
+}
+
+function buildSwimlane(task) {
+  const cf = task.controlFlow || [];
+  if (!cf.length) return '<div class="swimlane"><div class="swim-block phase-TIMEOUT" style="flex:1">No data</div></div>';
+
+  const maxIter = task.iterations;
+  const breakthrough = task.breakthroughIter;
+
+  // Build slot map
+  const slots = [];
+  for (const entry of cf) {
+    const span = entry.span || 1;
+    for (let i = 0; i < span; i++) {
+      slots.push({
+        iter: entry.iter + i,
+        phase: entry.phase,
+        sub: entry.sub || '',
+        hyp: entry.hyp || '',
+        outcome: entry.outcome || ''
+      });
+    }
+  }
+
+  // Determine display width
+  const displaySlots = Math.min(maxIter, Math.max(slots.length, 20));
+  const blockWidth = Math.max(4, Math.min(18, Math.floor(700 / displaySlots)));
+
+  let html = '<div class="swimlane">';
+
+  for (let i = 0; i < slots.length && i < displaySlots; i++) {
+    const d = slots[i];
+    const phase = d.phase;
+    const cls = 'phase-' + phase;
+    const hasBreakthrough = breakthrough !== null && breakthrough !== undefined && d.iter === breakthrough;
+    const outcomeHtml = d.outcome === 'success' ? '<div class="outcome-dot success"></div>' :
+                        d.outcome === 'failure' ? '<div class="outcome-dot failure"></div>' :
+                        d.outcome === 'partial' ? '<div class="outcome-dot partial"></div>' : '';
+    const breakthroughHtml = hasBreakthrough ? '<div class="breakthrough-marker"></div>' : '';
+    const tipText = `Iter ${d.iter}: ${d.phase}${d.sub ? ':' + d.sub : ''}${d.hyp ? ' [' + d.hyp + ']' : ''}${d.outcome ? ' (' + d.outcome + ')' : ''}`;
+
+    html += `<div class="swim-block ${cls}" style="width:${blockWidth}px">
+      ${outcomeHtml}${breakthroughHtml}
+      <span class="swim-tip">${escapeHtml(tipText)}</span>
+    </div>`;
+  }
+
+  // Fill remaining
+  for (let i = slots.length; i < displaySlots; i++) {
+    html += `<div class="swim-block phase-TIMEOUT" style="width:${blockWidth}px;opacity:0.2"></div>`;
+  }
+
+  html += '</div>';
+
+  // Scale
+  html += '<div class="iter-scale">';
+  const scaleStep = displaySlots > 40 ? 10 : displaySlots > 20 ? 5 : 5;
+  for (let i = 0; i < displaySlots; i++) {
+    const label = (i < slots.length && i % scaleStep === 0) ? slots[i].iter : '';
+    html += `<div class="iter-num" style="width:${blockWidth}px">${label}</div>`;
+  }
+  html += '</div>';
+
+  return html;
+}
+
+function buildTaskRow(tid) {
+  const t = DATA[tid];
+  if (!t) return '';
+  const shortId = tid.replace('arc-', '');
+
+  let html = `<div class="task-row" data-task="${tid}" data-score="${t.score}" data-iters="${t.iterations}" data-subagent="${t.hasSubAgents}">`;
+  html += `<div class="task-header" onclick="toggleDetail('${tid}')">`;
+
+  // Task ID column
+  html += `<div class="task-id-col">
+    <div class="task-id">${shortId} <span class="expand-icon">&#9654;</span></div>
+    <div class="task-meta">${t.score === 1 ? 'perfect' : t.score === 0.5 ? 'partial' : 'failed'} &bull; ${t.iterations} iters &bull; ${fmtTime(t.wallTimeMs)}</div>`;
+
+  // Insight badges
+  html += '<div class="insight-badges">';
+  const verdictClass = t.score === 1 ? 'perfect' : t.score >= 0.5 ? 'partial' : 'failure';
+  html += `<span class="insight-chip ${verdictClass}">${t.verdict}</span>`;
+
+  const btClass = (t.breakthroughIter <= 8) ? 'bt-early' : 'bt-late';
+  html += `<span class="insight-chip ${btClass}">BT@${t.breakthroughIter}</span>`;
+
+  const hypClass = t.hypothesesTested <= 2 ? 'hyp-low' : 'hyp-high';
+  html += `<span class="insight-chip ${hypClass}">hyp:${t.hypothesesTested}</span>`;
+
+  if (t.hasSubAgents) {
+    html += `<span class="insight-chip sub-agent">sub-agents:${t.subAgentCount}</span>`;
+  }
+  if (t.attemptUsed > 0) {
+    html += `<span class="insight-chip attempt">attempt ${t.attemptUsed}</span>`;
+  }
+  html += '</div>';
+  html += '</div>'; // task-id-col
+
+  // Run column
+  const v = t.verdict || 'unknown';
+  html += `<div class="run-col">
+    <div class="run-label">ARCGENTICA <span class="verdict-badge ${v}">${v}</span>${t.failureMode ? ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,0.1);color:#f85149;font-family:monospace">' + t.failureMode + '</span>' : ''}</div>
+    <div class="run-stats">${t.iterations} iters &bull; ${t.hypothesesTested} hyps &bull; ${t.implementationAttempts} impl &bull; train ${t.trainScore}${t.breakthroughIter != null ? ' &bull; BT@' + t.breakthroughIter : ''}${t.hasSubAgents ? ' &bull; ' + t.subAgentCount + ' sub-agent' + (t.subAgentCount > 1 ? 's' : '') : ''}</div>
+    ${buildSwimlane(t)}
+  </div>`;
+
+  html += '</div>'; // task-header
+
+  // Detail panel
+  html += `<div class="task-detail" id="detail-${tid}">`;
+  html += '<div class="detail-grid">';
+
+  // Left: Stats
+  html += '<div class="detail-section">';
+  html += '<h4>Task Statistics</h4>';
+  html += `<div class="stat-row"><span class="stat-label">Score</span><span class="stat-val">${t.score}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Verdict</span><span class="stat-val">${v}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Iterations</span><span class="stat-val">${t.iterations}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Wall Time</span><span class="stat-val">${fmtTime(t.wallTimeMs)}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Attempt Used</span><span class="stat-val">${t.attemptUsed}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Train Score</span><span class="stat-val">${t.trainScore}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Explore / Extract / Verify</span><span class="stat-val">${t.itersExplore} / ${t.itersExtract} / ${t.itersVerify}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Wasted Iterations</span><span class="stat-val">${t.itersWasted}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Hypotheses</span><span class="stat-val">${t.hypothesesTested} tested, ${t.hypothesesRejected} rejected</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Breakthrough</span><span class="stat-val">iter ${t.breakthroughIter}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Impl Attempts</span><span class="stat-val">${t.implementationAttempts}</span></div>`;
+  html += `<div class="stat-row"><span class="stat-label">Sub-Agents</span><span class="stat-val">${t.hasSubAgents ? t.subAgentCount : 'none'}</span></div>`;
+  html += '</div>';
+
+  // Right: Summary + Insight
+  html += '<div class="detail-section">';
+  html += '<h4>Task Summary</h4>';
+  html += `<p style="margin-bottom:12px">${escapeHtml(t.summary)}</p>`;
+  html += `<h4 style="margin-top:12px;color:#3fb950">Key Insight</h4>`;
+  html += `<p style="font-size:12px;color:#56d364">${escapeHtml(t.keyInsight)}</p>`;
+  html += `<h4 style="margin-top:12px;color:#58a6ff">What Worked Well</h4>`;
+  html += `<p style="font-size:12px;color:#79c0ff">${escapeHtml(t.whatWorked)}</p>`;
+  html += '</div>';
+
+  // Hypothesis table (full width)
+  if (t.hypotheses && t.hypotheses.length) {
+    html += '<div class="detail-section full-width">';
+    html += '<h4>Hypothesis Log</h4>';
+    html += '<table class="hyp-table"><thead><tr><th>ID</th><th>Hypothesis</th><th>Iters</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>';
+    for (const h of t.hypotheses) {
+      const cls = h.outcome === 'accepted' ? 'accepted' : h.outcome === 'rejected' ? 'rejected' : 'superseded';
+      html += `<tr>
+        <td style="font-weight:600">${h.id}</td>
+        <td>${escapeHtml(h.name)}</td>
+        <td style="font-family:monospace">${h.iters}</td>
+        <td class="${cls}">${h.outcome}</td>
+        <td style="font-size:11px;color:#8b949e">${escapeHtml(h.evidence)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  html += '</div>'; // detail-grid
+  html += '</div>'; // task-detail
+  html += '</div>'; // task-row
+
+  return html;
+}
+
+function toggleDetail(tid) {
+  const row = document.querySelector(`[data-task="${tid}"]`);
+  const detail = document.getElementById(`detail-${tid}`);
+  if (detail.classList.contains('open')) {
+    detail.classList.remove('open');
+    row.classList.remove('expanded');
+  } else {
+    detail.classList.add('open');
+    row.classList.add('expanded');
+  }
+}
+
+// ========== SORTING & FILTERING ==========
+let currentSort = 'score-desc';
+let currentFilter = 'all';
+
+function sortTasks(taskIds) {
+  const arr = [...taskIds];
+  switch (currentSort) {
+    case 'score-desc':
+      arr.sort((a,b) => (DATA[b].score - DATA[a].score) || (DATA[a].iterations - DATA[b].iterations));
+      break;
+    case 'iters-asc':
+      arr.sort((a,b) => DATA[a].iterations - DATA[b].iterations);
+      break;
+    case 'iters-desc':
+      arr.sort((a,b) => DATA[b].iterations - DATA[a].iterations);
+      break;
+    case 'time-desc':
+      arr.sort((a,b) => (DATA[b].wallTimeMs||0) - (DATA[a].wallTimeMs||0));
+      break;
+    case 'hyps-desc':
+      arr.sort((a,b) => DATA[b].hypothesesTested - DATA[a].hypothesesTested);
+      break;
+    case 'id':
+      arr.sort();
+      break;
+  }
+  return arr;
+}
+
+function filterTasks(taskIds) {
+  if (currentFilter === 'all') return taskIds;
+  if (currentFilter === 'perfect') return taskIds.filter(t => DATA[t].score === 1);
+  if (currentFilter === 'partial') return taskIds.filter(t => DATA[t].score < 1);
+  if (currentFilter === 'sub-agents') return taskIds.filter(t => DATA[t].hasSubAgents);
+  if (currentFilter === 'single-hyp') return taskIds.filter(t => DATA[t].hypothesesTested === 1);
+  if (currentFilter === 'multi-hyp') return taskIds.filter(t => DATA[t].hypothesesTested > 1);
+  return taskIds;
+}
+
+function renderTasks() {
+  const container = document.getElementById('tasks-container');
+  const allIds = Object.keys(DATA);
+  const filtered = filterTasks(allIds);
+  const sorted = sortTasks(filtered);
+
+  let html = '';
+  for (const tid of sorted) {
+    html += buildTaskRow(tid);
+  }
+  if (!html) html = '<p style="color:#8b949e;padding:20px">No tasks match the current filter.</p>';
+  container.innerHTML = html;
+}
+
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  const filters = [
+    {key:'all', label:'All (20)'},
+    {key:'perfect', label:'Perfect (19)'},
+    {key:'partial', label:'Partial (1)'},
+    {key:'sub-agents', label:'Sub-Agents (3)'},
+    {key:'single-hyp', label:'Single Hypothesis (11)'},
+    {key:'multi-hyp', label:'Multi-Hypothesis (9)'},
+  ];
+  const sorts = [
+    {key:'score-desc', label:'Score'},
+    {key:'iters-asc', label:'Iters (low)'},
+    {key:'iters-desc', label:'Iters (high)'},
+    {key:'time-desc', label:'Wall Time'},
+    {key:'hyps-desc', label:'Hypotheses'},
+    {key:'id', label:'Task ID'},
+  ];
+
+  let html = '';
+  for (const f of filters) {
+    html += `<button class="filter-btn${currentFilter === f.key ? ' active' : ''}" onclick="setFilter('${f.key}')">${f.label}</button>`;
+  }
+  html += '<span class="sort-label">Sort:</span>';
+  for (const s of sorts) {
+    html += `<button class="filter-btn${currentSort === s.key ? ' active' : ''}" onclick="setSort('${s.key}')">${s.label}</button>`;
+  }
+  bar.innerHTML = html;
+}
+
+function setFilter(f) { currentFilter = f; renderFilterBar(); renderTasks(); }
+function setSort(s) { currentSort = s; renderFilterBar(); renderTasks(); }
+
+// ========== AGGREGATE CHARTS ==========
+let chartsRendered = false;
+
+function renderCharts() {
+  if (chartsRendered) return;
+  chartsRendered = true;
+
+  const container = document.getElementById('agg-charts');
+  const tasks = Object.values(DATA);
+
+  // Prepare data
+  const iters = tasks.map(t => t.iterations);
+  const wallTimes = tasks.filter(t => t.wallTimeMs).map(t => t.wallTimeMs / 60000);
+  const hyps = tasks.map(t => t.hypothesesTested);
+  const bts = tasks.map(t => t.breakthroughIter);
+  const subAgentTasks = tasks.filter(t => t.hasSubAgents).length;
+
+  let html = '';
+
+  // 1. Iterations histogram
+  html += '<div class="agg-card"><h3>Iterations per Task</h3><div class="bar-chart" id="chart-iters">';
+  const iterBuckets = [
+    {label:'1-6', min:1, max:6},
+    {label:'7-10', min:7, max:10},
+    {label:'11-20', min:11, max:20},
+    {label:'21-30', min:21, max:30},
+    {label:'31-60', min:31, max:60},
+    {label:'61-110', min:61, max:110},
+  ];
+  const maxBucketCount = Math.max(...iterBuckets.map(b => tasks.filter(t => t.iterations >= b.min && t.iterations <= b.max).length));
+  for (const b of iterBuckets) {
+    const count = tasks.filter(t => t.iterations >= b.min && t.iterations <= b.max).length;
+    const pct = maxBucketCount > 0 ? (count / maxBucketCount) * 100 : 0;
+    html += `<div class="bar-row">
+      <span class="bar-label">${b.label}</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:#1f6feb">${count > 0 ? '' : ''}</div></div>
+      <span class="bar-val">${count}</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  // 2. Wall time histogram
+  html += '<div class="agg-card"><h3>Wall Time Distribution</h3><div class="bar-chart">';
+  const timeBuckets = [
+    {label:'< 5m', min:0, max:5},
+    {label:'5-10m', min:5, max:10},
+    {label:'10-15m', min:10, max:15},
+    {label:'15-20m', min:15, max:20},
+    {label:'20-30m', min:20, max:30},
+    {label:'30m+', min:30, max:999},
+  ];
+  const wallTimeTasks = tasks.filter(t => t.wallTimeMs);
+  const maxTimeBucket = Math.max(...timeBuckets.map(b => wallTimeTasks.filter(t => t.wallTimeMs/60000 >= b.min && t.wallTimeMs/60000 < b.max).length));
+  for (const b of timeBuckets) {
+    const count = wallTimeTasks.filter(t => t.wallTimeMs/60000 >= b.min && t.wallTimeMs/60000 < b.max).length;
+    const pct = maxTimeBucket > 0 ? (count / maxTimeBucket) * 100 : 0;
+    html += `<div class="bar-row">
+      <span class="bar-label">${b.label}</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:#d29922">${count > 0 ? '' : ''}</div></div>
+      <span class="bar-val">${count}</span>
+    </div>`;
+  }
+  const noTime = tasks.filter(t => !t.wallTimeMs).length;
+  if (noTime > 0) {
+    html += `<div class="bar-row"><span class="bar-label">n/a</span><div class="bar-container"><div class="bar-fill" style="width:${(noTime/maxTimeBucket)*100}%;background:#6e7681"></div></div><span class="bar-val">${noTime}</span></div>`;
+  }
+  html += '</div></div>';
+
+  // 3. Sub-agent usage
+  html += '<div class="agg-card"><h3>Sub-Agent Usage</h3><div class="bar-chart">';
+  html += `<div class="bar-row">
+    <span class="bar-label">No agents</span>
+    <div class="bar-container"><div class="bar-fill" style="width:${((20-subAgentTasks)/20)*100}%;background:#3fb950"></div></div>
+    <span class="bar-val">${20 - subAgentTasks}</span>
+  </div>`;
+  html += `<div class="bar-row">
+    <span class="bar-label">Sub-agents</span>
+    <div class="bar-container"><div class="bar-fill" style="width:${(subAgentTasks/20)*100}%;background:#bc8cff"></div></div>
+    <span class="bar-val">${subAgentTasks}</span>
+  </div>`;
+  // Per-task sub-agent details
+  const subTasks = tasks.filter(t => t.hasSubAgents).sort((a,b) => b.subAgentCount - a.subAgentCount);
+  for (const st of subTasks) {
+    html += `<div class="bar-row">
+      <span class="bar-label" style="font-size:10px">${st.taskId.replace('arc-','')}</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${(st.subAgentCount/3)*100}%;background:#f0883e">${st.subAgentCount} agents</div></div>
+      <span class="bar-val">${st.iterations}it</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  // 4. Hypothesis count distribution
+  html += '<div class="agg-card"><h3>Hypotheses Tested per Task</h3><div class="bar-chart">';
+  const hypBuckets = [1,2,3,4,5,6];
+  const maxHypCount = Math.max(...hypBuckets.map(h => tasks.filter(t => t.hypothesesTested === h).length));
+  for (const h of hypBuckets) {
+    const count = tasks.filter(t => t.hypothesesTested === h).length;
+    if (count === 0 && h > 5) continue;
+    const pct = maxHypCount > 0 ? (count / maxHypCount) * 100 : 0;
+    html += `<div class="bar-row">
+      <span class="bar-label">${h} hyp</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:${h === 1 ? '#3fb950' : h <= 3 ? '#58a6ff' : '#f85149'}">${count > 0 ? '' : ''}</div></div>
+      <span class="bar-val">${count}</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  // 5. Phase distribution (total iterations across all tasks)
+  html += '<div class="agg-card"><h3>Phase Distribution (aggregate iterations)</h3><div class="bar-chart">';
+  let totalExplore = 0, totalExtract = 0, totalVerify = 0, totalWasted = 0;
+  for (const t of tasks) {
+    totalExplore += t.itersExplore || 0;
+    totalExtract += t.itersExtract || 0;
+    totalVerify += t.itersVerify || 0;
+    totalWasted += t.itersWasted || 0;
+  }
+  const totalPhase = totalExplore + totalExtract + totalVerify;
+  const phases = [
+    {label:'EXPLORE', val:totalExplore, color:'#1f6feb'},
+    {label:'EXTRACT', val:totalExtract, color:'#3fb950'},
+    {label:'VERIFY', val:totalVerify, color:'#bc8cff'},
+    {label:'Wasted', val:totalWasted, color:'#f85149'},
+  ];
+  const maxPhase = Math.max(...phases.map(p => p.val));
+  for (const p of phases) {
+    const pct = maxPhase > 0 ? (p.val / maxPhase) * 100 : 0;
+    html += `<div class="bar-row">
+      <span class="bar-label">${p.label}</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:${p.color}">${p.val}</div></div>
+      <span class="bar-val">${Math.round(p.val/totalPhase*100)}%</span>
+    </div>`;
+  }
+  // Stacked bar showing distribution
+  html += '<div style="margin-top:12px"><div style="font-size:11px;color:#8b949e;margin-bottom:4px">Per-task phase split</div>';
+  const sortedTasks = [...tasks].sort((a,b) => a.iterations - b.iterations);
+  for (const t of sortedTasks) {
+    const total = t.itersExplore + t.itersExtract + t.itersVerify;
+    if (total === 0) continue;
+    const ePct = (t.itersExplore / total * 100).toFixed(0);
+    const xPct = (t.itersExtract / total * 100).toFixed(0);
+    const vPct = (t.itersVerify / total * 100).toFixed(0);
+    html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+      <span style="width:60px;text-align:right;font-size:10px;color:#8b949e;font-family:monospace">${t.taskId.replace('arc-','').substring(0,8)}</span>
+      <div class="stacked-bar" style="flex:1">
+        <div class="stacked-segment" style="width:${ePct}%;background:#1f6feb" title="Explore: ${t.itersExplore}"></div>
+        <div class="stacked-segment" style="width:${xPct}%;background:#3fb950" title="Extract: ${t.itersExtract}"></div>
+        <div class="stacked-segment" style="width:${vPct}%;background:#bc8cff" title="Verify: ${t.itersVerify}"></div>
+      </div>
+      <span style="font-size:10px;color:#6e7681;width:30px;text-align:right">${total}</span>
+    </div>`;
+  }
+  html += '</div>';
+  html += '</div></div>';
+
+  // 6. Breakthrough iteration distribution
+  html += '<div class="agg-card"><h3>Breakthrough Iteration</h3><div class="bar-chart">';
+  const btBuckets = [
+    {label:'iter 2-3', min:2, max:3},
+    {label:'iter 4-6', min:4, max:6},
+    {label:'iter 7-9', min:7, max:9},
+    {label:'iter 10-18', min:10, max:18},
+    {label:'iter 19+', min:19, max:999},
+  ];
+  const maxBtCount = Math.max(...btBuckets.map(b => tasks.filter(t => t.breakthroughIter >= b.min && t.breakthroughIter <= b.max).length));
+  for (const b of btBuckets) {
+    const count = tasks.filter(t => t.breakthroughIter >= b.min && t.breakthroughIter <= b.max).length;
+    const pct = maxBtCount > 0 ? (count / maxBtCount) * 100 : 0;
+    const color = b.min <= 6 ? '#3fb950' : b.min <= 9 ? '#58a6ff' : b.min <= 18 ? '#d29922' : '#f85149';
+    html += `<div class="bar-row">
+      <span class="bar-label">${b.label}</span>
+      <div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:${color}">${count > 0 ? '' : ''}</div></div>
+      <span class="bar-val">${count}</span>
+    </div>`;
+  }
+  html += '</div>';
+  // Scatter: breakthrough iter vs total iterations
+  html += '<div style="margin-top:12px"><div style="font-size:11px;color:#8b949e;margin-bottom:4px">Breakthrough iter vs total iterations</div>';
+  for (const t of sortedTasks) {
+    const btPct = Math.min(100, (t.breakthroughIter / t.iterations * 100));
+    const color = t.score === 1 ? '#3fb950' : '#d29922';
+    html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+      <span style="width:60px;text-align:right;font-size:10px;color:#8b949e;font-family:monospace">${t.taskId.replace('arc-','').substring(0,8)}</span>
+      <div style="flex:1;height:12px;background:#21262d;border-radius:3px;position:relative">
+        <div style="position:absolute;left:${btPct}%;top:0;width:8px;height:12px;background:${color};border-radius:2px;transform:translateX(-4px)" title="BT@${t.breakthroughIter} / ${t.iterations} total"></div>
+      </div>
+      <span style="font-size:10px;color:#6e7681;width:40px;text-align:right">${t.breakthroughIter}/${t.iterations}</span>
+    </div>`;
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // 7. Attempt selection (pass@2)
+  html += '<div class="agg-card"><h3>Attempt Selection (pass@2)</h3><div class="bar-chart">';
+  const attempt0 = tasks.filter(t => t.attemptUsed === 0).length;
+  const attempt1 = tasks.filter(t => t.attemptUsed === 1).length;
+  html += `<div class="bar-row">
+    <span class="bar-label">Attempt 0</span>
+    <div class="bar-container"><div class="bar-fill" style="width:${(attempt0/20)*100}%;background:#3fb950">${attempt0} tasks</div></div>
+    <span class="bar-val">${attempt0}</span>
+  </div>`;
+  html += `<div class="bar-row">
+    <span class="bar-label">Attempt 1</span>
+    <div class="bar-container"><div class="bar-fill" style="width:${(attempt1/20)*100}%;background:#58a6ff">${attempt1} tasks</div></div>
+    <span class="bar-val">${attempt1}</span>
+  </div>`;
+  html += '</div></div>';
+
+  // 8. Efficiency: single-shot vs multi-hypothesis
+  html += '<div class="agg-card"><h3>Implementation Efficiency</h3><div class="bar-chart">';
+  const singleShot = tasks.filter(t => t.hypothesesTested === 1);
+  const multiHyp = tasks.filter(t => t.hypothesesTested > 1);
+  const avgItersSingle = singleShot.reduce((s,t) => s + t.iterations, 0) / singleShot.length;
+  const avgItersMulti = multiHyp.reduce((s,t) => s + t.iterations, 0) / multiHyp.length;
+  html += `<div style="font-size:12px;color:#8b949e;margin-bottom:8px">Single-hypothesis solves: avg ${avgItersSingle.toFixed(1)} iters (${singleShot.length} tasks)</div>`;
+  html += `<div style="font-size:12px;color:#8b949e;margin-bottom:8px">Multi-hypothesis solves: avg ${avgItersMulti.toFixed(1)} iters (${multiHyp.length} tasks)</div>`;
+
+  // Per-task efficiency dot plot
+  html += '<div style="margin-top:8px"><div style="font-size:11px;color:#8b949e;margin-bottom:4px">Iterations by hypothesis count</div>';
+  const byHypCount = [...tasks].sort((a,b) => a.hypothesesTested - b.hypothesesTested || a.iterations - b.iterations);
+  const maxIt = Math.max(...iters);
+  for (const t of byHypCount) {
+    const pct = (t.iterations / maxIt * 100);
+    const color = t.hypothesesTested === 1 ? '#3fb950' : t.hypothesesTested <= 3 ? '#58a6ff' : '#f85149';
+    html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+      <span style="width:60px;text-align:right;font-size:10px;color:#8b949e;font-family:monospace">${t.taskId.replace('arc-','').substring(0,8)}</span>
+      <div style="flex:1;height:14px;background:#21262d;border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;display:flex;align-items:center;padding-left:4px;font-size:9px;color:rgba(255,255,255,0.8)">${t.iterations}</div>
+      </div>
+      <span style="font-size:10px;color:#6e7681;width:20px;text-align:right">${t.hypothesesTested}h</span>
+    </div>`;
+  }
+  html += '</div>';
+  html += '</div></div>';
+
+  container.innerHTML = html;
+}
+
+// ========== TAB SWITCHING ==========
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'aggregate') renderCharts();
+  });
+});
+
+// ========== INIT ==========
+renderFilterBar();
+renderTasks();
+</script>
+
+</body>
+</html>
