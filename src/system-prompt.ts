@@ -10,12 +10,14 @@ You write JavaScript in \`\`\`javascript fenced blocks. After each response, you
 - \`context\` (string) — the task data, available as a variable. Each agent has its own private \`context\`.
 - \`console.log()\` — prints output. This is how you see results between iterations.
 - \`return(value)\` — terminates the loop and returns your final answer. Only call this when you are confident.
-- \`await rlm(query, context?, { systemPrompt? })\` — spawn a child RLM with its own iteration loop.
+- \`await rlm(query, context?, { systemPrompt?, model? })\` — spawn a child RLM with its own iteration loop.
   Provide task-specific instructions via the \`systemPrompt\` option. The child automatically gets code execution, iteration capability, and awareness of its position in the delegation tree — you only need to provide the task instructions.
+  Use \`model\` to select an alias from the Available Models table (if configured). Omit to use the current model.
   **CRITICAL: Must be awaited — unawaited calls are silently lost and waste API budget.**
   If you define an async helper that calls rlm(), you must also await the helper call.
-- \`await llm(query, context?)\` — one-shot LLM call. No REPL, no iteration, no delegation.
+- \`await llm(query, context?, { model? })\` — one-shot LLM call. No REPL, no iteration, no delegation.
   Costs 1 API call vs 3-7 for rlm(). Prefer for simple tasks: classify an item, extract a value, answer a question.
+  Use \`model\` to select an alias from the Available Models table (if configured). Omit to use the current model.
   \`llm()\` children have NO access to \`__ctx.shared.data\` — pass all needed data in the context parameter.
 - \`__rlm\` (read-only) — your position in the delegation tree:
   - \`depth\` / \`maxDepth\` — current recursion depth and limit (root = 0)
@@ -75,18 +77,47 @@ Respond with plain text and fenced code blocks only.`;
  */
 export function buildChildRepl(hasRlm: boolean): string {
 	const rlmDoc = hasRlm
-		? `\n- \`await rlm(query, context?, { systemPrompt? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited.`
+		? `\n- \`await rlm(query, context?, { systemPrompt?, model? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited.`
 		: "";
 	return (
 		`\n\n## Environment\n\n` +
 		`- \`context\` (string) — data provided by your parent\n` +
 		`- \`console.log()\` — prints output (how you see results between iterations)\n` +
 		`- \`return(value)\` — return your final answer (only after verifying via console.log)\n` +
-		`- \`await llm(query, context?)\` — one-shot LLM call for simple subtasks` +
+		`- \`await llm(query, context?, { model? })\` — one-shot LLM call for simple subtasks` +
 		rlmDoc + `\n` +
 		`- \`__ctx.shared.data\` — the root context data, readable at any depth\n` +
 		`- Variables persist across iterations\n\n` +
 		`Write JavaScript in \`\`\`javascript fenced blocks. Your code executes in a persistent sandbox.`
+	);
+}
+
+/**
+ * Render an "Available Models" system-prompt section from a models registry.
+ * Returns empty string if models is undefined/empty.
+ */
+export function buildModelTable(
+	models?: Record<string, { tags?: string[]; description?: string }>,
+): string {
+	if (!models || Object.keys(models).length === 0) return "";
+
+	const aliases = Object.keys(models).sort();
+	const rows = aliases.map((alias) => {
+		const { tags, description } = models[alias];
+		const tagsStr = tags && tags.length > 0 ? tags.join(", ") : "-";
+		const descStr = description || "-";
+		return `| ${alias} | ${tagsStr} | ${descStr} |`;
+	});
+
+	return (
+		`\n\n## Available Models\n\n` +
+		`When delegating with \`rlm()\` or \`llm()\`, you can select a model by alias:\n\n` +
+		`| Alias | Tags | Description |\n` +
+		`|-------|------|-------------|\n` +
+		rows.join("\n") +
+		`\n\nUsage: \`await rlm("query", context, { model: "fast" })\`\n` +
+		`       \`await llm("query", context, { model: "fast" })\`\n` +
+		`Default (no model specified): uses the same model as the current agent.`
 	);
 }
 

@@ -59,6 +59,17 @@ npx node-rlm --query "Hello" --model custom/my-model --base-url http://localhost
 | `--base-url <url>`      | --                                         | Custom API base URL (for Ollama, vLLM, etc.)              |
 | `--max-iterations <n>`  | 15                                         | Maximum REPL loop iterations (root)                       |
 | `--max-depth <n>`       | 3                                          | Maximum recursion depth; beyond this, `rlm()` is one-shot |
+| `--model-alias <spec>`  | --                                         | Register a named model for child delegation (repeatable)  |
+
+Model aliases let the root agent (and its children) delegate to different models by name. Format: `alias=provider/model[:tag1,tag2,...]`
+
+```bash
+npx node-rlm --query "Analyze this dataset" \
+  --model-alias fast=openrouter/google/gemini-3-flash-preview:fast,cheap \
+  --model-alias smart=openrouter/anthropic/claude-sonnet-4:intelligent,thorough
+```
+
+The agent sees an "Available Models" table in its system prompt and can delegate with `await rlm("subtask", data, { model: "fast" })` or `await llm("classify this", item, { model: "fast" })`.
 
 ### Providers
 
@@ -100,6 +111,7 @@ Throws `RlmMaxIterationsError` if the iteration budget is exhausted (carries par
 | `maxIterations` | `number`  | 15         | REPL loop budget for the root agent                          |
 | `maxDepth`      | `number`  | 3          | Recursion depth limit                                        |
 | `pluginBodies`  | `string`  | --         | Extra prompt text appended to the root agent's system prompt |
+| `models`        | `Record<string, ModelEntry>` | -- | Named model aliases for child delegation (see below)  |
 
 ### Sandbox globals
 
@@ -110,8 +122,8 @@ These are available to the model inside the REPL:
 | `context`                                       | Task data (reads `__ctx.local.context`, falling back to `__ctx.shared.data`).                                           |
 | `console.log()`                                 | Output visible to the model between iterations.                                                                         |
 | `return(value)`                                 | Ends the loop and sets the final answer. First-iteration returns are intercepted for verification.                      |
-| `await rlm(query, context?, { systemPrompt? })` | Spawn a child RLM. Shared sandbox, own message history. Must be awaited.                                                |
-| `await llm(query, context?)`                    | One-shot LLM call. No REPL, no iteration.                                                                               |
+| `await rlm(query, context?, { systemPrompt?, model? })` | Spawn a child RLM. Shared sandbox, own message history. `model` selects an alias. Must be awaited.              |
+| `await llm(query, context?, { model? })`        | One-shot LLM call. No REPL, no iteration. `model` selects an alias.                                                     |
 | `__rlm`                                         | Read-only delegation context: `depth`, `maxDepth`, `iteration`, `maxIterations`, `lineage`, `invocationId`, `parentId`. |
 | `__ctx.shared.data`                             | Root context (frozen, readable by all depths).                                                                          |
 | `__ctx.local`                                   | This invocation's writable workspace.                                                                                   |

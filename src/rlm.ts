@@ -1,7 +1,13 @@
 import { JsEnvironment } from "./environment.js";
-import { buildChildRepl, FLAT_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./system-prompt.js";
+import { buildChildRepl, buildModelTable, FLAT_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./system-prompt.js";
 
 export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string>;
+
+export interface ModelEntry {
+	callLLM: CallLLM;
+	tags?: string[];
+	description?: string;
+}
 
 export interface RlmOptions {
 	callLLM: CallLLM;
@@ -9,6 +15,8 @@ export interface RlmOptions {
 	maxDepth?: number;
 	/** Concatenated plugin bodies to append to the root agent's system prompt. */
 	pluginBodies?: string;
+	/** Named model aliases available for child delegation. */
+	models?: Record<string, ModelEntry>;
 }
 
 export interface RlmResult {
@@ -122,9 +130,12 @@ export async function rlm(query: string, context: string | undefined, options: R
 		maxIterations: options.maxIterations ?? 15,
 		maxDepth: options.maxDepth ?? 3,
 		pluginBodies: options.pluginBodies,
+		models: options.models,
 	};
 
-	const rootSystemPrompt = opts.pluginBodies ? `${SYSTEM_PROMPT}\n\n---\n\n${opts.pluginBodies}` : SYSTEM_PROMPT;
+	const modelTable = buildModelTable(opts.models);
+	const basePrompt = SYSTEM_PROMPT + modelTable;
+	const rootSystemPrompt = opts.pluginBodies ? `${basePrompt}\n\n---\n\n${opts.pluginBodies}` : basePrompt;
 
 	const env = new JsEnvironment();
 
@@ -213,7 +224,10 @@ export async function rlm(query: string, context: string | undefined, options: R
 		invocationId: string,
 		parentId: string | null,
 		customSystemPrompt?: string,
+		callLLMOverride?: CallLLM,
 	): Promise<RlmResult> {
+		const callLLM = callLLMOverride ?? opts.callLLM;
+
 		if (depth >= opts.maxDepth) {
 			const msg = context ? `${query}\n\nContext: ${context}` : query;
 			const flatOrientation = buildOrientationBlock(
@@ -223,7 +237,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 			const effectiveFlatPrompt = customSystemPrompt
 				? customSystemPrompt + flatOrientation
 				: FLAT_SYSTEM_PROMPT + flatOrientation;
-			const answer = await opts.callLLM([{ role: "user", content: msg }], effectiveFlatPrompt);
+			const answer = await callLLM([{ role: "user", content: msg }], effectiveFlatPrompt);
 			return { answer, iterations: 1, trace: [] };
 		}
 
@@ -240,14 +254,14 @@ export async function rlm(query: string, context: string | undefined, options: R
 			// Parent provided custom instructions — use child base template
 			const hasRlm = depth < opts.maxDepth - 1;
 			const childBase = buildChildRepl(hasRlm);
-			effectiveSystemPrompt = customSystemPrompt + childBase + orientationBlock;
+			effectiveSystemPrompt = customSystemPrompt + childBase + modelTable + orientationBlock;
 		} else if (depth === 0) {
 			// Root agent gets the full system prompt with plugins
 			effectiveSystemPrompt = rootSystemPrompt + orientationBlock +
 				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
 		} else {
 			// Non-root child without custom prompt — use base system prompt, no plugins
-			effectiveSystemPrompt = SYSTEM_PROMPT + orientationBlock +
+			effectiveSystemPrompt = SYSTEM_PROMPT + modelTable + orientationBlock +
 				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
 		}
 
@@ -285,7 +299,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		for (let iteration = 0; iteration < effectiveMaxIterations; iteration++) {
 			let response: string;
 			try {
-				response = await opts.callLLM(messages, effectiveSystemPrompt);
+				response = await callLLM(messages, effectiveSystemPrompt);
 			} catch (err) {
 				throw new RlmError(
 					err instanceof Error ? err.message : String(err),
@@ -403,7 +417,21 @@ export async function rlm(query: string, context: string | undefined, options: R
 		throw new RlmMaxIterationsError(effectiveMaxIterations, trace);
 	}
 
-	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string }): Promise<string> => {
+	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string }): Promise<string> => {
+		// Resolve model override if requested
+		let modelCallLLM: CallLLM | undefined;
+		if (rlmOpts?.model) {
+			const entry = opts.models?.[rlmOpts.model];
+			if (!entry) {
+				return Promise.reject(
+					new Error(
+						`Unknown model alias "${rlmOpts.model}". Available: ${Object.keys(opts.models ?? {}).join(", ") || "none configured"}`,
+					),
+				);
+			}
+			modelCallLLM = entry.callLLM;
+		}
+
 		const savedDepth = activeDepth;
 		const childLineage = [...((env.get("__rlm") as DelegationContext | undefined)?.lineage ?? [q]), q];
 		const callerInvocationId = (env.get("__rlm") as DelegationContext | undefined)?.invocationId ?? "root";
@@ -418,7 +446,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 
 		const promise = (async () => {
 			try {
-				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, rlmOpts?.systemPrompt);
+				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, rlmOpts?.systemPrompt, modelCallLLM);
 				return result.answer;
 			} finally {
 				activeDepth = savedDepth;
@@ -431,9 +459,19 @@ export async function rlm(query: string, context: string | undefined, options: R
 		return promise;
 	});
 
-	env.set("llm", async (q: string, c?: string): Promise<string> => {
+	env.set("llm", async (q: string, c?: string, llmOpts?: { model?: string }): Promise<string> => {
+		let effectiveCallLLM = opts.callLLM;
+		if (llmOpts?.model) {
+			const entry = opts.models?.[llmOpts.model];
+			if (!entry) {
+				throw new Error(
+					`Unknown model alias "${llmOpts.model}". Available: ${Object.keys(opts.models ?? {}).join(", ") || "none configured"}`,
+				);
+			}
+			effectiveCallLLM = entry.callLLM;
+		}
 		const msg = c ? `${q}\n\nContext: ${c}` : q;
-		return opts.callLLM([{ role: "user", content: msg }], FLAT_SYSTEM_PROMPT);
+		return effectiveCallLLM([{ role: "user", content: msg }], FLAT_SYSTEM_PROMPT);
 	});
 
 	return rlmInternal(query, context, 0, [query], "root", null);

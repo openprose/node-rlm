@@ -459,4 +459,109 @@ describe("rlm", () => {
 		expect(llmPrompt).not.toContain("## My Plugin");
 		expect(llmPrompt).not.toContain("Do special things.");
 	});
+
+	it("model selection: rlm() child uses the specified model's callLLM", async () => {
+		let fastModelCalled = false;
+		const defaultCallLLM: CallLLM = async (messages, _systemPrompt) => {
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "hello") {
+				return '```repl\nreturn "FAST_MODEL response"\n```';
+			}
+			return '```repl\nresult = await rlm("hello", undefined, { model: "fast" })\nreturn result\n```';
+		};
+
+		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
+			fastModelCalled = true;
+			return '```repl\nreturn "FAST_MODEL response"\n```';
+		};
+
+		const result = await rlm("parent query", undefined, {
+			callLLM: defaultCallLLM,
+			maxDepth: 3,
+			models: {
+				fast: { callLLM: fastCallLLM, tags: ["speed"], description: "A fast model" },
+			},
+		});
+
+		expect(fastModelCalled).toBe(true);
+		expect(result.answer).toBe("FAST_MODEL response");
+	});
+
+	it("model selection: llm() uses the specified model's callLLM", async () => {
+		let fastModelCalled = false;
+		const defaultCallLLM: CallLLM = async (_messages, systemPrompt) => {
+			if (!systemPrompt.includes("javascript")) {
+				return "default llm answer";
+			}
+			return '```repl\nresult = await llm("hello", undefined, { model: "fast" })\nreturn result\n```';
+		};
+
+		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
+			fastModelCalled = true;
+			return "FAST_MODEL llm answer";
+		};
+
+		const result = await rlm("test", undefined, {
+			callLLM: defaultCallLLM,
+			models: {
+				fast: { callLLM: fastCallLLM, tags: ["speed"], description: "A fast model" },
+			},
+		});
+
+		expect(fastModelCalled).toBe(true);
+		expect(result.answer).toBe("FAST_MODEL llm answer");
+	});
+
+	it("model selection: invalid model alias produces error containing 'Unknown model alias'", async () => {
+		let callIndex = 0;
+		const defaultCallLLM: CallLLM = async (messages, _systemPrompt) => {
+			callIndex++;
+			if (callIndex === 1) {
+				return '```repl\nresult = await rlm("hello", undefined, { model: "nonexistent" })\nreturn result\n```';
+			}
+			// After the error, return so the test doesn't hit max iterations
+			return '```repl\nreturn "saw error"\n```';
+		};
+
+		const result = await rlm("test", undefined, {
+			callLLM: defaultCallLLM,
+			maxDepth: 3,
+			models: {
+				fast: { callLLM: defaultCallLLM },
+			},
+		});
+
+		const allOutput = result.trace.map((t) => `${t.output}\n${t.error ?? ""}`).join("\n");
+		expect(allOutput).toContain("Unknown model alias");
+	});
+
+	it("model selection: no model specified uses default callLLM", async () => {
+		let defaultCalledForChild = false;
+		let fastModelCalled = false;
+
+		const defaultCallLLM: CallLLM = async (messages, systemPrompt) => {
+			const userMsg = messages[0]?.content || "";
+			if (!systemPrompt.includes("javascript")) {
+				defaultCalledForChild = true;
+				return "default llm answer";
+			}
+			return '```repl\nresult = await llm("hello")\nreturn result\n```';
+		};
+
+		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
+			fastModelCalled = true;
+			return "FAST_MODEL llm answer";
+		};
+
+		const result = await rlm("test", undefined, {
+			callLLM: defaultCallLLM,
+			models: {
+				fast: { callLLM: fastCallLLM },
+			},
+		});
+
+		expect(defaultCalledForChild).toBe(true);
+		expect(fastModelCalled).toBe(false);
+		expect(result.answer).toBe("default llm answer");
+	});
 });

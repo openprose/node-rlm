@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fromProviderModel } from "./drivers/openrouter-compatible.js";
 import { rlm } from "./rlm.js";
+import type { ModelEntry } from "./rlm.js";
 
 function usage(): never {
 	console.log(`Usage: node-rlm --query <query> [options]
@@ -16,6 +17,8 @@ Options:
   --base-url <url>        Custom API base URL (for Ollama, vLLM, etc.)
   --max-iterations <n>    Maximum iterations (default: 15)
   --max-depth <n>         Maximum recursion depth (default: 3)
+  --model-alias <alias>=<provider/model>[:<tag1>,<tag2>,...]
+                          Register a named model alias for child delegation (repeatable)
 
 Model format: provider/model-id (e.g. openrouter/google/gemini-3-flash-preview, openai/gpt-4o)
 
@@ -25,6 +28,7 @@ Examples:
   node-rlm --query "What is 2+2"
   node-rlm --query "Hello" --model openai/gpt-4o
   node-rlm --query "Hello" --model custom/my-model --base-url http://localhost:11434/v1
+  node-rlm --query "Hello" --model-alias fast=openrouter/google/gemini-3-flash-preview:fast,cheap
 `);
 	process.exit(1);
 }
@@ -37,12 +41,19 @@ function parseArgs(argv: string[]): {
 	baseUrl?: string;
 	maxIterations: number;
 	maxDepth: number;
+	modelAliases: string[];
 } {
 	const args: Record<string, string> = {};
+	const modelAliases: string[] = [];
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg.startsWith("--") && i + 1 < argv.length) {
-			args[arg.slice(2)] = argv[i + 1];
+			const key = arg.slice(2);
+			if (key === "model-alias") {
+				modelAliases.push(argv[i + 1]);
+			} else {
+				args[key] = argv[i + 1];
+			}
 			i++;
 		}
 	}
@@ -59,7 +70,46 @@ function parseArgs(argv: string[]): {
 		baseUrl: args["base-url"],
 		maxIterations: parseInt(args["max-iterations"] ?? "15", 10),
 		maxDepth: parseInt(args["max-depth"] ?? "3", 10),
+		modelAliases,
 	};
+}
+
+function parseModelAliases(aliases: string[]): Record<string, ModelEntry> | undefined {
+	if (aliases.length === 0) return undefined;
+
+	const models: Record<string, ModelEntry> = {};
+	for (const raw of aliases) {
+		const eqIdx = raw.indexOf("=");
+		if (eqIdx === -1) {
+			console.error(`Invalid --model-alias format: "${raw}" (expected alias=provider/model[:tag1,tag2,...])`);
+			process.exit(1);
+		}
+		const alias = raw.slice(0, eqIdx);
+		const rest = raw.slice(eqIdx + 1);
+
+		const colonIdx = rest.indexOf(":");
+		let modelId: string;
+		let tags: string[] | undefined;
+		if (colonIdx === -1) {
+			modelId = rest;
+		} else {
+			modelId = rest.slice(0, colonIdx);
+			const tagStr = rest.slice(colonIdx + 1);
+			tags = tagStr.split(",").filter(Boolean);
+		}
+
+		if (!alias || !modelId) {
+			console.error(`Invalid --model-alias format: "${raw}" (alias and model ID must be non-empty)`);
+			process.exit(1);
+		}
+
+		models[alias] = {
+			callLLM: fromProviderModel(modelId),
+			tags,
+			description: modelId,
+		};
+	}
+	return models;
 }
 
 function loadContextDir(dirPath: string): string {
@@ -102,8 +152,11 @@ async function main() {
 		baseUrl: args.baseUrl,
 	});
 
+	const models = parseModelAliases(args.modelAliases);
+
 	console.log(`Model: ${args.model}`);
 	if (args.baseUrl) console.log(`Base URL: ${args.baseUrl}`);
+	if (models) console.log(`Model aliases: ${Object.keys(models).join(", ")}`);
 	if (context) console.log(`Context: ${context.length.toLocaleString()} characters`);
 	console.log(`Max iterations: ${args.maxIterations}`);
 	console.log(`Max depth: ${args.maxDepth}`);
@@ -114,6 +167,7 @@ async function main() {
 		callLLM,
 		maxIterations: args.maxIterations,
 		maxDepth: args.maxDepth,
+		...(models && { models }),
 	});
 
 	for (const entry of result.trace) {
