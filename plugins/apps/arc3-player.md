@@ -47,7 +47,7 @@ Fetches the current scorecard summary. Call this when the game ends (state = WIN
 {
   game_id: string,
   guid: string,           // unique frame ID (used internally)
-  frame: number[][][],    // 64x64 grid, color indices 0-15
+  frame: number[][][],    // 64x64 grid of pixel values (each cell is an array of color channel values)
   state: "NOT_FINISHED" | "NOT_STARTED" | "WIN" | "GAME_OVER",
   levels_completed: number,
   win_levels: number,
@@ -55,7 +55,7 @@ Fetches the current scorecard summary. Call this when the game ends (state = WIN
 }
 ```
 
-The `frame` is a 64x64 grid where each cell is a color index (0-15). Analyze the visual patterns to understand the game mechanics.
+The `frame` is a 3D array (`number[][][]`) representing a 64x64 grid where each cell contains an array of color channel values. Analyze the visual patterns to understand the game mechanics.
 
 ### Action Semantics
 

@@ -95,3 +95,14 @@ The filter API can be useful for ad-hoc exploration:
 ```bash
 curl 'https://datasets-server.huggingface.co/filter?dataset=oolongbench/oolong-synth&config=default&split=validation&where=dataset=%27trec_coarse%27%20AND%20context_len=131072&offset=0&length=5'
 ```
+
+## Other Benchmarks
+
+**S-NIAH** — Synthetic benchmark. Tasks are generated programmatically at eval time; no download needed.
+
+**ARC-AGI-2** — Downloaded from GitHub Releases:
+```bash
+npx tsx eval/download.ts --dataset arc
+```
+
+**ARC-AGI-3** — API-based benchmark. No download needed. Requires `ARC3_API_KEY` environment variable.

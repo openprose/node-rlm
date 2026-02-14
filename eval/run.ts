@@ -348,6 +348,11 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 			};
 
 		case "arc3": {
+			if (!process.env.ARC3_API_KEY) {
+				console.error("ARC3_API_KEY not set. Required for ARC-3 benchmark.");
+				console.error("Set it in .env or as an environment variable.");
+				process.exit(1);
+			}
 			const clients = new Map<string, Arc3Client>();
 			return {
 				loadTasks: () => loadArc3Tasks(

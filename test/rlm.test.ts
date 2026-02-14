@@ -535,6 +535,19 @@ describe("rlm", () => {
 		expect(allOutput).toContain("Unknown model alias");
 	});
 
+	it("sandboxGlobals: custom globals are accessible from agent code", async () => {
+		const mockObj = { greet: (name: string) => "hello " + name };
+		const callLLM = mockCallLLM([
+			'```repl\nreturn myApi.greet("world")\n```',
+			'```repl\nreturn myApi.greet("world")\n```',
+		]);
+		const result = await rlm("test query", undefined, {
+			callLLM,
+			sandboxGlobals: { myApi: mockObj },
+		});
+		expect(result.answer).toBe("hello world");
+	});
+
 	it("model selection: no model specified uses default callLLM", async () => {
 		let defaultCalledForChild = false;
 		let fastModelCalled = false;

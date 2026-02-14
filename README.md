@@ -189,7 +189,7 @@ plugins/
   apps/               Task-strategy prompts
   profiles/           Model-to-driver mappings
 
-eval/                 Benchmark harness (OOLONG, S-NIAH) -- see eval/README.md
+eval/                 Benchmark harness (OOLONG, S-NIAH, ARC, ARC-AGI-3) -- see eval/README.md
 test/                 Vitest tests
 ```
 
