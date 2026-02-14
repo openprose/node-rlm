@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC-AGI-2: Algorithmic Analysis Driver Impact</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; }
+a { color: #58a6ff; text-decoration: none; }
+
+/* Header */
+.header { background: linear-gradient(135deg, #161b22 0%, #0d1117 100%); border-bottom: 1px solid #30363d; padding: 24px 32px; }
+.header h1 { font-size: 24px; font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
+.header .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
+
+/* Score Cards */
+.score-row { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.score-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; flex: 1; min-width: 260px; }
+.score-card.best-known { border-left: 4px solid #3fb950; }
+.score-card.algorithmic { border-left: 4px solid #f0883e; }
+.score-card.delta { border-left: 4px solid #f85149; }
+.score-card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 8px; }
+.score-card .big-num { font-size: 36px; font-weight: 700; line-height: 1; }
+.score-card .big-num.green { color: #3fb950; }
+.score-card .big-num.orange { color: #f0883e; }
+.score-card .big-num.red { color: #f85149; }
+.score-card .big-num.purple { color: #bc8cff; }
+.score-card .detail { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+/* Analysis Context Panel */
+.analysis-context { margin-top: 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 20px; }
+.analysis-context h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e; margin-bottom: 8px; }
+.analysis-context p { font-size: 13px; color: #c9d1d9; line-height: 1.7; }
+.analysis-context .highlight { color: #f85149; font-weight: 600; }
+
+/* Nav tabs */
+.nav-tabs { display: flex; gap: 2px; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 32px; }
+.nav-tab { padding: 10px 16px; font-size: 14px; color: #8b949e; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.nav-tab:hover { color: #c9d1d9; }
+.nav-tab.active { color: #f0f6fc; border-bottom-color: #f78166; }
+
+/* Content */
+.content { padding: 24px 32px; max-width: 1600px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Category headers */
+.cat-header { display: flex; align-items: flex-start; gap: 12px; margin: 24px 0 12px; padding: 8px 0; border-bottom: 1px solid #21262d; flex-wrap: wrap; }
+.cat-header:first-child { margin-top: 0; }
+.cat-badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+.cat-badge.both-pass { background: rgba(63,185,80,0.15); color: #3fb950; }
+.cat-badge.gained { background: rgba(136,132,216,0.15); color: #bc8cff; }
+.cat-badge.lost { background: rgba(248,81,73,0.15); color: #f85149; }
+.cat-badge.both-fail { background: rgba(139,148,158,0.15); color: #8b949e; }
+.cat-header h2 { font-size: 16px; color: #f0f6fc; flex-shrink: 0; }
+.cat-count { font-size: 13px; color: #8b949e; flex-shrink: 0; }
+.cat-context { font-size: 12px; color: #6e7681; line-height: 1.5; flex-basis: 100%; margin-top: 4px; padding-left: 2px; }
+
+/* Task row */
+.task-row { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 8px; overflow: hidden; transition: all 0.2s; }
+.task-row:hover { border-color: #484f58; }
+.task-header { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 0; cursor: pointer; user-select: none; }
+.task-id-col { padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid #21262d; }
+.task-id { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; color: #f0f6fc; }
+.task-meta { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+/* Run columns */
+.run-col { padding: 10px 16px; }
+.run-col + .run-col { border-left: 1px solid #21262d; }
+.run-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.run-label.r026-label { color: #8b949e; }
+.run-label.r035-label { color: #8b949e; }
+.verdict-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; }
+.verdict-badge.pass { background: rgba(63,185,80,0.2); color: #3fb950; }
+.verdict-badge.fail { background: rgba(248,81,73,0.2); color: #f85149; }
+.run-stats { font-size: 11px; color: #8b949e; margin-bottom: 6px; }
+
+/* Swimlane */
+.swimlane { display: flex; gap: 2px; height: 28px; align-items: stretch; }
+.swim-block { border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.8); min-width: 18px; flex: 1; position: relative; cursor: default; transition: transform 0.1s; }
+.swim-block:hover { transform: scaleY(1.15); z-index: 2; }
+.swim-block .swim-tip { display: none; position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%); background: #1c2128; border: 1px solid #484f58; border-radius: 6px; padding: 6px 10px; font-size: 11px; white-space: nowrap; z-index: 100; color: #c9d1d9; font-weight: 400; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.4); max-width: 350px; overflow: hidden; text-overflow: ellipsis; }
+.swim-block:hover .swim-tip { display: block; }
+
+/* Phase colors */
+.phase-EXPLORE { background: #1f6feb; }
+.phase-EXTRACT { background: #3fb950; }
+.phase-VERIFY { background: #bc8cff; }
+.phase-RETURN { background: #f0f6fc; color: #0d1117 !important; }
+.phase-ERROR { background: #f85149; }
+.phase-PLAN { background: #d29922; }
+.phase-STALL { background: #6e7681; }
+.phase-TIMEOUT { background: #484f58; border: 1px dashed #6e7681; }
+
+/* Iter timeline scale */
+.iter-scale { display: flex; gap: 2px; height: 12px; margin-top: 2px; }
+.iter-num { flex: 1; text-align: center; font-size: 8px; color: #484f58; min-width: 18px; }
+
+/* Detail panel */
+.task-detail { display: none; border-top: 1px solid #21262d; padding: 16px; background: #0d1117; }
+.task-detail.open { display: block; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.detail-section { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px; }
+.detail-section h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b949e; margin-bottom: 8px; }
+.detail-section .stat-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #21262d; }
+.detail-section .stat-row:last-child { border-bottom: none; }
+.detail-section .stat-label { color: #8b949e; }
+.detail-section .stat-val { color: #f0f6fc; font-weight: 600; font-family: 'SF Mono', monospace; }
+
+/* Iteration detail table */
+.iter-detail-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+.iter-detail-table th { text-align: left; padding: 4px 8px; color: #8b949e; border-bottom: 1px solid #30363d; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.iter-detail-table td { padding: 4px 8px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+.iter-detail-table tr:last-child td { border-bottom: none; }
+.iter-detail-table .phase-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+.iter-detail-table .output-text { font-family: 'SF Mono', monospace; font-size: 10px; color: #8b949e; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iter-detail-table .code-yes { color: #3fb950; }
+.iter-detail-table .code-no { color: #484f58; }
+.iter-detail-table .err-yes { color: #f85149; }
+
+/* Full-width detail section */
+.detail-full { grid-column: 1 / -1; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px; }
+.detail-full h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #bc8cff; margin-bottom: 8px; }
+
+/* Legend */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; padding: 12px 16px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
+.legend-swatch { width: 16px; height: 12px; border-radius: 2px; }
+
+/* Driver Adoption Section */
+.adoption-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; }
+.adoption-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+.adoption-card h3 { font-size: 14px; color: #f0f6fc; margin-bottom: 12px; }
+.adoption-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+.adoption-bar-label { width: 130px; text-align: right; color: #8b949e; flex-shrink: 0; font-family: 'SF Mono', monospace; font-size: 11px; }
+.adoption-bar-track { flex: 1; height: 20px; background: #21262d; border-radius: 3px; overflow: hidden; position: relative; }
+.adoption-bar-fill { height: 100%; border-radius: 3px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.9); min-width: 1px; transition: width 0.3s; }
+.adoption-bar-val { width: 50px; text-align: left; color: #f0f6fc; font-weight: 600; font-family: monospace; flex-shrink: 0; font-size: 12px; }
+
+/* Efficiency comparison bars */
+.eff-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.eff-label { width: 100px; text-align: right; color: #8b949e; flex-shrink: 0; font-family: 'SF Mono', monospace; font-size: 11px; }
+.eff-bars { flex: 1; display: flex; gap: 4px; height: 22px; align-items: center; }
+.eff-bar { height: 100%; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.9); min-width: 1px; }
+.eff-delta { width: 60px; text-align: center; font-family: monospace; font-size: 11px; flex-shrink: 0; }
+.eff-delta.positive { color: #f85149; }
+.eff-delta.negative { color: #3fb950; }
+.eff-delta.zero { color: #8b949e; }
+
+/* Key Findings */
+.key-findings { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+.key-findings h3 { font-size: 14px; color: #f0f6fc; margin-bottom: 14px; }
+.findings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.finding-card { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px; }
+.finding-card .finding-stat { font-size: 28px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
+.finding-card .finding-stat.green { color: #3fb950; }
+.finding-card .finding-stat.red { color: #f85149; }
+.finding-card .finding-stat.blue { color: #58a6ff; }
+.finding-card .finding-stat.purple { color: #bc8cff; }
+.finding-card .finding-stat.orange { color: #f0883e; }
+.finding-card .finding-label { font-size: 12px; color: #8b949e; line-height: 1.4; }
+.finding-card .finding-detail { font-size: 11px; color: #6e7681; margin-top: 4px; }
+
+/* Expand icon */
+.expand-icon { font-size: 14px; color: #484f58; transition: transform 0.2s; display: inline-block; margin-left: 6px; }
+.task-row.expanded .expand-icon { transform: rotate(90deg); }
+
+/* Filter buttons */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-btn { padding: 4px 12px; font-size: 12px; border-radius: 16px; border: 1px solid #30363d; background: transparent; color: #8b949e; cursor: pointer; transition: all 0.2s; }
+.filter-btn:hover { border-color: #484f58; color: #c9d1d9; }
+.filter-btn.active { background: #21262d; border-color: #484f58; color: #f0f6fc; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .task-header { grid-template-columns: 160px 1fr; }
+  .run-col:nth-child(3) { grid-column: 1 / -1; border-left: none; border-top: 1px solid #21262d; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .score-row { flex-direction: column; }
+  .header { padding: 16px; }
+  .content { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARC-AGI-2: Algorithmic Analysis Driver Impact</h1>
+  <div class="subtitle">Run-026 "Best Known" (9 drivers) vs Run-035 "+algorithmic-analysis" (10 drivers) &mdash; 20 matched tasks, Claude Opus 4.6</div>
+
+  <div class="score-row">
+    <div class="score-card best-known">
+      <h3>Run-026 &mdash; Best Known</h3>
+      <div class="big-num green">65%</div>
+      <div class="detail">13/20 correct &bull; 9 composable drivers &bull; avg 15.4 iters &bull; mean 279s</div>
+    </div>
+    <div class="score-card algorithmic">
+      <h3>Run-035 &mdash; +Algorithmic Analysis</h3>
+      <div class="big-num orange">60%</div>
+      <div class="detail">12/20 correct &bull; 10 drivers (+algorithmic-analysis) &bull; avg 15.4 iters &bull; mean 291s</div>
+    </div>
+    <div class="score-card delta">
+      <h3>Delta</h3>
+      <div class="big-num red">&minus;5pp</div>
+      <div class="detail">&minus;1 net task &bull; gained 1, lost 2 &bull; +$5.17 cost (+34%) &bull; +40% input chars</div>
+    </div>
+  </div>
+
+  <div class="analysis-context">
+    <h3>Analysis Context</h3>
+    <p>The <code>algorithmic-analysis</code> driver was added to test the thesis that heavy mathematical analysis in early iterations would improve pattern discovery. It prescribed a "Grand Survey" framework with systematic dimension analysis, color inventory, transition matrices, diff computation, connected components, and symmetry detection. It also introduced novel techniques: local rule mining, tiling analysis, and periodicity detection. <span class="highlight">Result: a 5pp regression (65% &rarr; 60%)</span>, with substantially higher token usage due to verbose analytical reasoning that consumed iteration budget without improving solve rates.</p>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="trajectories">Trajectories</div>
+  <div class="nav-tab" data-tab="adoption">Driver Adoption</div>
+  <div class="nav-tab" data-tab="efficiency">Iteration Efficiency</div>
+</div>
+
+<div class="content">
+
+<!-- TRAJECTORIES TAB -->
+<div class="tab-panel active" id="tab-trajectories">
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch phase-EXPLORE"></div> Explore</div>
+  <div class="legend-item"><div class="legend-swatch phase-EXTRACT"></div> Extract</div>
+  <div class="legend-item"><div class="legend-swatch phase-VERIFY"></div> Verify</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f0f6fc"></div> Return</div>
+  <div class="legend-item"><div class="legend-swatch phase-ERROR"></div> Error</div>
+  <div class="legend-item"><div class="legend-swatch phase-PLAN"></div> Plan</div>
+  <div class="legend-item"><div class="legend-swatch phase-TIMEOUT" style="border:1px dashed #6e7681"></div> (unused)</div>
+</div>
+
+<div class="filter-bar" id="filter-bar"></div>
+
+<div id="tasks-container"></div>
+
+</div>
+
+<!-- DRIVER ADOPTION TAB -->
+<div class="tab-panel" id="tab-adoption">
+
+<div class="key-findings">
+  <h3>Algorithmic Analysis Driver Adoption Summary</h3>
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="finding-stat orange">20/20</div>
+      <div class="finding-label">Tasks used dimensions + color inventory</div>
+      <div class="finding-detail">Always adopted from Grand Survey</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat red">0/20</div>
+      <div class="finding-label">Tasks used transitions, diff, components, or symmetry</div>
+      <div class="finding-detail">These Grand Survey sections were never adopted</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat blue">3/20</div>
+      <div class="finding-label">Tasks used tiling analysis</div>
+      <div class="finding-detail">arc-135a2760, arc-0934a4d8, arc-a251c730</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat purple">2/20</div>
+      <div class="finding-label">Tasks used periodicity detection</div>
+      <div class="finding-detail">arc-135a2760, arc-0934a4d8</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat red">&minus;5pp</div>
+      <div class="finding-label">Net score impact of the driver</div>
+      <div class="finding-detail">Gained 1 task, lost 2 tasks</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat orange">+40%</div>
+      <div class="finding-label">Increase in input tokens consumed</div>
+      <div class="finding-detail">22M vs 15.8M chars &mdash; verbose analysis overhead</div>
+    </div>
+  </div>
+</div>
+
+<div class="adoption-grid">
+  <div class="adoption-card">
+    <h3>Grand Survey Section Adoption (per task)</h3>
+    <div id="survey-adoption-bars"></div>
+  </div>
+  <div class="adoption-card">
+    <h3>Novel Technique Adoption (per task)</h3>
+    <div id="novel-adoption-bars"></div>
+  </div>
+  <div class="adoption-card" style="grid-column: 1 / -1;">
+    <h3>Per-Task Technique Usage</h3>
+    <div id="technique-grid"></div>
+  </div>
+</div>
+
+</div>
+
+<!-- ITERATION EFFICIENCY TAB -->
+<div class="tab-panel" id="tab-efficiency">
+
+<div class="key-findings">
+  <h3>Iteration Efficiency: Both-Pass Tasks (11 tasks)</h3>
+  <div class="findings-grid">
+    <div class="finding-card">
+      <div class="finding-stat green" id="eff-mean-026"></div>
+      <div class="finding-label">Mean iterations (Run-026)</div>
+      <div class="finding-detail">Best Known configuration</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat orange" id="eff-mean-035"></div>
+      <div class="finding-label">Mean iterations (Run-035)</div>
+      <div class="finding-detail">With algorithmic-analysis driver</div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat" id="eff-mean-delta"></div>
+      <div class="finding-label">Mean iteration delta</div>
+      <div class="finding-detail" id="eff-delta-detail"></div>
+    </div>
+    <div class="finding-card">
+      <div class="finding-stat blue" id="eff-faster-count"></div>
+      <div class="finding-label" id="eff-faster-label"></div>
+      <div class="finding-detail" id="eff-faster-detail"></div>
+    </div>
+  </div>
+</div>
+
+<div class="adoption-card" style="margin-top:16px;">
+  <h3>Iteration Count Comparison (Both-Pass Tasks)</h3>
+  <div id="efficiency-bars"></div>
+</div>
+
+<div class="adoption-card" style="margin-top:16px;">
+  <h3>Wall Time Comparison (Both-Pass Tasks)</h3>
+  <div id="walltime-bars"></div>
+</div>
+
+</div>
+
+</div>
+
+<script>
+// ============================================================
+// EMBEDDED DATA
+// ============================================================
+const DATA = {"r026":{"arc-247ef758":{"s":1,"i":11,"w":151544,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test inputs: 2  Train 0: input 12x18 ->","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Divider column: 3, value: 2 Left side shapes","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Border background: 3 Markers on border:   Co","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Marker positions: {'4':{'col':5,'row':4},'6'","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Left side of OUTPUT:   r0: 0 0 0   r1: 0 0 0","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 5 expected: 0 0 0 2 3 0 0 0 0 4 7 7 0 0 ","e":false},{"p":"EXPLORE","c":true,"o":"Output rows 6-8 for train 1:   r6: 0 0 0 0 3 4 0 7 0 5 0 7 0","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"RETURN","c":true,"o":"Test 0: input 15x20 -> output 15x20 Input: 0 1 0 0 3 9 9 1 9","e":false},{"p":"RETURN","c":true,"o":"Test 1 border bg: 1 Test 1 top row (right): 9 1 7 1 7 3 1 4 ","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-0934a4d8":{"s":0,"i":19,"w":209118,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 4 Test examples: 1  Train 0:   Input:  30","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Input: 353366541499439999349941456633 533366","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 30x30   H-reflection diffs: 776   V-reflection diff","e":false},{"p":"VERIFY","c":true,"o":"Train 0: 180-rot diffs: 606   bbox: rows 0-29, cols 0-29, si","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 8-cells: 36, bbox: rows 14-22, cols 25-28, size 9x4","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 8-region rows 14-22, cols 25-28   Predicted (180-ro","e":false},{"p":"VERIFY","c":true,"o":"Train 0: 8-region rows 14-22, cols 25-28   Pred H-reflect: [","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 8-region rows 14-22, cols 25-28 Predicted (4-fold s","e":false},{"p":"PLAN","c":true,"o":"Q1 vs Q4 (180-rot): 78/225 Q2 vs Q3 (180-rot): 69/225 Q1 vs ","e":false},{"p":"VERIFY","c":true,"o":"2x2 180-rot symmetric blocks: 139/225 Row-pair match: 158/45","e":false},{"p":"VERIFY","c":true,"o":"Row 0 vs 15: 5/30 Row 1 vs 16: 3/30 Cols 2 and 29: 30/30 Col","e":false},{"p":"VERIFY","c":true,"o":"Col 0: no partner (31) Col 1: no partner (30) Col 2 vs 29: 3","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Scor","e":false},{"p":"EXTRACT","c":true,"o":"Test result:   9   9   9   9   7   7   1   6   1 ANSWER: [[n","e":false},{"p":"VERIFY","c":true,"o":"Test input: 30x30 8-region: rows 14-22, cols 0-2 44135779616","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: row sums: [object Object] col sums: [object Object]","e":false},{"p":"PLAN","c":true,"o":"Train 0: rowK=31, colK=31 Train 1: rowK=31, colK=31 Train 2:","e":false},{"p":"EXPLORE","c":true,"o":"Column pairings (>=26/30 match):   Cols 2 & 29: 21/30 (sum=3","e":false},{"p":"EXPLORE","c":true,"o":"Using point sym with fallback to row sym: 889 889 889 889 44","e":false}]},"arc-135a2760":{"s":0,"i":19,"w":246611,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test examples: 1  Train 0:   Input:  5x","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Input ===   0: [3,3,3,3,3,3,3,3,3,3,3,3,3]   1: ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 1 Region 2 === Row 7 input:  [1,4,1,4,1,4,1,1,1,4,","e":false},{"p":"EXTRACT","c":true,"o":"Period for region 1 row 2: 3 Period for region 2 row 7: 2 Pe","e":false},{"p":"PLAN","c":true,"o":"Region 1: [object Object] Region 2: [object Object] Region 3","e":false},{"p":"EXPLORE","c":true,"o":"Region 1: pH=1, pW=3, score=0.889 Region 2: pH=2, pW=2, scor","e":false},{"p":"PLAN","c":true,"o":"bg: 3 bgRows: 0,4 bgCols: 0,12 rowBands: [[1,3]] colBands: [","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS","e":false},{"p":"VERIFY","c":true,"o":"Test output dimensions: 29 x 29 Test output:   0: [8,8,8,8,8","e":false},{"p":"VERIFY","c":true,"o":"Test input:   0: [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,","e":false},{"p":"VERIFY","c":true,"o":"Differences between test input and output:   [2,12]: 8 -> 1 ","e":false},{"p":"VERIFY","c":true,"o":"Region 4 (9-region) input:   r2: [8,8,8,8]   r3: [8,8,8,8]  ","e":false},{"p":"EXPLORE","c":true,"o":"Region 4 column analysis:   Col 0: [8,8,8,8,8,8,8,8,8,8,8,8,","e":false},{"p":"EXPLORE","c":true,"o":"Region 4: 1 x 3 score: 0.850   [0]: [8,9,8] Region 3: 2 x 4 ","e":false},{"p":"EXPLORE","c":true,"o":"R4 1x3: score=0.850 tile=[[8,9,8]] R4 1x4: score=0.850 tile=","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 2 exp: [3,2,1,3,1,3,1,3,1,3,1,2,3]   Row","e":false},{"p":"PLAN","c":true,"o":"Train 0: FAIL   Row 2 diff Train 1: FAIL   Row 7 diff   Row ","e":false},{"p":"PLAN","c":true,"o":"Train 0: PASS Train 1: PASS DEADLINE CANDIDATE: [[8,8,8,8,8,","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-2ba387bc":{"s":1,"i":10,"w":98745,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 4 Test examples: 1  Train 0:   Input:  23","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Input === 000000000000000000000000 0011110000000","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 ===   Color 1: 4x4 at (1,2) cells=16 SOLID   Col","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Output ===   4 blocks of 4 rows each   Block 0: ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Frames: 8@(6,17), 3@(13,8), 4@(18,3) Solids:","e":false},{"p":"VERIFY","c":true,"o":"=== Train 0 === Frames (sorted by pos): 8@(6,17),3@(13,8),4@","e":false},{"p":"EXPLORE","c":true,"o":"Pattern: frames sorted by position pair with solids sorted b","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Scor","e":false},{"p":"RETURN","c":true,"o":"Test output: 44446666 40046666 40046666 44446666 22227777 20","e":false},{"p":"VERIFY","c":true,"o":"","e":false}]},"arc-136b0064":{"s":1,"i":17,"w":285438,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 1  Train 0:   Input:  15","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Input: 202060640500000 202006040000000 22200","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Divider column (all 4s): 7 Left side:   2020","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === (5 at right[0][1])   Block 0: colors = [2,6]","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === (5 at output col 1)   Block 0: left color 2,","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Output ===   Row 0: 0500000  nonzero at cols 1:5","e":false},{"p":"EXPLORE","c":true,"o":"Shape 1: 5 filled cells Shape 2: 7 filled cells Shape 3: 6 f","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0: 5 at (0,1) ===   2: 2 cells, horizontal, rows 1","e":false},{"p":"VERIFY","c":true,"o":"Shape 1: cols=[2,2,1] rows=[2,2,1] Shape 2: cols=[3,1,3] row","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Start: (0,1) Path length: 20, total non-zero","e":false},{"p":"EXPLORE","c":true,"o":"Checking right-shape cell count vs output segment length:  T","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output:   Row 0: 0500000   Row 1: 2200000   Row 2: 1","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 cell counts: {'1':9,'2':2,'3':4,'6':6} Train 1 cell ","e":false},{"p":"PLAN","c":true,"o":"Start: (0,1)   Shape 2: (0,1) -> down 1, horiz -1 -> end (1,","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"VERIFY","c":true,"o":"Test input:   110011040050000   101010140000000   0100010400","e":false},{"p":"RETURN","c":true,"o":"ANSWER: [[0,0,5,0,0,0,0],[0,0,1,1,1,0,0],[0,0,0,2,2,0,0],[0,","e":false}]},"arc-36a08778":{"s":1,"i":18,"w":329653,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 6 Test inputs: 2  Train 0: input 14x14, o","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 14x14 Segments of 2: [{'row':3,'c1':3,'c2':5,'len':","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 output:  0 7 7 7 7 6 7 7 7 7 7 7 6 7  1 7 7 7 7 6 7 ","e":false},{"p":"EXPLORE","c":true,"o":"Testing chain hypothesis for Train 1: Checking: is it that t","e":false},{"p":"PLAN","c":true,"o":"CHAIN HYPOTHESIS CONFIRMED for Train 1! Pattern: Each 6 vert","e":false},{"p":"VERIFY","c":true,"o":"Train 4 output:  0 6 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7  ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 6-positions: [[0,4],[0,12],[1,4],[1,12]] Train 1: 6","e":false},{"p":"EXPLORE","c":true,"o":"Key insight: walls stop when they hit a segment. Rectangle w","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 6 expected: [7,7,7,7,7,6,6,7,7,7,6,7,7,7","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 col 2 values:   Row 0: 7   Row 1: 7   Row 2: 6   Row","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 11 exp: [7,6,7,7,6,6,6,6,6,6,6,6,7,7]   ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 13 exp: [7,6,7,7,6,7,7,7,7,7,7,6,7,7]   ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 segments: [{'row':3,'c1':3,'c2':5},{'row':3,'c1':11,","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Trai","e":false},{"p":"RETURN","c":true,"o":"Test 0 dims: 16 x 16 Test 1 dims: 30 x 30 Test 0: 7 7 6 7 7 ","e":false},{"p":"VERIFY","c":true,"o":"Test 0 input:  0 7 7 6 7 7 7 7 7 7 7 7 7 6 7 7 7  1 7 7 6 7 ","e":false},{"p":"VERIFY","c":true,"o":"Test 1 col 2 values rows 10-17:   Row 10: 7   Row 11: 7   Ro","e":false},{"p":"RETURN","c":true,"o":"DEADLINE CANDIDATE: [[[7,7,6,7,7,7,7,7,7,7,7,7,6,7,7,7],[7,7","e":false}]},"arc-5961cc34":{"s":1,"i":14,"w":265320,"t":[{"p":"EXPLORE","c":true,"o":"Train examples: 4 Test examples: 1 Train 0: input 13x15 -> o","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Input: 0 [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8] 1 [","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 4 pos: 9,8 2 positions: [[10,8],[11,8],[12,8]] 3 po","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 1 shape components   Shape 1: 1-cells bbox [2,1]-[5","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output 2-positions:   row 0: cols [8]   row 1: cols ","e":false},{"p":"EXPLORE","c":true,"o":"Let me trace Train 3: Arrow: 4 at [19,5], 2s going down Shap","e":false},{"p":"EXTRACT","c":true,"o":"Train 1 verification: Arrow col 10, row 20\u21920 (vertical line)","e":false},{"p":"VERIFY","c":true,"o":"Train 3 output - checking shape 2 area:   row 12, cols 13-16","e":false},{"p":"EXPLORE","c":true,"o":"Train 3, col 5, rows 9-18: 2,2,2,2,2,2,2,2,2,2  Train 2, col","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: FAIL   First diff at row 0   Expected","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Scor","e":false},{"p":"VERIFY","c":true,"o":"Test output: 0 [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,2,2,8,8,8,8,","e":false},{"p":"RETURN","c":true,"o":"Test input: 0 [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-446ef5d2":{"s":0,"i":20,"w":349275,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test inputs: 2 Train 0: input 12x20 -> ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Input: 0 [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 objects === Found 4 components Component 0: rows","e":false},{"p":"ERROR","c":true,"o":"=== Train 0 Output Analysis ===","e":true},{"p":"EXPLORE","c":true,"o":"=== Train 0 Output Analysis ===  Train 0 output full active:","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 top band: Row 4: [0,0,0,0,0,0,0,7,0] Row 5: [0,7,0,0","e":false},{"p":"EXPLORE","c":true,"o":"Template top row 0: [0,0,0] Template top row 1: [0,7,0] Outp","e":false},{"p":"PLAN","c":true,"o":"Row 3: [7,7,7,7,7,7,7,7,7,7,7] Row 4: [7,0,0,0,0,0,0,0,7,0,7","e":false},{"p":"VERIFY","c":true,"o":"Big rect columns: Col 1: 7,7,7,7,7,7,7 Col 2: 7,0,0,7,2,2,7 ","e":false},{"p":"PLAN","c":true,"o":"Checking assembly hypothesis: Assembled row 4: [7,0,0,0,0,0,","e":false},{"p":"VERIFY","c":true,"o":"Test row 7: [7,2,7,2,2,2,2,7,2,2,2] Expected:   [7,2,7,2,2,2","e":false},{"p":"VERIFY","c":true,"o":"=== Train 1 detailed analysis === Comp 0: 4 4 8 8 4 3 3 3 8 ","e":false},{"p":"VERIFY","c":true,"o":"Output TL: [[3,3,3],[3,9,9],[3,9,9]] Output TR: [[3,3,3],[9,","e":false},{"p":"VERIFY","c":true,"o":"Output BR: [[9,9,3],[3,3,3],[3,3,3]] Comp 1:    [[9,9,3],[3,","e":false},{"p":"VERIFY","c":true,"o":"Big rect top interior rows: 2 (rows 5-6), cols: 4 (cols 2-5)","e":false},{"p":"PLAN","c":true,"o":"Train 0 pieces: 4x3,3x6,7x5,5x4 Train 1 pieces: 4x4,3x3,3x3,","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Piece 0 (4x3): [object Object]    7 7 7    2","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Piece 0: marker=null, cleaned 4x3:    7 7 7 ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Piece 0 (4x3): frame=7, edges={'top':true,'b","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 re-analysis === Piece 0 (4x3): corner=TB, marker","e":false}]},"arc-4e34c42c":{"s":0,"i":20,"w":421064,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test inputs: 2 Train 0: input 23x25 -> ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Input === 0 [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 objects: 3   rows 6-10, cols 6-15, size 5x10, colors","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 Object 1 (rows 6-10, cols 6-15): [9,8,8,8,8,8,8,8,8,","e":false},{"p":"VERIFY","c":true,"o":"Obj A (rows 1-5, cols 10-16): [4,4,4,1,1,1,1] [8,1,1,1,3,3,1","e":false},{"p":"VERIFY","c":true,"o":"Output cols 0-12: [4,4,4,4,4,4,4,4,4,4,4,6,6] [1,1,1,4,4,4,4","e":false},{"p":"EXPLORE","c":true,"o":"Obj D right 3 cols: [6,4,4] [6,6,8] [6,6,8] [6,6,8] [6,4,4] ","e":false},{"p":"EXTRACT","c":true,"o":"Obj1 right 3x3 (rows 7-9, cols 13-15): [3,3,3] [3,2,3] [3,3,","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: overlap obj2->obj1: 1 Merged: 5 x 12 Match output? ","e":false},{"p":"VERIFY","c":true,"o":"Objects: A 5 x 7 B 5 x 3 C 5 x 13 D 5 x 6 MATCH! Order: B ->","e":false},{"p":"EXPLORE","c":true,"o":"Pairwise max overlaps:   A -> B: 1   A -> C: 1   B -> C: 3  ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS (5x12 vs 5x12) Train 1: FAIL (5x22 vs 5x22) Ex","e":false},{"p":"VERIFY","c":true,"o":"Objects found: 4   pos (1,10) size 5x7   pos (3,1) size 3x3 ","e":false},{"p":"EXPLORE","c":true,"o":"Found 1 valid chains Train 0: PASS   Found 4 valid chains   ","e":false},{"p":"VERIFY","c":true,"o":"0\u21921 non-bg matches in overlap: 3 3\u21920 non-bg matches in overl","e":false},{"p":"VERIFY","c":true,"o":"Found 1 valid strict chains   Chain [1,0,2] totalOv=4 Train ","e":false},{"p":"ERROR","c":true,"o":"Train 0: PASS (5x12) Train 1: PASS (5x22)","e":true},{"p":"PLAN","c":true,"o":"Train 0: PASS Train 1: PASS Test 0: NULL Test 1: 7x23 DEADLI","e":false},{"p":"VERIFY","c":true,"o":"Test 0 bg: 3 Test 0 objects: 6   pos (1,2) size 4x8     [6,6","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Test 0: 7x34 Test 1: 7x23","e":false}]},"arc-6e453dd6":{"s":1,"i":11,"w":155998,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 1  Train 0: input 16x16 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: divCol=11, H=16, W=16   Shape: rows 0-7, cols 0-5 (","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: divCol=11   Row 4: 2s at cols 12,13,14,15, right si","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: FAIL   Row 1 expected: 6 6 6 6 6 0 0 6 0 6 6 5 6 6 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Shape rows 0-7, cols 0-5:     r0: 0000..     r1: ","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: FAIL   Row 1 expected: 6 6 6 6 6 0 0 6 0 6 6 5 6 6 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0, shape rows 0-7:   r0: cols=0,1,2,3, hasMaxC=false, ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Shape rows 0-7: ALL MATCH   Shape rows 11-14: ALL","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3  Test o","e":false},{"p":"RETURN","c":true,"o":"ANSWER: [[6,6,6,6,6,6,6,6,5,6,6,6],[6,6,6,6,6,6,6,6,5,6,6,6]","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-7ed72f31":{"s":1,"i":10,"w":153054,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test examples: 2  Train 0: input 18x18 ","e":false},{"p":"EXPLORE","c":true,"o":"Output rows 5-12 for Train 0: (5,6): 1->3, (5,7): 1->3, (5,1","e":false},{"p":"VERIFY","c":true,"o":"Object 1 (3s) reflection through single 2 at (4,5): VERIFIED","e":false},{"p":"VERIFY","c":true,"o":"Train 1 diffs: (3,1): 8->4, (3,2): 8->4, (3,3): 8->4, (3,14)","e":false},{"p":"EXTRACT","c":true,"o":"2-groups: 4 2-group at [[4,5]]: shape has 0 cells, color=und","e":false},{"p":"VERIFY","c":true,"o":"Found 7 components   Component: 3 cells, 0 2s, 3 shape cells","e":false},{"p":"EXPLORE","c":true,"o":"Found 4 components (8-connected)   Comp: 1 2s, 3 shape, colo","e":false},{"p":"EXPLORE","c":true,"o":"Test 0: 18x18 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 ","e":false},{"p":"RETURN","c":true,"o":"Test 0 output verification - spot check OK Test 1 spot check","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-195c6913":{"s":0,"i":19,"w":805993,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test inputs: 2  Train 0: input 20x20 ->","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 color counts: [object Object] Sorted: 0,221,3,162,2,","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: bg1=0, bg2=3, rare=2,4,8   Color 2 at: [[1,1],[1,2]","e":false},{"p":"EXPLORE","c":true,"o":"Train 0, row 15: 2 2 8 2 2 8 2 2 8 2 2 8 2 4 3 3 3 3 3 3 Tra","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output col 17:   row 0: 4   row 1: 2   row 2: 2   ro","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 - cells changed to color 2:   (1,17) was 0   (1,19) ","e":false},{"p":"EXTRACT","c":true,"o":"Row 4 full: 3 3 3 3 3 3 3 3 3 3 3 3 8 2 2 8 2 2 4 3 Row 0 fu","e":false},{"p":"EXPLORE","c":true,"o":"Staircase boundary in Train 0:   Row 0: first 0 at col 19   ","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 staircase boundary:   Row 0: first 8 at col 17   Row","e":false},{"p":"EXPLORE","c":true,"o":"Let me examine which cells in the output have the endpoint c","e":false},{"p":"PLAN","c":true,"o":"Investigating the concave vertices of the boundary...   Conv","e":false},{"p":"PLAN","c":true,"o":"Col 12, rows 14 down to 4:   (14,12)=2   (13,12)=8   (12,12)","e":false},{"p":"ERROR","c":true,"o":"","e":true},{"p":"PLAN","c":true,"o":"bg1=0, bg2=3, pattern=2,2,8, endpoint=4, markers=[[15,0]] Tr","e":false},{"p":"EXPLORE","c":true,"o":"bg1=0, bg2=3, pattern=2,2,8, endpoint=4, markers=[[15,0]] Tr","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL (1 diffs)   (0,19) pred=2 exp=0 Train 1: FAIL ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL (4 diffs)   (2,18) pred=8 exp=0   (2,19) pred=","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL (82 diffs) Train 1: FAIL (131 diffs) Train 2: ","e":false},{"p":"EXPLORE","c":true,"o":"Returning solve2 results","e":false}]},"arc-78332cb0":{"s":0,"i":17,"w":329924,"t":[{"p":"EXPLORE","c":true,"o":"Train examples: 3 Test examples: 2  Train 0: input 11x11 -> ","e":false},{"p":"EXPLORE","c":true,"o":"TL: [[7,7,7,7,7],[7,7,7,7,7],[7,7,7,7,7],[7,2,2,2,7],[7,7,2,","e":false},{"p":"VERIFY","c":true,"o":"Train 1 input blocks: B0: [[7,7,7,7,7],[7,7,8,8,7],[7,7,8,8,","e":false},{"p":"VERIFY","c":true,"o":"Train 2 col dividers: 5,11 Train 2 input blocks: IB0: [[7,7,","e":false},{"p":"EXPLORE","c":true,"o":"Train 2 output: [7,7,7,7,7] [7,8,8,8,7] [7,7,8,7,7] [7,7,8,7","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 input B0: [[7,7,7,7,7],[7,7,8,8,7],[7,7,8,8,7],[8,8,","e":false},{"p":"VERIFY","c":true,"o":"Train 2 block counts: 6 5 4 Train 2 output block counts: 6 5","e":false},{"p":"PLAN","c":true,"o":"90\u00b0 CW of 2x2 doesn't directly give the output order Let me ","e":false},{"p":"PLAN","c":true,"o":"T0 bboxes: TL: [object Object] TR: [object Object] BL: [obje","e":false},{"p":"EXPLORE","c":true,"o":"T0 bboxes: TL: {'minR':3,'maxR':4,'minC':1,'maxC':3,'h':2,'w","e":false},{"p":"EXPLORE","c":true,"o":"Hypothesis: blocks ordered by (r+c) parity, then position T0","e":false},{"p":"VERIFY","c":true,"o":"T2 block 0: input=output? true   Input:  [[7,7,7,7,7],[7,8,8","e":false},{"p":"PLAN","c":true,"o":"Stuck on unifying sorting rule. Let me check T2 more careful","e":false},{"p":"EXPLORE","c":true,"o":"Test 0: 11 x 11 Test 1: 23 x 5 Test 1 row dividers: 5,11,17 ","e":false},{"p":"PLAN","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS","e":false},{"p":"RETURN","c":true,"o":"Test 0: 23x5 [[7,7,7,7,7],[7,4,4,4,7],[4,4,7,4,7],[7,4,4,4,7","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-a251c730":{"s":1,"i":13,"w":189860,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test examples: 1  Train 0: input 30x30 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 - Rectangle 1 interior: Row 6: 1 1 1 1 1 1 1 1 1 1 1","e":false},{"p":"EXPLORE","c":true,"o":"Pattern confirmed for Train 0!  Train 1 - Rect 1 interior no","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 Output: Row 0: 3 3 3 3 3 3 3 3 Row 1: 3 4 4 4 4 4 4 ","e":false},{"p":"EXTRACT","c":true,"o":"Test - Rect 1 border check: Row 1: 4 4 4 4 4 4 4 4 4 4 4 4 4","e":false},{"p":"EXPLORE","c":true,"o":"Output: Row 0: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 Row 1: 2 8 8 8 8 ","e":false},{"p":"VERIFY","c":true,"o":"Train 0 rectangles: border=6 (5,2)-(18,17),border=3 (20,5)-(","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS","e":false},{"p":"ERROR","c":true,"o":"","e":true},{"p":"EXPLORE","c":true,"o":"Rect border=4, fill=3, nonFill count=26   NonFill: [object O","e":false},{"p":"EXTRACT","c":true,"o":"Template non-fill cells with positions:   interior(2,5) val=","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS  Test output: Row 0: 2 2 2 2 2 2","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-aa4ec2a5":{"s":1,"i":12,"w":135896,"t":[{"p":"EXPLORE","c":true,"o":"Train examples: 3 Test examples: 1  Train 0: input 23x25 -> ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Component 1: size=33, bbox=[1,16]-[6,22], 6x","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 ===  Component 1: size=33, 6x7 Input region:   4","e":false},{"p":"VERIFY","c":true,"o":"=== Train 0 === Component 1: size=33, 6x7, holes=9   1-cells","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Component 1: 1->8, total_holes=9, edge_holes","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Component 1: 1->8, enclosed=9, open=0   Encl","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Diff at (2,17): got 2, expected 6   Diff at ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Component 1 (has enclosed holes): Component ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"EXPLORE","c":true,"o":"Test output: [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,","e":false},{"p":"RETURN","c":true,"o":"ANSWER: [[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-8f3a5a89":{"s":1,"i":17,"w":255904,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 1  Train 0: input 16x16 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 6 at 15,0 7 count: 39 Changed cells: 67 Changes: [o","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 changes: {'8->7':39,'1->8':28} Train 1 changes: {'8-","e":false},{"p":"VERIFY","c":true,"o":"Train 0 border miss: (15,0) inp=6 out=6  Train 0: 1->8 chang","e":false},{"p":"EXPLORE","c":true,"o":"Train 2: 1s that stay as 1:   (0,12)   (1,12)   (2,12)   (3,","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 1->8 cells, in region?   (0,10) in_region=false   (","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 1s outside region, adjacent to region?   (0,6) adj=","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: PASS Train 1: FAIL   Diff (1,8): expected=7 got=8  ","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 output: 7 7 7 7 1 1 7 7 7 7 7 8 8 7 1 1 7 8 7 7 7 8 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 4 components of 1s   Component 1: 16 cells, touches","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Comp 1: size=16, touchesEdge=true, adjToRegion=tr","e":false},{"p":"EXTRACT","c":true,"o":"(8,8) inp=8 out=8   (8,9) inp=8 out=8   (8,10) inp=8 out=8  ","e":false},{"p":"EXPLORE","c":true,"o":"Train 1: Missing 7s:   (1,8) diagAdj=true     neighbors: 8(0","e":false},{"p":"VERIFY","c":true,"o":"Train 0: FAIL   (0,10): exp=8 got=1   (0,11): exp=8 got=1   ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"RETURN","c":true,"o":"Test output: 7 7 7 7 7 7 7 7 7 7 1 8 7 8 8 8 8 8 8 8 8 7 1 8","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-89565ca0":{"s":0,"i":19,"w":363678,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 1  Train 0:   Input: 22x","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 rectangles:   Color 1: rows 5-10, cols 4-9, size 6x6","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Color 1: hDiv=2, vDiv=2, regions=1x1=1     hDivs:","e":false},{"p":"PLAN","c":true,"o":"Train 0:   Color 1: hLines=2, vLines=2, cells=1 (1x1)     hP","e":false},{"p":"VERIFY","c":true,"o":"Color 8 in Train 2: Row 0: 0,0,7,0,0 Row 1: 0,8,8,8,8 Row 2:","e":false},{"p":"PLAN","c":true,"o":"Detailed color 8 area in Train 2:   Row 1: 8,8,8,8   Row 2: ","e":false},{"p":"PLAN","c":true,"o":"Color 2 in Train 0 (rows 12-20, cols 10-26):   Row 12: 2,2,2","e":false},{"p":"EXPLORE","c":true,"o":"Col 10: 7 cells of color 2 Col 11: 3 cells of color 2 Col 12","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 overlap/containment:   1 overlaps 3   2 overlaps 3  ","e":false},{"p":"PLAN","c":true,"o":"Color 3 in Train 1:   16: 33333333333333   17: 3030003000300","e":false},{"p":"EXPLORE","c":true,"o":"Color 2 in Train 1, column analysis:   Col 4: 11 2s   Col 10","e":false},{"p":"EXPLORE","c":true,"o":"Color 4 in Train 1, column analysis:   Col 12: 8 4s   Col 17","e":false},{"p":"EXPLORE","c":true,"o":"Color 2 in Train 2:   6: .2222222222   7: 2000102000.   8: 2","e":false},{"p":"EXPLORE","c":true,"o":"Color 2 Train 0 row counts (out of 17 cols):   Row 12: 16/17","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Color 1: noisy frame cells = 1   Color 2: noisy f","e":false},{"p":"VERIFY","c":true,"o":"Train 0 sorted by count: 1(19), 2(59), 3(67)   Output order:","e":false},{"p":"EXPLORE","c":true,"o":"Threshold 0.5:   Train 0: cells=1:1,3:2,2:3 | output order: ","e":false},{"p":"EXPLORE","c":true,"o":"Test colors sorted by count: 2(27),3(51),8(53),1(58),4(88) C","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL order=1,2,3 overlaps=1,1,2   Expected: [[1,5,5","e":false}]},"arc-b99e7126":{"s":1,"i":14,"w":206481,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 1  Train 0:   Input:  29","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Input === 22222222222222222222222222222 24442444","e":false},{"p":"EXTRACT","c":true,"o":"=== Train 0 DIFF (input vs output) ===   [5,9] 4 -> 3   [5,1","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Tile types: count=46: [[4,4,4],[4,1,4],[4,4,","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Input anomalous: [[3,2],[3,3],[3,4]] Output ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 - Output tile details ===   (1,2) wasAnom=false ","e":false},{"p":"PLAN","c":true,"o":"Train 0 Input:   .......   .......   .......   ..XXX..   ...","e":false},{"p":"PLAN","c":true,"o":"Train 0 - anomalous tile as mask (where different from norma","e":false},{"p":"VERIFY","c":true,"o":"Train 1 output shape:   .X.X  <- matches mask row 0: X.X   .","e":false},{"p":"VERIFY","c":true,"o":"Anomaly color pattern (just the replacing color): Train 0 - ","e":false},{"p":"EXPLORE","c":true,"o":"Testing placement approach:  Train 0:   Placement (1,2): cov","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"RETURN","c":true,"o":"Test output dimensions: 29 x 29 ANSWER: [[8,8,8,8,8,8,8,8,8,","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-db695cfb":{"s":1,"i":10,"w":159300,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 5 Test examples: 1  Train 0: input 15x12 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   1s: [[3,1],[9,7]]   6s: [[2,9],[5,3],[8,6],[13,4]","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   6@[2,9] - 1@[3,1]: dr=-1, dc=8, |dr|=1, |dc|=8, |","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output:    [0,8]=6    [1,7]=6    [2,6]=6, [2,9]=6   ","e":false},{"p":"EXPLORE","c":true,"o":"By r+c (anti-diagonal):   8: [[0,8],[1,7],[2,6],[3,5],[4,4],","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 output non-bg:    [0,1]=6    [1,2]=6, [1,6]=1    [2,","e":false},{"p":"EXPLORE","c":true,"o":"1-1 pairs:   [2,2]-[3,12]: r+c=4,15 r-c=0,-9 |dr|=1 |dc|=10 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Trai","e":false},{"p":"VERIFY","c":true,"o":"Test output dimensions: 25 x 21 3 3 3 3 3 3 3 3 6 3 3 3 6 3 ","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-cbebaa4b":{"s":1,"i":18,"w":460569,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 2 Test inputs: 2  Train 0: input 22x22 ->","e":false},{"p":"EXPLORE","c":true,"o":"Output[4][8] = 3 Output[4][9] = 3 Output[4][10] = 3 Output[4","e":false},{"p":"EXTRACT","c":true,"o":"All 2-positions in Train 0 input:   (0,15) adj colors: [8]  ","e":false},{"p":"EXPLORE","c":true,"o":"Shape 4 region (rows 10-14, cols 9-12):   row 10: [2,0,2,0] ","e":false},{"p":"EXPLORE","c":true,"o":"Output region rows 4-17, cols 8-20:   row 4: [3,3,3,3,3,0,0,","e":false},{"p":"EXPLORE","c":true,"o":"Shape 1 in output (rows 12-17, cols 10-15):   row 12: [4,4,2","e":false},{"p":"EXPLORE","c":true,"o":"Shape 1 isolated in output (rows 12-17, cols 12-17):   row 1","e":false},{"p":"EXPLORE","c":true,"o":"All 2-positions in Train 1 input:   (6,16) adj colors: [6]  ","e":false},{"p":"ERROR","c":true,"o":"Train 1 Shape 6:   row 3: [6,6,6]   row 4: [6,0,6]   row 5: ","e":true},{"p":"EXPLORE","c":true,"o":"Train 1 Output non-zero cells: (4,7)=6 (4,8)=6 (4,9)=6 (5,7)","e":false},{"p":"ERROR","c":true,"o":"","e":true},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Shape 0 color=8 bbox=(1,15)-(3,19) ports: to","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 port spacings ===   Shape 8 top: count=2 diffs=[","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 12 expected: [0,0,0,0,0,0,0,0,0,4,4,4,2,","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Row 4 exp: [0,0,0,0,0,0,0,0,3,3,3,3,3,0,0,0,","e":false},{"p":"EXPLORE","c":true,"o":"Placed 5/5 shapes Train 0: PASS Placed 5/5 shapes Train 1: P","e":false},{"p":"RETURN","c":true,"o":"Placed 7/7 shapes Placed 7/7 shapes ANSWER: [[[0,0,0,0,0,0,0","e":false},{"p":"RETURN","c":true,"o":"","e":false}]}},"r035":{"arc-135a2760":{"s":1,"i":16,"w":225446,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 5x13 -> output 5x13  ratio","e":false},{"p":"EXPLORE","c":true,"o":"Test input size: 29 x 29  Train 1 Block 3: Input row 12: 8 4","e":false},{"p":"EXTRACT","c":true,"o":"Column 0 values: 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8","e":false},{"p":"EXPLORE","c":true,"o":"=== Panel 1 (cols 2-5) === Row 2: 8 8 8 8 Row 3: 8 2 2 8 Row","e":false},{"p":"EXPLORE","c":true,"o":"=== Panel 1: Finding vertical period === Period 3: 99/100 ma","e":false},{"p":"VERIFY","c":true,"o":"=== Train 1 Block 0 === Row 2 output has period 3: 3 3 4 3 3","e":false},{"p":"PLAN","c":true,"o":"=== Panel 1 (period 3) === Row 24: 8 8 2 8 -> 8 2 2 8 Total ","e":false},{"p":"VERIFY","c":true,"o":"=== Panel 1 Fixed (period 3) === Row 2: 8 8 8 8 Row 3: 8 2 2","e":false},{"p":"VERIFY","c":true,"o":"=== Train 0 Verification === Best period: [object Object] Ma","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 content: 1 3 1 3 1 3 3 3 1 Train 0 expected: 1 3 1 3","e":false},{"p":"PLAN","c":true,"o":"=== FULL VERIFICATION === Train 0 period: [object Object] Tr","e":false},{"p":"PLAN","c":true,"o":"Panel content definitions: [{'contentRowStart':2,'contentRow","e":false},{"p":"EXPLORE","c":true,"o":"Total cells changed: 9  Output grid: 8 8 8 8 8 8 8 8 8 8 8 8","e":false},{"p":"VERIFY","c":true,"o":"Panel 0: Perfectly periodic with period 3 Panel 1: Perfectly","e":false},{"p":"RETURN","c":true,"o":"ANSWER: [[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-247ef758":{"s":1,"i":16,"w":288754,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 12x18 -> output 12x18  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Divider column: 3, color: 2 Top border (righ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Shape color 4: rows 0-2, cols 0-2   Pattern:","e":false},{"p":"EXPLORE","c":true,"o":"=== Left side changes ===  Train 0:   Row 0: 0 4 0 -> 0 0 0 ","e":false},{"p":"VERIFY","c":true,"o":"Train 0: FAIL   Row 5 expected: [0,0,0,2,3,0,0,0,0,4,7,7,0,0","e":false},{"p":"VERIFY","c":true,"o":"Current order of placement matters. Let me check what order ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"RETURN","c":true,"o":"Test 0 output (15x20): 0 0 0 0 3 9 9 1 9 9 3 9 9 9 4 6 9 9 8","e":false},{"p":"VERIFY","c":true,"o":"Test 0 INPUT: 0 1 0 0 3 9 9 1 9 9 3 9 9 9 4 6 9 9 8 9 1 1 1 ","e":false},{"p":"VERIFY","c":true,"o":"Test 0 borders: Top: 9 9 1 9 9 3 9 9 9 4 6 9 9 8 9 Bottom: 9","e":false},{"p":"ERROR","c":true,"o":"Test 1 top border (full): 9 1 7 1 7 3 1 4 6 1 1 1 Test 1 bot","e":true},{"p":"VERIFY","c":true,"o":"Test 1 left side (cols 0-4):   Row 0: 6 0 0 0 0   Row 1: 0 6","e":false},{"p":"EXPLORE","c":true,"o":"divCol: 5  Color 4: bbox (6,1)-(8,3), center (7,2)   Pattern","e":false},{"p":"VERIFY","c":true,"o":"Shape placement order:   Color 7 (minR=9): rows=2, cols=8,10","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3 ANSWER:","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-195c6913":{"s":0,"i":19,"w":354554,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 20x20 -> output 20x20  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 1 INPUT === 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 8 8 ","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 2 INPUT === 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 ","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 MARKERS (input) === [{'r':1,'c':1,'color':2},{'r","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 4-block at (16-17, 16-17) Train 0: single 2 at (15,","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 output row 13: 4 1 4 1 4 1 4 1 4 1 4 1 4 1 4 9 2 2 2","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output row 1: 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 0 2 8 ","e":false},{"p":"EXPLORE","c":true,"o":"=== CHANGES in Train 0 === (0,17): 3 -> 4 (1,1): 2 -> 3 (1,2","e":false},{"p":"EXPLORE","c":true,"o":"Path values: 2,2,8,2,2,8,2,2,8,2,2,8,2,4,2,8,2,2,8,2,2,8,2,2","e":false},{"p":"EXPLORE","c":true,"o":"Path 1a row 13: 4,1,4,1,4,1,4,1,4,1,4,1,4,1,4 Full path 1a: ","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 col 14 output:   r0: 2   r1: 2   r2: 9   r3: 4   r4:","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 input col 12:   r0: 3   r1: 3   r2: 3   r3: 3   r4: ","e":false},{"p":"EXPLORE","c":true,"o":"Marker positions: Train 0: [object Object],[object Object],[","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 markers:   (1,1)=2   (1,2)=2   (1,4)=2   (1,5)=2   (","e":false},{"p":"EXTRACT","c":true,"o":"Train 0 pattern: 2,2,8 Train 1 pattern: 4,1 Train 2 pattern:","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: PASS (pattern=2,2,8, markers=[{'r':15,'c':0,'color'","e":false},{"p":"VERIFY","c":true,"o":"Train 1 input col 16:   r0: 2   r1: 2   r2: 8   r3: 8   r4: ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   (0,19): got 2, expected 0 Train 1: FAIL   (0","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   (0,19): got 2, expected 0   Total diffs: 1 T","e":false}]},"arc-136b0064":{"s":1,"i":17,"w":358721,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 15x15 -> output 15x7  rati","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 5 at (0, 9) Train 1: 5 at (0, 11) Train 2: 5 at (0,","e":false},{"p":"EXPLORE","c":true,"o":"=== OUTPUT ANALYSIS ===  Train 0 Output:   Row 0: [{'c':1,'v","e":false},{"p":"EXPLORE","c":true,"o":"=== PATH TRACING ===  Train 0: start at (0, 1)   Row 0: col1","e":false},{"p":"EXPLORE","c":true,"o":"=== BLOCKS TO SEGMENTS MAPPING ===  Train 0 path:   Color 2,","e":false},{"p":"PLAN","c":true,"o":"Train 0 segments: 2D1 1D1 1R1 1D1 1R2 6D4 3D1 3L3 6D2 1D1 1R","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Blocks: (2,6) (1,3) (1,6) (6,1)   Path colors: 2x","e":false},{"p":"VERIFY","c":true,"o":"=== VERIFYING: lefts then rights, merge adjacent same colors","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Sequence: 2(7), 1(5), 1(5), 6(4), 6(4), 3(6), 6(4","e":false},{"p":"EXPLORE","c":true,"o":"Shape C always contributes 2 cells DOWN Shape A(7): Train 0 ","e":false},{"p":"PLAN","c":true,"o":"C(4)->2, B(5)->3, D(6)->4, A(7)->? Pattern: size - 2! A(7) s","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output: Row 0: 0 5 0 0 0 0 0 Row 1: 2 2 0 0 0 0 0 Ro","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 segments:   Color 2: 1 cells, first(1,1) last(1,1) d","e":false},{"p":"EXPLORE","c":true,"o":"Shape effects: A (101/101/111): enter down 1, then left 1 B ","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"EXPLORE","c":true,"o":"Test output: 0 0 5 0 0 0 0 0 0 1 1 1 0 0 0 0 0 2 2 0 0 0 0 0","e":false},{"p":"RETURN","c":true,"o":"Verification complete. Returning answer.","e":false}]},"arc-0934a4d8":{"s":0,"i":19,"w":371842,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 30x30 -> output 9x4  ratio","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 8-block at rows [14,22], cols [25,28], size 9x4   O","e":false},{"p":"VERIFY","c":true,"o":"Train 0 180-rotation: 294/828 match (534 mismatches) Train 0","e":false},{"p":"VERIFY","c":true,"o":"Train 0 180-rotation fill: 13/36   Expected: [[9,9,6,4],[2,6","e":false},{"p":"VERIFY","c":true,"o":"Train 0 row palindrome: 62/414 Train 0 row-pair mirror: 52/4","e":false},{"p":"PLAN","c":true,"o":"Let me look at rows 14-22, comparing cols 25-28 area with th","e":false},{"p":"VERIFY","c":true,"o":"Row 0:  3 5 3 3 6 6 5 4 1 4 9 9 4 3 9 9 9 9 3 4 9 9 4 1 4 5 ","e":false},{"p":"VERIFY","c":true,"o":"Train 0: Searching for output pattern in input...   hFlip ma","e":false},{"p":"PLAN","c":true,"o":"Train 0: 8-block at (14-22, 25-28)   hFlip at (14, 3) -> 8-b","e":false},{"p":"PLAN","c":true,"o":"=== Train 0: 8-block at rows 14-22, cols 25-28 (9x4) === Mai","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Layer 0: total=116, top values: 9(40), 4(20)","e":false},{"p":"VERIFY","c":true,"o":"Train 0: 8-block at rows 14-22, cols 25-28   Row palindrome ","e":false},{"p":"PLAN","c":true,"o":"Train 0: 8-block rows=14-22 cols=25-28   hFlip match at col ","e":false},{"p":"EXPLORE","c":true,"o":"=== Verifying: output = g[29-(minR+r)][29-(minC+c)] ===   Tr","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 8 at (14-22, 25-28)   Mirror center offset = 2 in e","e":false},{"p":"PLAN","c":true,"o":"=== Verify: out[r][c] = g[minR+r][30 - (minC+c)] === Train 0","e":false},{"p":"VERIFY","c":true,"o":"Train 0 verify hFlip(g[14-22][3-6]):   9 9 6 4 vs 9 9 6 4 OK","e":false},{"p":"EXPLORE","c":true,"o":"=== Final verification === Train 0: 9/36 (colsSpan=false)   ","e":false},{"p":"EXPLORE","c":true,"o":"=== Fix: out[r][c] = g[minR+r][31 - minC - c] for hFlip === ","e":false}]},"arc-2ba387bc":{"s":1,"i":11,"w":161723,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 23x24 -> output 16x8  rati","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 rectangles:   color=1 pos=(1,2) size=4x4 solid=true ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Frames: 8@(6,17), 3@(13,8), 4@(18,3)   Solids: 1@","e":false},{"p":"VERIFY","c":true,"o":"Train 0:   1 (S) at row=1-4 col=2-5   2 (S) at row=4-7 col=9","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 sorted by diagonal:   1(S) diag=3 pos=(1,2)   2(S) d","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   1(S) center=(2.5,3.5) gridPos=(0,1)   2(S) center","e":false},{"p":"PLAN","c":true,"o":"Train 0: Groups by row overlap:   [1(S)@(1,2), 2(S)@(4,9), 8","e":false},{"p":"PLAN","c":true,"o":"Train 0:   Frames by minR: 8@(6,17), 3@(13,8), 4@(18,3)   So","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Scor","e":false},{"p":"VERIFY","c":true,"o":"Test result dimensions: 16 x 8 Test result: 4 4 4 4 6 6 6 6 ","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-6e453dd6":{"s":1,"i":10,"w":120345,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 16x16 -> output 16x16  rat","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: col5=11, width=16 Train 1: col5=5, width=10 Train 2","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: col5=11   Shape at c=0-5, shift=5, new c=5-10     R","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: col5=11   Shape bbox: r=0-7, c=0-5, shifted to c=5-","e":false},{"p":"EXTRACT","c":true,"o":"MISMATCH Train 0, r=7: predicted=true, actual=false, holes=3","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   r=1: 00.0.. intHoles=1 rightEdge=false pred=false","e":false},{"p":"EXTRACT","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"VERIFY","c":true,"o":"Test output: [6,6,6,6,6,6,6,6,5,6,6,6] [6,6,6,6,6,6,6,6,5,6,","e":false},{"p":"RETURN","c":true,"o":"Shape r=2-6, c=1-5, shift=2   r=2: 0000. intH=0 rEdge=false ","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-5961cc34":{"s":1,"i":16,"w":318446,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 13x15 -> output 13x15  rat","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   4 at: [9,8]   2s at: [[10,8],[11,8],[12,8]]   3s ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 output 2-positions (not matching input 2s):   Row 0:","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: Does the line at col 8 intersect shape at cols 1-4?","e":false},{"p":"VERIFY","c":true,"o":"Train 2 shape B region (rows 2-7, cols 14-19):   Row 2: 8 8 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 2 output col 16:   Row 0: 8   Row 1: 8   Row 2: 2   Ro","e":false},{"p":"VERIFY","c":true,"o":"Train 3 col 5 rows 0-2: 8 8 8 Train 3 row 5 cols 7-21: 2 2 2","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: FAIL   First diff at [5,12]: predicte","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS","e":false},{"p":"EXPLORE","c":true,"o":"Test output: 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8","e":false},{"p":"VERIFY","c":true,"o":"Shape: rows 2-9, cols 1-8, cells=50, 3s=[[5,8],[6,8]], exitD","e":false},{"p":"EXPLORE","c":true,"o":"tinp[5][8]: 3 tinp[5][7]: 1 Row 2, col 8: 8 Row 3, col 8: 8 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS","e":false},{"p":"VERIFY","c":true,"o":"Test output: 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 2 2 8 8 8 8 8 8","e":false},{"p":"VERIFY","c":true,"o":"ANSWER: [[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,2,2,8,8,8,8,8,8,8,","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-4e34c42c":{"s":0,"i":20,"w":460538,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 23x25 -> output 5x12  rati","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 1 INPUT === 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 objects: 3   (6,6)-(10,15) size 5x10 cells=26   (11,","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 OBJECTS ===  Object 0 at (6,6): 9 8 8 8 8 8 8 8 ","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 ASSEMBLY CHECK === Object 1 col 2: 9,1,4,1,9 Obj","e":false},{"p":"VERIFY","c":true,"o":"Object 3 col 0: 4,5,3,5,4 Object 2 col 12: 5,3,5 Object 3 co","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 1: Finding Object 0 in output === Row 0: 4 4 4 1 1","e":false},{"p":"EXPLORE","c":true,"o":"=== TEST 0 INPUT === 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3","e":false},{"p":"EXTRACT","c":true,"o":"=== TEST 0 OBJECTS ===  Obj 0: (1,2)-(4,9) 4x8 cells=23   6 ","e":false},{"p":"PLAN","c":true,"o":"=== TEST 0: Edge matching ===  Obj 0 (4x8):   Top row: 6 6 1","e":false},{"p":"PLAN","c":true,"o":"=== 3x3 NODE PATTERNS ===  Train 0:   (7,13) center=2 frame=","e":false},{"p":"PLAN","c":true,"o":"=== Train 0: Overlap detection === Obj0 -> Obj2: overlap=3co","e":false},{"p":"EXPLORE","c":true,"o":"=== TEST 0: All overlaps === Obj0 -> Obj3: type=TB overlap=2","e":false},{"p":"EXPLORE","c":true,"o":"Obj5 bottom 3 rows: 3 4 4 4 3 4 4 1 4 4 3 4 4 4 3 Obj2 top 3","e":false},{"p":"PLAN","c":true,"o":"=== TEST 0: Containment check ===  === TEST 1: Containment c","e":false},{"p":"PLAN","c":true,"o":"Obj5: 3 x 6 Obj3: 3 x 11 Obj4: 3 x 6 Obj2: 7 x 5 Found [1,6,","e":false},{"p":"EXPLORE","c":true,"o":"=== TEST 1 OUTPUT === 1 1 1 1 1 1 1 2 2 2 1 1 1 1 1 1 1 1 1 ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 assembled: 5x12 (expected 5x12) Match: true  Train 1","e":false},{"p":"RETURN","c":true,"o":"Train 1 selected: 0->1(LR,3),0->1(TB,4),1->2(LR,9),2->3(LR,3","e":false},{"p":"EXPLORE","c":true,"o":"Test 0 manual: 12x14 3 3 3 3 3 1 1 1 3 3 3 1 1 1 3 3 3 3 3 1","e":false}]},"arc-36a08778":{"s":0,"i":19,"w":541990,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 14x14 -> output 14x14  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 2 Analysis ===  Train 0 segments:   {'type':'h','r","e":false},{"p":"VERIFY","c":true,"o":"=== Train 1 detailed analysis === New 6 positions: [[2,4],[2","e":false},{"p":"EXPLORE","c":true,"o":"Let me check: for each segment, what are the 6-borders? Trai","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 input 6 positions:   r=0, c=4   r=0, c=11   r=1, c=4","e":false},{"p":"PLAN","c":true,"o":"Train 1 reconstructed: r 0: ....6......6. r 1: ....6......6.","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 3 input === r 0: 77767 r 1: 22262 r 2: 77777 r 3: ","e":false},{"p":"EXPLORE","c":true,"o":"Group 1 in Train 3: r=3 isolated 2s, r=5 bottom line Group 2","e":false},{"p":"PLAN","c":true,"o":"=== Train 4 input === r0: 6................... r1: 6........","e":false},{"p":"EXPLORE","c":true,"o":"Train 2 predicted vs expected: r0: ..6...622 FAIL expected: ","e":false},{"p":"EXPLORE","c":true,"o":"=== Identifying 2-objects === Train 0: 2-cells: 29, 6-cells:","e":false},{"p":"PLAN","c":true,"o":"Testing: 6-line at c=4 connects to seg r=9 c=1..4   c=4 is a","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   H-segs (non-row0/1): [{'r':3,'c1':3,'c2':5,'len':","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 184/196   r6: got ..6..66...6... exp .....66...6...","e":false},{"p":"PLAN","c":true,"o":"Train 0: 192/196   r9: got .6666666..6... exp .6666666......","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 196/196 Train 1: 208/208 Train 2: 72/72 Train 3: 70","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 184/196   r8: got .....6.2222222 exp .....662222222","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 188/196   r10: got ..222226...... exp .6222226.....","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]},"arc-78332cb0":{"s":0,"i":19,"w":336324,"t":[{"p":"EXPLORE","c":true,"o":"Training examples: 3 Test examples: 2  === DIMENSIONS === Tr","e":false},{"p":"EXPLORE","c":true,"o":"TL: 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 2 2 2 7 7 7 2 7 7 TR: 7 ","e":false},{"p":"VERIFY","c":true,"o":"Train 0 quadrant sizes: TL: 4 color: 2 TR: 7 color: 4 BL: 10","e":false},{"p":"VERIFY","c":true,"o":"Train 1 block matching: Input block 0 = Output block 2 Input","e":false},{"p":"VERIFY","c":true,"o":"Train 2 block matching: Input block 0 = Output block 0 Input","e":false},{"p":"PLAN","c":true,"o":"Train 1 input blocks: Block 0:   7 7 7 7 7   7 7 8 8 7   7 7","e":false},{"p":"PLAN","c":true,"o":"Sorting by non-bg count ascending: Train 0: TL=4, BR=6, TR=7","e":false},{"p":"VERIFY","c":true,"o":"=== RECHECK TRAIN 2 === Input block 0 (count=6) -> Output po","e":false},{"p":"PLAN","c":true,"o":"=== Block centers === Train 0:   TL: center=(3.25, 2.00), co","e":false},{"p":"VERIFY","c":true,"o":"Train 0 TL: 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 2 2 2 7 7 7 2 7 ","e":false},{"p":"PLAN","c":true,"o":"Train 0 blocks:   TL: color=2, cnt=4, bbox=(3,1)-(4,3), h=2,","e":false},{"p":"PLAN","c":true,"o":"Train 1: Transpose match: false RotCW match: false RotCCW ma","e":false},{"p":"VERIFY","c":true,"o":"Train 0 - sort by top row: Sorted by top desc: TL(top=3), BR","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 by area: By area asc: TL(6), BR(10), BL(12), TR(15) ","e":false},{"p":"VERIFY","c":true,"o":"Train 0: layout 2x2, 4 blocks Block counts: (0,0):4, (0,1):7","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 reversed horizontal match: true Train 2 same-order v","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3  Test 0","e":false},{"p":"RETURN","c":true,"o":"Test 1 blocks:   (0,0): cnt=6, color=9   (1,0): cnt=6, color","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-446ef5d2":{"s":0,"i":20,"w":498090,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 12x20 -> output 12x20  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== FINDING COLOR 4 POSITIONS === Train 0 color 4 positions:","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 INPUT OBJECTS ===  Obj0 (2,7) (4x3): 7 7 7 2 2 2","e":false},{"p":"EXPLORE","c":true,"o":"Output TL (3x3): 3 3 3 3 9 9 3 9 9 Output TR (3x3): 3 3 3 9 ","e":false},{"p":"VERIFY","c":true,"o":"Obj1: [[9,9,3],[3,3,3],[3,3,3]] Output TR: [[3,3,3],[9,9,3],","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Obj2 (big rectangle) === 7 7 7 7 7 7 0 0 0 0 7 0","e":false},{"p":"EXPLORE","c":true,"o":"=== Horizontal concatenation test === Obj2 top (0-section wi","e":false},{"p":"VERIFY","c":true,"o":"Output bottom (4x11): 7 7 7 7 7 7 7 7 7 7 7 7 2 7 2 2 2 2 2 ","e":false},{"p":"EXPLORE","c":true,"o":"Assembled Train 1: 3 3 3 3 3 3 3 9 9 9 9 3 3 9 9 9 9 3 3 9 9","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 === Border color: 7 Pieces count: 4 Piece 0: 4x3","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 ASSEMBLY === Top: 4, Left: 1, Bot: 3, Right: 2 T","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 === TL: 7x5, TR: 3x6 Different heights - need co","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 No-overlap assembly === Other pieces: 4x3 T=true","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 assembled (6x6): 3 3 3 3 3 3 3 9 9 9 9 3 3 9 9 9 9 3","e":false},{"p":"VERIFY","c":true,"o":"=== Piece positions in input === Train 0: piece at (0,17) si","e":false},{"p":"VERIFY","c":true,"o":"Train 0: avg piece center: (4.5, 12.1) Train 1: avg piece ce","e":false},{"p":"PLAN","c":true,"o":"Test 0 input: 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 ","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 === bg=8, indicator=4, border=7 Pieces: 4   4x3 ","e":false},{"p":"RETURN","c":true,"o":"ASSEMBLY FAILED Train 0: FAIL ASSEMBLY FAILED Train 1: FAIL ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Assembly failed for 10 pieces Te","e":false}]},"arc-7ed72f31":{"s":1,"i":13,"w":166192,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 18x18 -> output 18x18  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== DIFF Train 0 ===   (5,6): 1 -> 3   (5,7): 1 -> 3   (5,16","e":false},{"p":"EXTRACT","c":true,"o":"=== Object 4s in Train 0: Reflect across col 14 === (5,11) -","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 1, Object 4s === 4s: [[3,5],[3,6],[3,7],[4,5],[4,7","e":false},{"p":"EXTRACT","c":true,"o":"Found 4 components of 2s   2-component: horizontal at 4, siz","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 (bg=1): 7 objects   Object with colors: 3(3)     3: ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   (5,6): predicted=1 expected=3   (5,7): predi","e":false},{"p":"VERIFY","c":true,"o":"Components: {'3':[[2,4],[3,4],[3,3]]} {'2':[[4,5]]} {'2':[[6","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS  All pass: true","e":false},{"p":"VERIFY","c":true,"o":"Test 0 output (18x18): 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8","e":false},{"p":"VERIFY","c":true,"o":"Test 0 input: 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 ","e":false},{"p":"RETURN","c":true,"o":"Train 0: PASS Train 1: PASS Score: 2/2 FINAL_ANSWER_LENGTH: ","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-a251c730":{"s":1,"i":11,"w":190129,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 30x30 -> output 9x20  rati","e":false},{"p":"EXPLORE","c":true,"o":"Train 0, Rect 1 (6-bordered): 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 ","e":false},{"p":"VERIFY","c":true,"o":"Output around 8 at [4][11]:   row 2: 2 1 2   row 3: 2 2 2   ","e":false},{"p":"VERIFY","c":true,"o":"grid[7][7] = 1  Train 1 OUTPUT: 3 3 3 3 3 3 3 3 3 4 4 4 4 4 ","e":false},{"p":"EXPLORE","c":true,"o":"Shape around 6s in test Rect 1:   6 at testR1[4][6]   7 at t","e":false},{"p":"EXPLORE","c":true,"o":"Test Rect 1 special cells: Special cells: [{'r':3,'c':6,'col","e":false},{"p":"EXPLORE","c":true,"o":"Shape 6 offsets: [{'dr':-1,'dc':0,'color':1},{'dr':0,'dc':-1","e":false},{"p":"VERIFY","c":true,"o":"=== Test Shape 6 === Centers for color 6: [{'r':4,'c':6},{'r","e":false},{"p":"VERIFY","c":true,"o":"Centers for color 1: [{'r':3,'c':3},{'r':8,'c':6},{'r':14,'c","e":false},{"p":"RETURN","c":true,"o":"Test output: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 8 8 8 8 8 8 8 8 8","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-aa4ec2a5":{"s":1,"i":10,"w":189104,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 23x25 -> output 23x25  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 ===   Component 1: size=33, bbox=[1,16]-[6,22] (","e":false},{"p":"EXPLORE","c":true,"o":"=== TRAIN 0 ===   Comp 1: size=33, 6x7, isRect=false     1s ","e":false},{"p":"EXTRACT","c":true,"o":"=== TRAIN 0 ===   Comp 1: border cells=26, matching 2s=26, m","e":false},{"p":"VERIFY","c":true,"o":"Train 0: FAIL   First diff at [0,15]: predicted=4, expected=","e":false},{"p":"VERIFY","c":true,"o":"Train 0 Output, rows 0-8, cols 14-24:   r0: 4 2 2 2 2 2 2 2 ","e":false},{"p":"EXPLORE","c":true,"o":"Comp 1 has 33 cells Mini grid:   0: 0 0 0 0 0 0 0 0 0   1: 0","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Score: 3/3","e":false},{"p":"VERIFY","c":true,"o":"Test output: 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4","e":false},{"p":"RETURN","c":true,"o":"","e":false}]},"arc-8f3a5a89":{"s":1,"i":14,"w":246169,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 16x16 -> output 16x16  rat","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 6 at (15, 0)   7s in output: 39, boundary cells: 40","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 mismatches:  Train 1 mismatches:   (1,8): inp=8 out=","e":false},{"p":"PLAN","c":true,"o":"Train 0: 4 components of 1s   Component 0: 16 cells, touches","e":false},{"p":"VERIFY","c":true,"o":"Train 0: FAIL (28 diffs)   (0,10): got 1 exp 8   (0,11): got","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Comp 0: touchesEdge=true, size=16, output values=","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   1-cells: 44/44 match prediction  Train 1:   1-cel","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 1-cell component rule: 44/44 Train 1: 1-cell compon","e":false},{"p":"EXPLORE","c":true,"o":"Train 1 mismatches (dist-1 rule):   (1,8): dist=2, predicted","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 95/95 PASS Train 1: 77/86 FAIL (1,8): dist=2 pred=8","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 95/95 PASS Train 1: 86/86 PASS Train 2: 321/335 FAI","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 95/95 PASS   FULL: 256/256 Train 1: 86/86 PASS   FU","e":false},{"p":"VERIFY","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS  Test output: 7 7 ","e":false},{"p":"RETURN","c":true,"o":"Dimensions: 12 x 12 Expected: 12 x 12","e":false}]},"arc-b99e7126":{"s":1,"i":10,"w":250247,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 29x29 -> output 29x29  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Normal cell: [[4,4,4],[4,1,4],[4,4,4]] Input","e":false},{"p":"EXPLORE","c":true,"o":"=== Analyzing extension pattern ===  Train 0:   Added: [[1,2","e":false},{"p":"EXPLORE","c":true,"o":"Train 0 modified cell pattern:   [[3,1,3],[3,1,3],[3,3,3]]  ","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: Added cells: ['1,2','1,4','2,2','2,4']   (3,2) deg=","e":false},{"p":"EXPLORE","c":true,"o":"Train 2 detailed cell comparison:   (0,0): unchanged 4   (0,","e":false},{"p":"PLAN","c":true,"o":"=== HYPOTHESIS CONFIRMED === The cell pattern (special color","e":false},{"p":"EXTRACT","c":true,"o":"Normal cell: [[9,2,9],[2,2,2],[9,9,9]] Special cell at (3,2)","e":false},{"p":"EXPLORE","c":true,"o":"Output grid: 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8","e":false},{"p":"RETURN","c":true,"o":"ANSWER: [[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,","e":false}]},"arc-89565ca0":{"s":0,"i":19,"w":301655,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 22x28 -> output 3x4  ratio","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 (noise=5) === Color 1: rows [5-10] cols [4-9] si","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: FAIL   Expected: [[1,5,5,5],[3,3,5,5],[2,2,2,2]]   ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Containment matrix:   3 contains 1 Overlap c","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Color 1: degree=1, neighbors=[3] Color 2: de","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: overlaps with 1 others Color 2: ove","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: 6x6, hDiv=2 vDiv=2, cells=1, outWid","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: colDiv=2 rowDiv=2 vSec=1 hSec=1 out","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 ===  Color 1 (outWidth=1):   ######   #..*.#   #","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: cols=1 rows=1 outWidth=1 Color 2: c","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0, Color 2 (outWidth=4) === Col profile for color ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: cols=1 rows=1 total=1 outWidth=1 Co","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Color 1: noiseInside=3 borderNoise=1 outWidt","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Color 1: cols=1 rows=1 max=1 sum=2 cols*rows","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Color 1: intColDivs=0 intRowDivs=0 cellCols=","e":false},{"p":"PLAN","c":true,"o":"Train 0: predicted order=[1,2,3] expected=[1,3,2]   Areas: 1","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   Chains: [[1,3,2]]   Expected order: [1,3,2]   Pre","e":false},{"p":"EXPLORE","c":true,"o":"Test colors: 1,2,3,4,8,9 Test rectangles:   Color 1: rows [1","e":false},{"p":"EXPLORE","c":true,"o":"DEADLINE CANDIDATE: [[2,9,9,9],[3,3,9,9],[8,8,8,9],[1,1,1,9]","e":false}]},"arc-db695cfb":{"s":1,"i":9,"w":141205,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 15x12 -> output 15x12  rat","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: 1s=[[3,1],[9,7]] 6s=[[2,9],[5,3],[8,6],[13,4]]   Ne","e":false},{"p":"EXPLORE","c":true,"o":"Train 0:   1-pair (3,1)-(9,7): diagonal, slope dr=1 dc=1  Tr","e":false},{"p":"PLAN","c":true,"o":"Train 0 (bg=5):   6 at (2,9):     dir(1,1): 0 matches, 2 mis","e":false},{"p":"EXPLORE","c":true,"o":"Hypothesis confirmed for 6 on diagonal path extending perpen","e":false},{"p":"VERIFY","c":true,"o":"Train 0 output[2][9]: 6 Train 3 output[14]: [8,8,8,1,6,8,8,8","e":false},{"p":"EXPLORE","c":true,"o":"Train 0: PASS Train 1: PASS Train 2: PASS Train 3: PASS Trai","e":false},{"p":"RETURN","c":true,"o":"Test output dimensions: 25 x 21 Test output: 3 3 3 3 3 3 3 3","e":false},{"p":"RETURN","c":true,"o":"All training pass: true ANSWER: [[3,3,3,3,3,3,3,3,6,3,3,3,6,","e":false}]},"arc-cbebaa4b":{"s":0,"i":19,"w":307543,"t":[{"p":"EXPLORE","c":true,"o":"=== DIMENSIONS === Train 0: input 22x22 -> output 22x22  rat","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Input Objects ===   Obj 0: pos=(0,15)-(4,19) siz","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 ===  Obj 0 (colors [2,8]):   20002   88888   080","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 Output Analysis === Color 1: rows 12-17, cols 10","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0: Object placement === Obj 0 (colors 2,8): shift ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Obj 0 (main color 8, 5x5):   20002   88888  ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0: Connection analysis === Obj 0(8) <-> Obj 2(4): ","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Obj 0 (color 8):   2-cells: (0,0), (0,4), (4","e":false},{"p":"EXPLORE","c":true,"o":"Central in train 1: 2-cells (0,2),(0,3),(2,0),(2,4) Connects","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0: Connection Graph ===   8(0) -> 4(2): translate ","e":false},{"p":"VERIFY","c":true,"o":"Obj 8 2-cells: (0,15),(0,19),(4,18),(4,16) Obj 4 2-cells: (1","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Placed obj 0(8) with shift (6,-7) Placed obj","e":false},{"p":"VERIFY","c":true,"o":"=== Detailed trace for Train 1 === Central idx: 1 Central 2-","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Placed obj 0(8) with shift (6,-7) Placed obj","e":false},{"p":"EXPLORE","c":true,"o":"=== Test 0 === Placed obj 0(8) with shift (7,-7) Placed obj ","e":false},{"p":"VERIFY","c":true,"o":"=== Test 1 Debug === Obj 0(8): bbox=(0,3)-(6,7) 2-cells=(0,3","e":false},{"p":"PLAN","c":true,"o":"=== Train 0 === Placed obj 0(8) with shift (6,-7) Placed obj","e":false},{"p":"EXPLORE","c":true,"o":"=== Train 0 === Placed obj 0(8) shift (6,-7) Placed obj 1(1)","e":false},{"p":"EXPLORE","c":true,"o":"","e":false}]}},"agg026":{"meanScore":0.65,"medianScore":1,"stdScore":0.4769696007084728,"p25Score":0,"p75Score":1,"meanIterations":15.4,"medianIterations":17,"meanWallTimeMs":278671.25,"totalWallTimeMs":1399407,"totalInputChars":15800335,"totalOutputChars":873988,"costEstimateUsd":15.13,"completedTasks":19,"failedTasks":1},"agg035":{"meanScore":0.6,"medianScore":1,"stdScore":0.4898979485566357,"p25Score":0,"p75Score":1,"meanIterations":15.35,"medianIterations":16,"meanWallTimeMs":291450.85,"totalWallTimeMs":1341554,"totalInputChars":22078284,"totalOutputChars":997152,"costEstimateUsd":20.3,"completedTasks":20,"failedTasks":0}};
+
+// ============================================================
+// CATEGORIZATION
+// ============================================================
+const ALL_TASK_IDS = [...new Set([...Object.keys(DATA.r026), ...Object.keys(DATA.r035)])].sort();
+
+function categorize() {
+  const cats = { gained: [], lost: [], bothPass: [], bothFail: [] };
+  for (const tid of ALL_TASK_IDS) {
+    const s026 = DATA.r026[tid]?.s || 0;
+    const s035 = DATA.r035[tid]?.s || 0;
+    if (s026 === 1 && s035 === 1) cats.bothPass.push(tid);
+    else if (s026 === 0 && s035 === 1) cats.gained.push(tid);
+    else if (s026 === 1 && s035 === 0) cats.lost.push(tid);
+    else cats.bothFail.push(tid);
+  }
+  return cats;
+}
+
+const cats = categorize();
+
+// ============================================================
+// DRIVER ADOPTION DATA
+// ============================================================
+const SURVEY_SECTIONS = {
+  'dimensions': { count: 20, color: '#3fb950' },
+  'color-inventory': { count: 20, color: '#3fb950' },
+  'transitions': { count: 0, color: '#f85149' },
+  'diff': { count: 0, color: '#f85149' },
+  'components': { count: 0, color: '#f85149' },
+  'symmetry': { count: 0, color: '#f85149' },
+};
+
+const NOVEL_TECHNIQUES = {
+  'local-rule-mining': { count: 2, color: '#58a6ff', tasks: ['arc-0934a4d8', 'arc-8f3a5a89'] },
+  'tiling': { count: 3, color: '#bc8cff', tasks: ['arc-135a2760', 'arc-0934a4d8', 'arc-a251c730'] },
+  'periodicity': { count: 2, color: '#d29922', tasks: ['arc-135a2760', 'arc-0934a4d8'] },
+};
+
+const TECHNIQUE_MAP = {
+  'arc-135a2760': { survey: ['dimensions', 'color-inventory'], novel: ['tiling', 'periodicity'] },
+  'arc-247ef758': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-195c6913': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-136b0064': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-0934a4d8': { survey: ['dimensions', 'color-inventory'], novel: ['local-rule-mining', 'tiling', 'periodicity'] },
+  'arc-2ba387bc': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-6e453dd6': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-5961cc34': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-4e34c42c': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-36a08778': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-78332cb0': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-446ef5d2': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-7ed72f31': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-a251c730': { survey: ['dimensions', 'color-inventory'], novel: ['tiling'] },
+  'arc-aa4ec2a5': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-8f3a5a89': { survey: ['dimensions', 'color-inventory'], novel: ['local-rule-mining'] },
+  'arc-b99e7126': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-89565ca0': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-db695cfb': { survey: ['dimensions', 'color-inventory'], novel: [] },
+  'arc-cbebaa4b': { survey: ['dimensions', 'color-inventory'], novel: [] },
+};
+
+// ============================================================
+// UTILITY FUNCTIONS
+// ============================================================
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function formatTime(ms) {
+  if (!ms) return 'n/a';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
+
+function phaseColor(phase) {
+  const map = {
+    'EXPLORE': '#1f6feb', 'EXTRACT': '#3fb950', 'VERIFY': '#bc8cff',
+    'RETURN': '#f0f6fc', 'ERROR': '#f85149', 'PLAN': '#d29922',
+    'STALL': '#6e7681', 'TIMEOUT': '#484f58'
+  };
+  return map[phase] || '#484f58';
+}
+
+// ============================================================
+// BUILD SWIMLANE
+// ============================================================
+function buildSwimlane(runData, maxIters) {
+  if (!runData) return '<div class="swimlane" style="opacity:0.3"><div class="swim-block phase-TIMEOUT" style="flex:20">No data</div></div>';
+
+  const trace = runData.t || [];
+  const totalIters = runData.i || 20;
+
+  let html = '<div class="swimlane">';
+
+  for (let i = 0; i < maxIters; i++) {
+    if (i < trace.length) {
+      const t = trace[i];
+      const phase = t.p || 'EXPLORE';
+      const cls = 'phase-' + phase;
+      const codeStr = t.c ? 'code: yes' : 'code: no';
+      const outStr = t.o ? t.o.substring(0, 50) : '';
+      const errStr = t.e ? ' [ERROR]' : '';
+      const tipText = `Iter ${i + 1}: ${phase} | ${codeStr}${errStr}${outStr ? ' | ' + outStr : ''}`;
+
+      html += `<div class="swim-block ${cls}">
+        <span class="swim-tip">${escapeHtml(tipText)}</span>
+      </div>`;
+    } else if (i < totalIters) {
+      html += `<div class="swim-block phase-TIMEOUT"></div>`;
+    } else {
+      html += `<div class="swim-block phase-TIMEOUT" style="opacity:0.15"></div>`;
+    }
+  }
+
+  html += '</div>';
+
+  html += '<div class="iter-scale">';
+  for (let i = 0; i < maxIters; i++) {
+    html += `<div class="iter-num">${(i + 1) % 5 === 0 ? (i + 1) : ''}</div>`;
+  }
+  html += '</div>';
+
+  return html;
+}
+
+// ============================================================
+// BUILD ITERATION DETAIL TABLE
+// ============================================================
+function buildIterTable(runData, label) {
+  if (!runData) return '';
+  const trace = runData.t || [];
+  if (trace.length === 0) return '';
+
+  let html = `<table class="iter-detail-table">
+    <thead><tr>
+      <th>#</th><th>Phase</th><th>Code</th><th>Error</th><th>Output</th>
+    </tr></thead><tbody>`;
+
+  for (let i = 0; i < trace.length; i++) {
+    const t = trace[i];
+    const phase = t.p || 'EXPLORE';
+    const dotColor = phaseColor(phase);
+    html += `<tr>
+      <td>${i + 1}</td>
+      <td><span class="phase-dot" style="background:${dotColor}"></span>${phase}</td>
+      <td class="${t.c ? 'code-yes' : 'code-no'}">${t.c ? 'Yes' : 'No'}</td>
+      <td class="${t.e ? 'err-yes' : ''}">${t.e ? 'Yes' : ''}</td>
+      <td class="output-text">${escapeHtml(t.o || '')}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+// ============================================================
+// BUILD TASK ROW
+// ============================================================
+function buildTaskRow(tid) {
+  const r026 = DATA.r026[tid];
+  const r035 = DATA.r035[tid];
+  const maxIters = 20;
+  const shortId = tid.replace('arc-', '');
+
+  let cat = 'both-fail';
+  if ((r026?.s || 0) === 1 && (r035?.s || 0) === 1) cat = 'both-pass';
+  else if ((r026?.s || 0) === 0 && (r035?.s || 0) === 1) cat = 'gained';
+  else if ((r026?.s || 0) === 1 && (r035?.s || 0) === 0) cat = 'lost';
+
+  const v026 = r026?.s === 1 ? 'pass' : 'fail';
+  const v035 = r035?.s === 1 ? 'pass' : 'fail';
+
+  // Technique badges for this task
+  const techMap = TECHNIQUE_MAP[tid] || { survey: [], novel: [] };
+
+  let html = `<div class="task-row" data-category="${cat}" data-task="${tid}">`;
+  html += `<div class="task-header" onclick="toggleDetail('${tid}')">`;
+
+  // Task ID column
+  html += `<div class="task-id-col">
+    <div class="task-id">${shortId} <span class="expand-icon">&#9654;</span></div>
+    <div class="task-meta">${cat.replace(/-/g, ' ')}</div>`;
+
+  // Show novel technique chips if any
+  if (techMap.novel.length > 0) {
+    html += '<div style="margin-top:4px;">';
+    for (const tech of techMap.novel) {
+      const techColor = tech === 'tiling' ? '#bc8cff' : tech === 'periodicity' ? '#d29922' : '#58a6ff';
+      html += `<span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:8px;margin:1px 2px;background:${techColor}20;color:${techColor};border:1px solid ${techColor}30;font-family:monospace;">${tech}</span>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Run 026 column
+  html += `<div class="run-col">
+    <div class="run-label r026-label">026 BEST KNOWN <span class="verdict-badge ${v026}">${v026}</span></div>
+    <div class="run-stats">${r026?.i || 0} iters &bull; ${formatTime(r026?.w)}</div>
+    ${buildSwimlane(r026, maxIters)}
+  </div>`;
+
+  // Run 035 column
+  html += `<div class="run-col">
+    <div class="run-label r035-label">035 +ALGORITHMIC <span class="verdict-badge ${v035}">${v035}</span></div>
+    <div class="run-stats">${r035?.i || 0} iters &bull; ${formatTime(r035?.w)}</div>
+    ${buildSwimlane(r035, maxIters)}
+  </div>`;
+
+  html += '</div>'; // task-header
+
+  // Detail panel
+  html += `<div class="task-detail" id="detail-${tid}">`;
+  html += '<div class="detail-grid">';
+
+  // Left: Run 026 details
+  html += '<div class="detail-section">';
+  html += '<h4 style="color:#3fb950">Run-026 (Best Known)</h4>';
+  if (r026) {
+    html += `<div class="stat-row"><span class="stat-label">Result</span><span class="stat-val" style="color:${r026.s === 1 ? '#3fb950' : '#f85149'}">${v026.toUpperCase()}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Iterations</span><span class="stat-val">${r026.i}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Wall Time</span><span class="stat-val">${formatTime(r026.w)}</span></div>`;
+    const phases026 = countPhases(r026);
+    html += `<div class="stat-row"><span class="stat-label">Explore / Extract / Verify</span><span class="stat-val">${phases026.EXPLORE} / ${phases026.EXTRACT} / ${phases026.VERIFY}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Errors</span><span class="stat-val">${phases026.ERROR}</span></div>`;
+    html += buildIterTable(r026, '026');
+  }
+  html += '</div>';
+
+  // Right: Run 035 details
+  html += '<div class="detail-section">';
+  html += '<h4 style="color:#f0883e">Run-035 (+Algorithmic Analysis)</h4>';
+  if (r035) {
+    html += `<div class="stat-row"><span class="stat-label">Result</span><span class="stat-val" style="color:${r035.s === 1 ? '#3fb950' : '#f85149'}">${v035.toUpperCase()}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Iterations</span><span class="stat-val">${r035.i}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Wall Time</span><span class="stat-val">${formatTime(r035.w)}</span></div>`;
+    const phases035 = countPhases(r035);
+    html += `<div class="stat-row"><span class="stat-label">Explore / Extract / Verify</span><span class="stat-val">${phases035.EXPLORE} / ${phases035.EXTRACT} / ${phases035.VERIFY}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Errors</span><span class="stat-val">${phases035.ERROR}</span></div>`;
+    html += buildIterTable(r035, '035');
+  }
+  html += '</div>';
+
+  // Delta comparison section
+  if (r026 && r035) {
+    html += '<div class="detail-full">';
+    html += '<h4>Comparison</h4>';
+    const iterDelta = (r035.i || 0) - (r026.i || 0);
+    const timeDelta = ((r035.w || 0) - (r026.w || 0)) / 1000;
+    const iterSign = iterDelta > 0 ? '+' : '';
+    const timeSign = timeDelta > 0 ? '+' : '';
+    html += `<div class="stat-row"><span class="stat-label">Iteration Delta</span><span class="stat-val" style="color:${iterDelta > 0 ? '#f85149' : iterDelta < 0 ? '#3fb950' : '#8b949e'}">${iterSign}${iterDelta}</span></div>`;
+    html += `<div class="stat-row"><span class="stat-label">Wall Time Delta</span><span class="stat-val" style="color:${timeDelta > 0 ? '#f85149' : timeDelta < 0 ? '#3fb950' : '#8b949e'}">${timeSign}${Math.round(timeDelta)}s</span></div>`;
+
+    // Show techniques used
+    if (techMap.novel.length > 0) {
+      html += `<div class="stat-row"><span class="stat-label">Novel Techniques</span><span class="stat-val" style="color:#bc8cff">${techMap.novel.join(', ')}</span></div>`;
+    } else {
+      html += `<div class="stat-row"><span class="stat-label">Novel Techniques</span><span class="stat-val" style="color:#6e7681">none adopted</span></div>`;
+    }
+
+    html += '</div>';
+  }
+
+  html += '</div>'; // detail-grid
+  html += '</div>'; // task-detail
+  html += '</div>'; // task-row
+
+  return html;
+}
+
+function countPhases(runData) {
+  const counts = { EXPLORE: 0, EXTRACT: 0, VERIFY: 0, RETURN: 0, ERROR: 0, PLAN: 0, STALL: 0 };
+  for (const t of (runData.t || [])) {
+    const p = t.p || 'EXPLORE';
+    counts[p] = (counts[p] || 0) + 1;
+  }
+  return counts;
+}
+
+// ============================================================
+// TOGGLE DETAIL
+// ============================================================
+function toggleDetail(tid) {
+  const row = document.querySelector(`[data-task="${tid}"]`);
+  const detail = document.getElementById(`detail-${tid}`);
+  if (detail.classList.contains('open')) {
+    detail.classList.remove('open');
+    row.classList.remove('expanded');
+  } else {
+    detail.classList.add('open');
+    row.classList.add('expanded');
+  }
+}
+
+// ============================================================
+// CATEGORY CONTEXT DESCRIPTIONS
+// ============================================================
+const CAT_CONTEXT = {
+  'gained': 'Solved by Run-035 but not Run-026. The algorithmic-analysis driver helped discover the correct pattern here.',
+  'lost': 'Solved by Run-026 but not Run-035. The added driver consumed iteration budget on verbose analysis without yielding the solution.',
+  'bothPass': 'Solved by both configurations. Compare iteration counts and wall times to assess efficiency impact.',
+  'bothFail': 'Failed in both configurations. The algorithmic-analysis driver did not unlock these tasks.',
+};
+
+// ============================================================
+// RENDER TASKS
+// ============================================================
+function renderTasks() {
+  const container = document.getElementById('tasks-container');
+  let html = '';
+
+  const catConfig = [
+    { key: 'gained', label: 'Gained', badge: 'gained', tasks: cats.gained },
+    { key: 'lost', label: 'Lost', badge: 'lost', tasks: cats.lost },
+    { key: 'bothPass', label: 'Both Pass', badge: 'both-pass', tasks: cats.bothPass },
+    { key: 'bothFail', label: 'Both Fail', badge: 'both-fail', tasks: cats.bothFail },
+  ];
+
+  for (const cat of catConfig) {
+    if (cat.tasks.length === 0) continue;
+    html += `<div class="cat-group" data-cat="${cat.key}">`;
+    html += `<div class="cat-header">
+      <span class="cat-badge ${cat.badge}">${cat.label}</span>
+      <span class="cat-count">${cat.tasks.length} task${cat.tasks.length > 1 ? 's' : ''}</span>
+      <div class="cat-context">${CAT_CONTEXT[cat.key] || ''}</div>
+    </div>`;
+    for (const tid of cat.tasks) {
+      html += buildTaskRow(tid);
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ============================================================
+// RENDER FILTER BAR
+// ============================================================
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  const filters = [
+    { key: 'all', label: 'All (20)' },
+    { key: 'gained', label: `Gained (${cats.gained.length})` },
+    { key: 'lost', label: `Lost (${cats.lost.length})` },
+    { key: 'bothPass', label: `Both Pass (${cats.bothPass.length})` },
+    { key: 'bothFail', label: `Both Fail (${cats.bothFail.length})` },
+  ];
+
+  let html = '';
+  for (const f of filters) {
+    html += `<button class="filter-btn ${f.key === 'all' ? 'active' : ''}" data-filter="${f.key}">${f.label}</button>`;
+  }
+  bar.innerHTML = html;
+
+  bar.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.cat-group').forEach(g => {
+        if (filter === 'all') {
+          g.style.display = '';
+        } else {
+          g.style.display = g.dataset.cat === filter ? '' : 'none';
+        }
+      });
+    });
+  });
+}
+
+// ============================================================
+// RENDER ADOPTION TAB
+// ============================================================
+function renderAdoption() {
+  // Survey adoption bars
+  const surveyContainer = document.getElementById('survey-adoption-bars');
+  let surveyHtml = '';
+  for (const [name, data] of Object.entries(SURVEY_SECTIONS)) {
+    const pct = (data.count / 20) * 100;
+    surveyHtml += `<div class="adoption-bar-row">
+      <div class="adoption-bar-label">${name}</div>
+      <div class="adoption-bar-track">
+        <div class="adoption-bar-fill" style="width:${pct}%;background:${data.color}"></div>
+      </div>
+      <div class="adoption-bar-val">${data.count}/20</div>
+    </div>`;
+  }
+  surveyContainer.innerHTML = surveyHtml;
+
+  // Novel technique bars
+  const novelContainer = document.getElementById('novel-adoption-bars');
+  let novelHtml = '';
+  for (const [name, data] of Object.entries(NOVEL_TECHNIQUES)) {
+    const pct = (data.count / 20) * 100;
+    novelHtml += `<div class="adoption-bar-row">
+      <div class="adoption-bar-label">${name}</div>
+      <div class="adoption-bar-track">
+        <div class="adoption-bar-fill" style="width:${Math.max(pct, 3)}%;background:${data.color}">${data.count}</div>
+      </div>
+      <div class="adoption-bar-val">${data.count}/20</div>
+    </div>`;
+  }
+  novelContainer.innerHTML = novelHtml;
+
+  // Per-task technique grid
+  const gridContainer = document.getElementById('technique-grid');
+  let gridHtml = '<table class="iter-detail-table"><thead><tr><th>Task</th><th>Result 026</th><th>Result 035</th><th>Survey Sections</th><th>Novel Techniques</th></tr></thead><tbody>';
+  for (const tid of ALL_TASK_IDS) {
+    const r026 = DATA.r026[tid];
+    const r035 = DATA.r035[tid];
+    const tech = TECHNIQUE_MAP[tid] || { survey: [], novel: [] };
+    const s026Color = r026?.s === 1 ? '#3fb950' : '#f85149';
+    const s035Color = r035?.s === 1 ? '#3fb950' : '#f85149';
+    const s026Label = r026?.s === 1 ? 'PASS' : 'FAIL';
+    const s035Label = r035?.s === 1 ? 'PASS' : 'FAIL';
+    const surveyStr = tech.survey.length > 0 ? tech.survey.join(', ') : '-';
+    const novelStr = tech.novel.length > 0 ? tech.novel.join(', ') : '-';
+    const novelColor = tech.novel.length > 0 ? '#bc8cff' : '#6e7681';
+    gridHtml += `<tr>
+      <td style="font-family:monospace;font-weight:600">${tid.replace('arc-', '')}</td>
+      <td style="color:${s026Color};font-weight:600">${s026Label}</td>
+      <td style="color:${s035Color};font-weight:600">${s035Label}</td>
+      <td style="color:#8b949e">${surveyStr}</td>
+      <td style="color:${novelColor}">${novelStr}</td>
+    </tr>`;
+  }
+  gridHtml += '</tbody></table>';
+  gridContainer.innerHTML = gridHtml;
+}
+
+// ============================================================
+// RENDER EFFICIENCY TAB
+// ============================================================
+function renderEfficiency() {
+  const bothPassTasks = cats.bothPass;
+
+  // Calculate stats
+  let sum026 = 0, sum035 = 0;
+  let faster026 = 0, faster035 = 0, equal = 0;
+  const taskDeltas = [];
+
+  for (const tid of bothPassTasks) {
+    const i026 = DATA.r026[tid].i;
+    const i035 = DATA.r035[tid].i;
+    sum026 += i026;
+    sum035 += i035;
+    const delta = i035 - i026;
+    taskDeltas.push({ tid, i026, i035, delta });
+    if (delta > 0) faster026++;
+    else if (delta < 0) faster035++;
+    else equal++;
+  }
+
+  const mean026 = (sum026 / bothPassTasks.length).toFixed(1);
+  const mean035 = (sum035 / bothPassTasks.length).toFixed(1);
+  const meanDelta = (sum035 / bothPassTasks.length - sum026 / bothPassTasks.length).toFixed(1);
+
+  document.getElementById('eff-mean-026').textContent = mean026;
+  document.getElementById('eff-mean-035').textContent = mean035;
+
+  const deltaEl = document.getElementById('eff-mean-delta');
+  deltaEl.textContent = (parseFloat(meanDelta) > 0 ? '+' : '') + meanDelta;
+  deltaEl.className = 'finding-stat ' + (parseFloat(meanDelta) > 0 ? 'red' : parseFloat(meanDelta) < 0 ? 'green' : 'blue');
+
+  document.getElementById('eff-delta-detail').textContent = parseFloat(meanDelta) > 0
+    ? 'Algorithmic analysis consumed more iterations on average'
+    : parseFloat(meanDelta) < 0
+    ? 'Algorithmic analysis was more efficient on average'
+    : 'No difference in mean iterations';
+
+  document.getElementById('eff-faster-count').textContent = faster035 + '/' + bothPassTasks.length;
+  document.getElementById('eff-faster-label').textContent = 'Tasks where Run-035 used fewer iterations';
+  document.getElementById('eff-faster-detail').textContent = `Run-026 faster: ${faster026}, Run-035 faster: ${faster035}, Equal: ${equal}`;
+
+  // Sort by delta
+  taskDeltas.sort((a, b) => a.delta - b.delta);
+
+  // Iteration comparison bars
+  const effContainer = document.getElementById('efficiency-bars');
+  let effHtml = '';
+  const maxIter = 20;
+
+  for (const td of taskDeltas) {
+    const shortId = td.tid.replace('arc-', '');
+    const w026 = (td.i026 / maxIter) * 100;
+    const w035 = (td.i035 / maxIter) * 100;
+    const deltaSign = td.delta > 0 ? '+' : '';
+    const deltaClass = td.delta > 0 ? 'positive' : td.delta < 0 ? 'negative' : 'zero';
+
+    effHtml += `<div class="eff-row">
+      <div class="eff-label">${shortId}</div>
+      <div class="eff-bars">
+        <div class="eff-bar" style="width:${w026}%;background:#3fb950;opacity:0.7" title="Run-026: ${td.i026} iters">${td.i026}</div>
+      </div>
+      <div class="eff-bars">
+        <div class="eff-bar" style="width:${w035}%;background:#f0883e;opacity:0.7" title="Run-035: ${td.i035} iters">${td.i035}</div>
+      </div>
+      <div class="eff-delta ${deltaClass}">${deltaSign}${td.delta}</div>
+    </div>`;
+  }
+
+  // Add header row
+  effHtml = `<div class="eff-row" style="margin-bottom:12px;">
+    <div class="eff-label" style="color:#6e7681;font-size:10px">Task</div>
+    <div class="eff-bars" style="justify-content:center;font-size:10px;color:#3fb950;">Run-026</div>
+    <div class="eff-bars" style="justify-content:center;font-size:10px;color:#f0883e;">Run-035</div>
+    <div class="eff-delta" style="font-size:10px;color:#6e7681">&Delta;</div>
+  </div>` + effHtml;
+
+  effContainer.innerHTML = effHtml;
+
+  // Wall time comparison
+  const wallContainer = document.getElementById('walltime-bars');
+  let wallHtml = '';
+  const maxWall = Math.max(...taskDeltas.map(td => Math.max(DATA.r026[td.tid].w || 0, DATA.r035[td.tid].w || 0)));
+
+  const wallDeltas = taskDeltas.map(td => {
+    const w026 = DATA.r026[td.tid].w || 0;
+    const w035 = DATA.r035[td.tid].w || 0;
+    return { ...td, w026, w035, wDelta: w035 - w026 };
+  }).sort((a, b) => a.wDelta - b.wDelta);
+
+  wallHtml += `<div class="eff-row" style="margin-bottom:12px;">
+    <div class="eff-label" style="color:#6e7681;font-size:10px">Task</div>
+    <div class="eff-bars" style="justify-content:center;font-size:10px;color:#3fb950;">Run-026</div>
+    <div class="eff-bars" style="justify-content:center;font-size:10px;color:#f0883e;">Run-035</div>
+    <div class="eff-delta" style="font-size:10px;color:#6e7681">&Delta;</div>
+  </div>`;
+
+  for (const wd of wallDeltas) {
+    const shortId = wd.tid.replace('arc-', '');
+    const pct026 = (wd.w026 / maxWall) * 100;
+    const pct035 = (wd.w035 / maxWall) * 100;
+    const deltaS = Math.round(wd.wDelta / 1000);
+    const deltaSign = deltaS > 0 ? '+' : '';
+    const deltaClass = deltaS > 0 ? 'positive' : deltaS < 0 ? 'negative' : 'zero';
+
+    wallHtml += `<div class="eff-row">
+      <div class="eff-label">${shortId}</div>
+      <div class="eff-bars">
+        <div class="eff-bar" style="width:${pct026}%;background:#3fb950;opacity:0.7" title="Run-026: ${formatTime(wd.w026)}">${formatTime(wd.w026)}</div>
+      </div>
+      <div class="eff-bars">
+        <div class="eff-bar" style="width:${pct035}%;background:#f0883e;opacity:0.7" title="Run-035: ${formatTime(wd.w035)}">${formatTime(wd.w035)}</div>
+      </div>
+      <div class="eff-delta ${deltaClass}">${deltaSign}${deltaS}s</div>
+    </div>`;
+  }
+
+  wallContainer.innerHTML = wallHtml;
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'adoption') renderAdoption();
+    if (tab.dataset.tab === 'efficiency') renderEfficiency();
+  });
+});
+
+// ============================================================
+// INIT
+// ============================================================
+renderTasks();
+renderFilterBar();
+
+</script>
+</body>
+</html>
