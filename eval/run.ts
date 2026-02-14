@@ -30,10 +30,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fromOpenRouter } from "./drivers/openrouter.js";
 import { runEval } from "./harness.js";
-import { oolongScore, exactMatch, arcGridMatch } from "./scoring.js";
+import { oolongScore, exactMatch, arcGridMatch, arc3Score } from "./scoring.js";
 import { loadOolongTasks } from "./datasets/oolong.js";
 import { generateSNIAHTasks } from "./datasets/s-niah.js";
 import { loadArcTasks } from "./datasets/arc.js";
+import { loadArc3Tasks } from "./datasets/arc3.js";
+import { Arc3Client } from "./arc3-client.js";
 import { loadStack } from "../src/plugins.js";
 import type { CallLLM, ModelEntry } from "../src/rlm.js";
 import { DEFAULT_MODEL_ALIASES } from "../src/models.js";
@@ -84,6 +86,7 @@ interface CliArgs {
 	modelAliases: string[];
 	maxBlocksPerIteration: number | null;
 	attempts: number;
+	game: string | null;
 }
 
 function usage(): never {
@@ -95,6 +98,7 @@ Benchmarks:
   oolong          OOLONG aggregation benchmark (trec_coarse, 50 tasks)
   s-niah          Single Needle in a Haystack (synthetic, ~48 tasks)
   arc             ARC-AGI-2 abstract reasoning (120 tasks)
+  arc3            ARC-AGI-3 interactive games (API-based)
 
 Options:
   --benchmark <name>       Benchmark to run (required)
@@ -110,6 +114,7 @@ Options:
   --context-len <n>        OOLONG: context_len filter (default: 131072)
   --tasks-per-length <n>   S-NIAH: tasks per context length (default: 8)
   --selected-problems <ids> ARC: comma-separated problem IDs to run
+  --game <ids>             ARC-3: comma-separated game IDs (e.g. ls20,ft09)
   --attempts <n>           Attempts per task for pass@N (default: 1)
   --rate-limit <n>         Requests per second (default: 5, 0 to disable)
   --rate-burst <n>         Burst capacity (default: 10)
@@ -188,6 +193,7 @@ function parseArgs(argv: string[]): CliArgs {
 		modelAliases,
 		maxBlocksPerIteration: args["max-blocks-per-iteration"] ? parseInt(args["max-blocks-per-iteration"], 10) : null,
 		attempts: parseInt(args.attempts ?? "1", 10),
+		game: args.game ?? null,
 	};
 }
 
@@ -306,6 +312,8 @@ function buildModelAliases(aliases: string[], apiKey: string): Record<string, Mo
 interface BenchmarkConfig {
 	loadTasks: () => Promise<EvalTask[]>;
 	scoringFn: ScoringFunction;
+	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
+	cleanupTask?: (task: EvalTask) => Promise<void>;
 }
 
 function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
@@ -339,9 +347,33 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 				scoringFn: arcGridMatch,
 			};
 
+		case "arc3": {
+			const clients = new Map<string, Arc3Client>();
+			return {
+				loadTasks: () => loadArc3Tasks(
+					args.game ? args.game.split(",").map((s) => s.trim()) : undefined,
+					args.maxTasks,
+				),
+				scoringFn: arc3Score,
+				setupSandbox: (task) => {
+					const gameId = task.metadata?.gameId as string;
+					const client = new Arc3Client(gameId);
+					clients.set(task.id, client);
+					return { arc3: client };
+				},
+				cleanupTask: async (task) => {
+					const client = clients.get(task.id);
+					if (client) {
+						await client.cleanup();
+						clients.delete(task.id);
+					}
+				},
+			};
+		}
+
 		default:
 			console.error(`Unknown benchmark: ${args.benchmark}`);
-			console.error("Available benchmarks: oolong, s-niah, arc");
+			console.error("Available benchmarks: oolong, s-niah, arc, arc3");
 			process.exit(1);
 	}
 }
@@ -423,6 +455,9 @@ async function main(): Promise<void> {
 	}
 	if (args.selectedProblems.length > 0) {
 		console.log(`Selected:        ${args.selectedProblems.join(", ")}`);
+	}
+	if (args.game) {
+		console.log(`Game:            ${args.game}`);
 	}
 	if (args.filter) {
 		console.log(`Filter:          ${args.filter}`);
@@ -525,6 +560,8 @@ async function main(): Promise<void> {
 		models,
 		...(args.maxBlocksPerIteration && { maxBlocksPerIteration: args.maxBlocksPerIteration }),
 		...(args.attempts > 1 && { attempts: args.attempts }),
+		...(benchmarkConfig.setupSandbox && { setupSandbox: benchmarkConfig.setupSandbox }),
+		...(benchmarkConfig.cleanupTask && { cleanupTask: benchmarkConfig.cleanupTask }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

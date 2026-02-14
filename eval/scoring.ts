@@ -275,6 +275,29 @@ function gridsEqual(a: unknown, b: unknown): boolean {
 	return a === b;
 }
 
+/**
+ * ARC-AGI-3 scoring. Parses the scorecard JSON returned by the agent
+ * and computes the average per-level efficiency (0-1).
+ *
+ * The API scorecard contains `score` (sum of per-level baseline/actual ratios)
+ * and `total_levels`. Dividing gives the average efficiency.
+ *
+ * Used for: ARC-AGI-3.
+ */
+export function arc3Score(predicted: string, _expected: string | string[]): number {
+	try {
+		const data = JSON.parse(predicted);
+		if (typeof data.score === "number" && typeof data.total_levels === "number") {
+			return data.total_levels > 0
+				? Math.min(1, data.score / data.total_levels)
+				: 0;
+		}
+		return 0;
+	} catch {
+		return 0;
+	}
+}
+
 function parseNumber(s: string): number | null {
 	// Remove common formatting: commas, whitespace, brackets
 	const cleaned = s.replace(/[\[\]\s,]/g, "").trim();

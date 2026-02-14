@@ -36,6 +36,10 @@ export interface HarnessConfig {
 	filter?: string;
 	/** Number of attempts per task for pass@N evaluation (default: 1). */
 	attempts?: number;
+	/** Create per-task sandbox globals. Called before rlm() for each task. */
+	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
+	/** Cleanup after each task (success or error). */
+	cleanupTask?: (task: EvalTask) => Promise<void>;
 	/** Progress callback, called after each task completes. */
 	onProgress?: (completed: number, total: number, result: EvalResult) => void;
 }
@@ -101,7 +105,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -189,6 +193,8 @@ async function runSingleTask(
 	pluginBodies?: string,
 	models?: Record<string, ModelEntry>,
 	maxBlocksPerIteration?: number,
+	setupSandbox?: (task: EvalTask) => Record<string, unknown>,
+	cleanupTask?: (task: EvalTask) => Promise<void>,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -207,6 +213,8 @@ async function runSingleTask(
 		return response;
 	};
 
+	const sandboxGlobals = setupSandbox?.(task);
+
 	try {
 		const result = await rlm(task.query, task.context, {
 			callLLM: wrappedCallLLM,
@@ -215,6 +223,7 @@ async function runSingleTask(
 			pluginBodies,
 			...(models && { models }),
 			...(maxBlocksPerIteration && { maxBlocksPerIteration }),
+			...(sandboxGlobals && { sandboxGlobals }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;
@@ -249,6 +258,8 @@ async function runSingleTask(
 			charCount: { input: totalInputChars, output: totalOutputChars },
 			error: errMsg,
 		};
+	} finally {
+		await cleanupTask?.(task);
 	}
 }
 

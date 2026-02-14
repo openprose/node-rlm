@@ -353,9 +353,13 @@ async function main(): Promise<void> {
 		case "arc":
 			await downloadArcFromRelease();
 			break;
+		case "arc3":
+			console.log("ARC-3 is API-based — no download needed.");
+			console.log("Set ARC3_API_KEY environment variable before running.");
+			break;
 		default:
 			console.error(`Unknown dataset: ${args.dataset}`);
-			console.error("Available datasets: oolong, s-niah, arc");
+			console.error("Available datasets: oolong, s-niah, arc, arc3");
 			process.exit(1);
 	}
 

@@ -24,6 +24,8 @@ export interface RlmOptions {
 	 * Default: undefined (no limit).
 	 */
 	maxBlocksPerIteration?: number;
+	/** Extra globals to inject into the REPL sandbox. */
+	sandboxGlobals?: Record<string, unknown>;
 }
 
 export interface RlmResult {
@@ -139,6 +141,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		pluginBodies: options.pluginBodies,
 		models: options.models,
 		maxBlocksPerIteration: options.maxBlocksPerIteration,
+		sandboxGlobals: options.sandboxGlobals,
 	};
 
 	const modelTable = buildModelTable(opts.models);
@@ -146,6 +149,12 @@ export async function rlm(query: string, context: string | undefined, options: R
 	const rootSystemPrompt = opts.pluginBodies ? `${basePrompt}\n\n---\n\n${opts.pluginBodies}` : basePrompt;
 
 	const env = new JsEnvironment();
+
+	if (opts.sandboxGlobals) {
+		for (const [name, value] of Object.entries(opts.sandboxGlobals)) {
+			env.set(name, value);
+		}
+	}
 
 	let activeDepth = 0;
 	const pendingRlmCalls = new Set<Promise<string>>();

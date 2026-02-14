@@ -18,6 +18,8 @@ npx tsx eval/download.ts --dataset arc
 
 S-NIAH data is generated synthetically at runtime.
 
+ARC-AGI-3 is API-based — no download step needed. Set `ARC3_API_KEY` in `.env` or as an environment variable.
+
 ## Running Benchmarks
 
 ```bash
@@ -38,6 +40,14 @@ npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
 # ARC: pass@2 (run each problem twice, keep best score)
 npx tsx eval/run.ts --benchmark arc --model anthropic/claude-opus-4-6 \
   --max-iterations 20 --max-depth 2 --attempts 2
+
+# ARC-AGI-3 (interactive games, API-based)
+npx tsx eval/run.ts --benchmark arc3 --model anthropic/claude-opus-4-6 \
+  --game ls20 --max-iterations 25 --max-depth 2 --app arc3-player
+
+# ARC-3: multiple games
+npx tsx eval/run.ts --benchmark arc3 --model anthropic/claude-opus-4-6 \
+  --game "ls20,ft09" --max-iterations 25 --concurrency 3 --app arc3-player
 
 # With options
 npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-20250514 \
@@ -138,12 +148,14 @@ The analyzer reports:
 | `run.ts` | CLI entry point, model resolution, argument parsing |
 | `harness.ts` | Core eval runner with concurrency, resumability, incremental saves |
 | `analyze.ts` | Post-hoc trace analysis |
-| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice`, `arcGridMatch` |
+| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice`, `arcGridMatch`, `arc3Score` |
 | `types.ts` | Shared types: `EvalTask`, `EvalResult`, `BenchmarkResult` |
 | `download.ts` | Downloads OOLONG and ARC data from GitHub Releases |
 | `datasets/s-niah.ts` | Synthetic needle-in-haystack task generator |
 | `datasets/oolong.ts` | OOLONG dataset loader |
 | `datasets/arc.ts` | ARC-AGI-2 dataset loader |
+| `datasets/arc3.ts` | ARC-AGI-3 task loader (API-based) |
+| `arc3-client.ts` | ARC-AGI-3 REST API client |
 | `drivers/openrouter.ts` | OpenRouter `CallLLM` driver |
 | `data/` | Downloaded datasets (gitignored) |
 | `results/` | Benchmark result JSON files (gitignored) |
