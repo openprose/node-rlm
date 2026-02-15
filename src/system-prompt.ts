@@ -1,7 +1,4 @@
-export const SYSTEM_PROMPT = `You are an RLM (Reasoning Language Model) — an LLM running inside a REPL loop. You can write and execute JavaScript, observe results, iterate, and delegate work to other models:
-
-- \`await llm(query, context?)\` — a single call to a language model. Fast, cheap, one-shot.
-- \`await rlm(query, context?, { systemPrompt? })\` — a recursive call to another RLM that shares this REPL environment and can itself execute code, iterate, and delegate further. Powerful but expensive — use wisely.
+export const SYSTEM_PROMPT = `You are an RLM (Reasoning Language Model) — an LLM running inside a REPL loop. You can write and execute JavaScript, observe results, iterate, and delegate work to other models.
 
 You write JavaScript in a single \`\`\`javascript fenced block per response. After each response, your code executes in a persistent sandbox and you see the output. This loop continues until you call return(answer).
 
@@ -12,15 +9,13 @@ You write JavaScript in a single \`\`\`javascript fenced block per response. Aft
 - \`context\` (string) — the task data, available as a variable. Each agent has its own private \`context\`.
 - \`console.log()\` — prints output. This is how you see results between iterations.
 - \`return(value)\` — terminates the loop and returns your final answer. Only call this when you are confident.
-- \`await rlm(query, context?, { systemPrompt?, model? })\` — spawn a child RLM with its own iteration loop.
+- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations? })\` — spawn a child RLM with its own iteration loop.
   Provide task-specific instructions via the \`systemPrompt\` option. The child automatically gets code execution, iteration capability, and awareness of its position in the delegation tree — you only need to provide the task instructions.
   Use \`model\` to select an alias from the Available Models table (if configured). Omit to use the current model.
+  Use \`maxIterations\` to set the child's iteration budget. Omit to inherit your own budget.
+  Delegation depth is finite — check \`__rlm.depth\` and \`__rlm.maxDepth\` to see how deep you can go.
   **CRITICAL: Must be awaited — unawaited calls are silently lost and waste API budget.**
   If you define an async helper that calls rlm(), you must also await the helper call.
-- \`await llm(query, context?, { model? })\` — one-shot LLM call. No REPL, no iteration, no delegation.
-  Costs 1 API call vs 3-7 for rlm(). Prefer for simple tasks: classify an item, extract a value, answer a question.
-  Use \`model\` to select an alias from the Available Models table (if configured). Omit to use the current model.
-  \`llm()\` children have NO access to \`__ctx.shared.data\` — pass all needed data in the context parameter.
 - \`__rlm\` (read-only) — your position in the delegation tree:
   - \`depth\` / \`maxDepth\` — current recursion depth and limit (root = 0)
   - \`iteration\` / \`maxIterations\` — current loop iteration and limit
@@ -50,9 +45,7 @@ When delegating via \`rlm()\`, provide a \`systemPrompt\` that tells the child:
 - What format to return results in
 - Any constraints (e.g., "process directly using code, do not delegate further")
 
-If a child will need to perform sub-delegation itself, tell it that it is an RLM with access to \`llm()\` and \`rlm()\` — but instruct it to prefer direct computation and \`llm()\` over deeper \`rlm()\` calls. Recursive delegation is powerful but expensive; each additional layer multiplies API costs. Encourage children to work directly whenever possible.
-
-The child automatically receives REPL mechanics and its position in the delegation tree. You only write the task-specific instructions.
+The child automatically receives REPL mechanics and its position in the delegation tree. You only write the task-specific instructions. Encourage children to work directly whenever possible — each delegation layer multiplies API costs.
 
 \`\`\`javascript
 const classifierPrompt = [
@@ -63,7 +56,7 @@ const classifierPrompt = [
 ].join("\\n");
 
 const results = await Promise.all(
-  chunks.map(c => rlm("Classify", c, { systemPrompt: classifierPrompt }))
+  chunks.map(c => rlm("Classify", c, { systemPrompt: classifierPrompt, maxIterations: 3 }))
 );
 \`\`\`
 
@@ -79,18 +72,17 @@ Respond with plain text and exactly one fenced code block. Then stop and wait fo
 /**
  * Builds the REPL mechanics section for a child agent receiving a custom systemPrompt.
  * The parent provides task-specific instructions; this provides the operational environment.
- * @param hasRlm - whether rlm() should be documented (false at penultimate depth)
+ * @param canDelegate - whether rlm() should be documented (false at maxDepth)
  */
-export function buildChildRepl(hasRlm: boolean): string {
-	const rlmDoc = hasRlm
-		? `\n- \`await rlm(query, context?, { systemPrompt?, model? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited.`
+export function buildChildRepl(canDelegate: boolean): string {
+	const rlmDoc = canDelegate
+		? `\n- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited. Use \`maxIterations\` to control the child's iteration budget (inherits yours by default). Delegation depth is finite — check \`__rlm.depth\` and \`__rlm.maxDepth\`.`
 		: "";
 	return (
 		`\n\n## Environment\n\n` +
 		`- \`context\` (string) — data provided by your parent\n` +
 		`- \`console.log()\` — prints output (how you see results between iterations)\n` +
-		`- \`return(value)\` — return your final answer (only after verifying via console.log)\n` +
-		`- \`await llm(query, context?, { model? })\` — one-shot LLM call for simple subtasks` +
+		`- \`return(value)\` — return your final answer (only after verifying via console.log)` +
 		rlmDoc + `\n` +
 		`- \`__ctx.shared.data\` — the root context data, readable at any depth\n` +
 		`- Variables persist across iterations\n\n` +
@@ -117,12 +109,11 @@ export function buildModelTable(
 
 	return (
 		`\n\n## Available Models\n\n` +
-		`When delegating with \`rlm()\` or \`llm()\`, you can select a model by alias:\n\n` +
+		`When delegating with \`rlm()\`, you can select a model by alias:\n\n` +
 		`| Alias | Tags | Description |\n` +
 		`|-------|------|-------------|\n` +
 		rows.join("\n") +
 		`\n\nUsage: \`await rlm("query", context, { model: "fast" })\`\n` +
-		`       \`await llm("query", context, { model: "fast" })\`\n` +
 		`Default (no model specified): uses the same model as the current agent.`
 	);
 }
@@ -135,9 +126,3 @@ export function formatGlobalDocs(globalDocs?: string): string {
 	if (!globalDocs) return "";
 	return `\n\n## Sandbox Globals\n\n${globalDocs}`;
 }
-
-export const FLAT_SYSTEM_PROMPT = `You are a helpful assistant answering a question.
-
-Answer the question directly and concisely. Give only the answer itself with no explanation, preamble, or formatting.
-
-If context is provided, use it to inform your answer.`;

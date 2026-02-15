@@ -1,5 +1,7 @@
 # Trajectory Analysis — Raw Research Learnings
 
+> **Note (Feb 2026):** References to `llm()` below describe the system as it was during these research runs. `llm()` has since been removed from the engine; the replacement for cheap one-shot calls is `rlm("query", ctx, { maxIterations: 1 })`. Flat mode has also been removed -- all agents at every depth are now full REPL agents.
+
 ## 1. What We Have: Trace Data Structure
 
 Per-task, per-iteration, our eval harness captures:

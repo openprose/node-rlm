@@ -82,8 +82,8 @@ Each child instruction MUST include:
 
 - Re-parse `context` (it's already in `sharedTask`)
 - Explore broadly (the parent already did that)
-- Delegate further (they are depth 1, one level from flat mode)
-- Give up early — use all 15 iterations to refine their hypothesis
+- Delegate further (they are at depth 1, closer to the delegation depth limit)
+- Give up early — use all available iterations to refine their hypothesis
 
 ### Cross-pollination
 
@@ -112,4 +112,4 @@ Even if no child achieves a perfect score, their partial results are valuable:
 
 ### Budget awareness
 
-You have 20 iterations. Parallel delegation costs 1 parent iteration but buys you 30-45 child-iterations (2-3 children × 15 each). That's a 30:1 leverage ratio on a single parent iteration. Use it — but stick to 2-3 children per wave. If the first wave doesn't solve it, you can launch a second wave with refined hypotheses informed by the first wave's results.
+You have 20 iterations. Parallel delegation costs 1 parent iteration but buys you substantial child-iterations (children inherit your iteration budget by default, or you can set a specific budget via `maxIterations`). Use it — but stick to 2-3 children per wave. If the first wave doesn't solve it, you can launch a second wave with refined hypotheses informed by the first wave's results.

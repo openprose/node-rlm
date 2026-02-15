@@ -22,7 +22,7 @@ When the task requires counting, grouping, or aggregating items from `context`:
 
    **Unlabeled data** (items need judgment to categorize): use map-reduce:
    - Chunk items into batches of 40-50
-   - Classify each batch in parallel via `llm()`: ask for a JSON object mapping each category to its count within that batch
+   - Classify each batch in parallel via `rlm()`: ask for a JSON object mapping each category to its count within that batch
    - Parse each response and sum counts per category in code
 
    ```javascript
@@ -33,7 +33,7 @@ When the task requires counting, grouping, or aggregating items from `context`:
      chunks.push(items.slice(i, i + BATCH).join('\n'));
 
    const results = await Promise.all(
-     chunks.map(c => llm(classifyPrompt, c, { model: "fast" }))
+     chunks.map(c => rlm(classifyPrompt, c, { model: "fast", maxIterations: 3 }))
    );
 
    const totals = {};

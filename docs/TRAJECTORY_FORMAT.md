@@ -50,8 +50,8 @@ iter  5  FILTER:regex           →  switch to line-by-line string matching
 iter  6  EXTRACT:compute        →  count matches via .filter().length
 iter  7  VERIFY:spot-check      →  log count, get 65
 iter  8  VERIFY:cross-method    →  re-count with different regex, still 65
-iter  9  EXTRACT:delegate       →  try llm() fan-out classification
-iter 10  EXTRACT:aggregate      →  aggregate llm() results, get 63
+iter  9  EXTRACT:delegate       →  try rlm() fan-out classification (maxIterations:1)
+iter 10  EXTRACT:aggregate      →  aggregate rlm() results, get 63
 iter 11  RETURN                 ✓  return("65") — chose code count over llm count
 ```
 
@@ -63,7 +63,7 @@ _Optional for single-strategy tasks. Included here for illustration._
 |----|-----------|-------|---------|
 | H1 | Data is JSON (parse with jq) | 4 | rejected: parse error |
 | H2 | Regex line-match gives correct count | 3,5-7 | accepted: 65 matches |
-| H3 | llm() fan-out is more accurate than regex | 9-10 | rejected: llm count=63, less trusted |
+| H3 | rlm() fan-out is more accurate than regex | 9-10 | rejected: delegation count=63, less trusted |
 
 ## Phase Analysis
 
@@ -82,19 +82,19 @@ _Optional for single-strategy tasks. Included here for illustration._
 **Assessment:** Regex was slightly too permissive — matched a partial label.
 
 ### Phase 4: Verification via Delegation (iter 8-10)
-**Strategy:** Re-counted with different regex, then tried llm() fan-out
-**Result:** Code said 65, llm() said 63. Neither matched expected 64.
+**Strategy:** Re-counted with different regex, then tried rlm() fan-out
+**Result:** Code said 65, rlm() fan-out said 63. Neither matched expected 64.
 **Assessment:** Good instinct to cross-verify, but both methods were inaccurate.
 
 ### Phase 5: Return (iter 11)
-**Decision:** Trusted code count (65) over llm() count (63).
-**Assessment:** Reasonable heuristic — code counts are usually more reliable than llm() estimates. But the regex was wrong.
+**Decision:** Trusted code count (65) over rlm() fan-out count (63).
+**Assessment:** Reasonable heuristic — code counts are usually more reliable than delegation-based estimates. But the regex was wrong.
 
 ## Root Cause
 The counting regex was slightly over-inclusive. The label "entity" also matched partial occurrences in phrases like "entity-related". A word-boundary regex (`\bentity\b`) would have yielded the correct count.
 
 ## What Would Have Helped
-1. **Plugin: structured-data-aggregation** — provides the chunked llm() map-reduce pattern
+1. **Plugin: structured-data-aggregation** — provides the chunked rlm() map-reduce pattern
 2. **Word-boundary regex** — explicit `\b` anchors in the grep pattern
 3. **Sanity check** — comparing code count to total lines would reveal the off-by-one
 ```
@@ -323,7 +323,7 @@ The phase is the **primary activity** of that iteration. Seed phases:
 | `PLAN`     | Reasoning about strategy without executing code, or minimal diagnostic code |
 | `FILTER`   | Narrowing data: grep, regex, split, slice for relevant subset               |
 | `EXTRACT`  | Computing the answer: counting, classifying, aggregating, implementing      |
-| `DELEGATE` | Primary activity is launching/collecting rlm() or llm() calls               |
+| `DELEGATE` | Primary activity is launching/collecting rlm() calls                        |
 | `VERIFY`   | Checking a candidate answer via re-computation or cross-method              |
 | `ERROR`    | Iteration dominated by handling/recovering from an error                    |
 | `RETURN`   | Calling return() with the final answer                                      |
@@ -359,7 +359,7 @@ omit them when the phase alone is sufficient. Seed sub-phases:
 | `apply` | Applying a validated algorithm to new data (e.g., test input) |
 | `aggregate` | Combining sub-results into a final answer |
 | `refine` | Fixing bugs or improving an existing implementation (e.g., solve1 -> solve2) |
-| `delegate` | Using llm()/rlm() to compute part of the answer |
+| `delegate` | Using rlm() to compute part of the answer |
 | `fallback` | Implementing a backup strategy under time pressure |
 
 **Under VERIFY:**
@@ -463,8 +463,8 @@ an error.
 | Pattern                 | Description                                                             |
 | ----------------------- | ----------------------------------------------------------------------- |
 | `delegation-rlm`        | Used rlm() for recursive sub-calls with iteration capability            |
-| `delegation-llm`        | Used llm() for one-shot fan-out (classification, extraction)            |
-| `parallel-fanout`       | Promise.all() over multiple llm()/rlm() calls                           |
+| `delegation-lightweight` | Used rlm() with small maxIterations for one-shot fan-out (classification, extraction) |
+| `parallel-fanout`       | Promise.all() over multiple rlm() calls                                 |
 | `sequential-delegation` | Chained delegation calls where each depends on the prior                |
 | `prompt-crafting`       | Invested significant effort designing the prompt for a child call       |
 | `over-delegation`       | Delegated a task that would have been simpler to compute directly       |
@@ -489,7 +489,7 @@ an error.
 | Pattern                  | Description                                                               |
 | ------------------------ | ------------------------------------------------------------------------- |
 | `verification`           | Explicitly verified answer before returning                               |
-| `cross-verification`     | Verified via a second independent method (e.g., code count vs. llm count) |
+| `cross-verification`     | Verified via a second independent method (e.g., code count vs. delegation count) |
 | `redundant-verification` | Verified the same thing 3+ times without new information                  |
 | `self-correction`        | Detected own error in output and fixed it in a subsequent iteration       |
 | `error-recovery`         | Recovered from a runtime error (syntax, exception, API failure)           |
@@ -539,7 +539,7 @@ the full taxonomy — limiting annotators to known modes defeats the purpose.
 | Mode                        | Description                                             |
 | --------------------------- | ------------------------------------------------------- |
 | `format-mismatch`           | Right answer, wrong format (not extracted from wrapper) |
-| `unawaited-delegation`      | Called rlm()/llm() without await — result silently lost |
+| `unawaited-delegation`      | Called rlm() without await — result silently lost       |
 | `multi-block-hallucination` | Generated fabricated output between code blocks         |
 | `...`                       | Any other formatting error you think is relevant        |
 

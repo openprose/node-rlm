@@ -89,8 +89,8 @@ Skip this if you already verified against training data this iteration.
 - **Verbal analysis.** "Describe the pattern" produces prose, not code/grids. Use code yourself.
 - **Spatial decomposition.** Patterns are holistic — symmetry axes and connected components span the full grid.
 - **Brute-force enumeration.** N children x 7 iterations each exceeds your own total budget with no guarantee of finding the right compositional transform.
-- **Budget extension.** Children get at most 7 iterations at depth 1 and start without your accumulated context.
+- **Budget extension.** Children inherit your iteration budget by default and start without your accumulated context.
 
 ### Cost-benefit rule
 
-Each `"fast"` child costs ~2-3 iterations. Each same-model child costs ~3-7. Delegate only when parallel children save more parent iterations than they consume. Pattern 1 almost always passes; Patterns 2-3 are situational.
+Each `"fast"` child costs ~2-3 iterations of its budget. Each same-model child costs ~3-7 iterations of its budget. Children inherit your iteration budget by default; use `{ maxIterations: N }` to cap them. Delegate only when parallel children save more parent iterations than they consume. Pattern 1 almost always passes; Patterns 2-3 are situational.

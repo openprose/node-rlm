@@ -1,5 +1,7 @@
 # globalDocs Implementation Plan
 
+> **Status (Feb 2026):** This plan has been fully implemented. The `globalDocs` feature is live in `src/rlm.ts` and `src/system-prompt.ts`. `eval/arc3-global-docs.md` exists and is loaded by the ARC-3 benchmark. The `arc3-player-v2.md` plugin has been split into strategy-only content (plugin) and API reference (globalDocs). Note: references to `FLAT_SYSTEM_PROMPT` and flat-mode agents below describe the system as it was at the time of writing -- flat mode has since been removed. All agents at every depth are now full REPL agents.
+
 Add a `globalDocs` option to the RLM harness that documents sandbox globals in every agent's system prompt at every depth. Then split the ARC-3 plugin into environment docs (via `globalDocs`) and strategy docs (stays in the plugin).
 
 ## Problem Statement

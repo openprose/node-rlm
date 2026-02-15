@@ -12,7 +12,7 @@ requires: []
 
 ### Overview
 
-You are the root orchestrator. You split work, delegate to children, and aggregate results. When delegating, instruct children to solve their subtasks directly — they should NOT re-delegate via `rlm()`. Children MAY use `llm()` for simple sub-questions (e.g., classify a single ambiguous item).
+You are the root orchestrator. You split work, delegate to children, and aggregate results. When delegating, instruct children to solve their subtasks directly — they should NOT re-delegate via `rlm()` unless necessary.
 
 ### When to delegate
 
@@ -48,9 +48,9 @@ const results = await Promise.all(chunks.map(chunk =>
 ));
 ```
 
-**Option B: Flat children via `rlm()` (when `__rlm.maxDepth === 1`)**
+**Option B: Lightweight children via `rlm()` with small iteration budget**
 
-Children are one-shot with no sandbox. Pass data as context, keep chunks to 10-15:
+For per-item or small-batch classification, use a small `maxIterations` to keep costs low:
 
 ```javascript
 const items = context.split('\n').filter(l => l.trim());
@@ -63,42 +63,21 @@ const results = await Promise.all(chunks.map((chunk, idx) =>
   rlm(
     `Classify each item into exactly one of: [LIST]. ` +
     `Return ONLY a JSON array: [{"idx": N, "label": "cat"}, ...]. Indices start at ${idx * chunkSize}.`,
-    chunk
+    chunk,
+    { maxIterations: 2 }
   )
 ));
 ```
 
-**Option C: `llm()` for individual classification**
-
-For per-item classification where each item is independent:
-
-```javascript
-const items = context.split('\n').filter(l => l.trim());
-const labels = await Promise.all(items.map((item, i) =>
-  llm(`Classify into exactly one of [A, B, C, D]. Reply with ONLY the category label.`, item)
-));
-console.log("Labels:", JSON.stringify(labels));
-```
-
-`llm()` costs 1 API call per item (vs 3-7 for `rlm()`). Use it when each item can be classified without multi-step reasoning.
-
 ### Model selection for delegation
 
-When model aliases are configured, pass `{ model: "alias" }` as the options argument to `rlm()` or `llm()` to choose which model handles a delegation. Three default aliases are always available: `fast`, `orchestrator`, `intelligent`.
+When model aliases are configured, pass `{ model: "alias" }` as the options argument to `rlm()` to choose which model handles a delegation. Three default aliases are always available: `fast`, `orchestrator`, `intelligent`.
 
 Use a cheap model for bulk classification fan-out, and let the orchestrator (default model) handle aggregation:
 
-**Option A** — cheap `rlm()` fan-out:
 ```javascript
 chunks.map(chunk =>
-  rlm(`Classify lines ${chunk.start}-${chunk.end - 1} ...`, undefined, { model: "fast" })
-)
-```
-
-**Option C** — cheap `llm()` per-item classification:
-```javascript
-items.map(item =>
-  llm(`Classify into exactly one of [A, B, C, D]. Reply with ONLY the label.`, item, { model: "fast" })
+  rlm(`Classify lines ${chunk.start}-${chunk.end - 1} ...`, undefined, { model: "fast", maxIterations: 3 })
 )
 ```
 
@@ -124,12 +103,12 @@ console.log("Classified:", allLabels.length, "Failed chunks:", failed.length);
 **If children return garbage:** Classify the failed items yourself in the next iteration. Do NOT re-delegate the entire batch.
 
 ```javascript
-// Re-classify failed chunk items yourself using llm()
+// Re-classify failed chunk items yourself using rlm() with small budget
 for (const chunkIdx of failed) {
   const start = chunkIdx * chunkSize;
   const end = Math.min(start + chunkSize, items.length);
   for (let i = start; i < end; i++) {
-    const label = await llm("Classify into one of [LIST]. Reply with ONLY the label.", items[i]);
+    const label = await rlm("Classify into one of [LIST]. Reply with ONLY the label.", items[i], { maxIterations: 1 });
     allLabels.splice(i, 0, label.trim());
   }
 }

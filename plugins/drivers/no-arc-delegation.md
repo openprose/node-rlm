@@ -14,7 +14,7 @@ requires: []
 
 ### Why
 
-Child RLMs get at most 7 iterations and start without your accumulated context -- your grid analysis, hypothesis history, variable state, and structural understanding. Across 80 ARC trajectories, every delegation attempt failed (0/3 success rate). Each failed delegation wastes 1 parent iteration from a 20-iteration budget.
+Child RLMs start without your accumulated context -- your grid analysis, hypothesis history, variable state, and structural understanding. Across 80 ARC trajectories, every delegation attempt failed (0/3 success rate). Each failed delegation wastes 1 parent iteration from a 20-iteration budget.
 
 ### What to do instead
 

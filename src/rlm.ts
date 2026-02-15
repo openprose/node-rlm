@@ -1,5 +1,5 @@
 import { JsEnvironment } from "./environment.js";
-import { buildChildRepl, buildModelTable, FLAT_SYSTEM_PROMPT, formatGlobalDocs, SYSTEM_PROMPT } from "./system-prompt.js";
+import { buildChildRepl, buildModelTable, formatGlobalDocs, SYSTEM_PROMPT } from "./system-prompt.js";
 
 export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string>;
 
@@ -89,11 +89,6 @@ interface ContextStore {
 	locals: Map<string, LocalStore>;
 }
 
-/** Depth-decaying iteration budget. */
-function iterationsForDepth(depth: number, maxIterations: number): number {
-	const caps = [Infinity, 15, 4, 3];
-	return Math.min(maxIterations, caps[Math.min(depth, caps.length - 1)]);
-}
 
 function buildOrientationBlock(
 	invocationId: string,
@@ -102,32 +97,22 @@ function buildOrientationBlock(
 	maxDepth: number,
 	effectiveMaxIterations: number,
 	lineage: readonly string[],
-	isFlat: boolean,
 ): string {
 	const rootTask = lineage[0].length > 200 ? lineage[0].substring(0, 200) + "..." : lineage[0];
-
-	if (isFlat) {
-		return (
-			`\n\n## Your Position\n\n` +
-			`You are a leaf agent ("${invocationId}") in a delegation tree.\n` +
-			`Parent: "${parentId}". Root task: "${rootTask}"\n` +
-			`You are in flat mode: answer in a single response. No code execution available.`
-		);
-	}
 
 	const roleDesc = depth === 0
 		? "You are the root orchestrator."
 		: `Parent: "${parentId}". Root task: "${rootTask}"`;
-	const childDesc = depth === maxDepth - 1
-		? "Your children will run in FLAT MODE (one-shot, no REPL, no sandbox). Pass all data directly in the query."
-		: `Your children will be REPL agents at depth ${depth + 1}.`;
+	const delegationDesc = depth < maxDepth
+		? `You can delegate to child RLMs at depth ${depth + 1} (max depth: ${maxDepth}).`
+		: "You are at the maximum delegation depth and cannot spawn child agents.";
 
 	return (
 		`\n\n## Your Position\n\n` +
-		`Agent "${invocationId}" — depth ${depth} of ${maxDepth - 1} (0-indexed).\n` +
+		`Agent "${invocationId}" — depth ${depth} of ${maxDepth} (0-indexed).\n` +
 		`${roleDesc}\n` +
 		`Iteration budget: ${effectiveMaxIterations} iterations (use them wisely).\n` +
-		`${childDesc}`
+		`${delegationDesc}`
 	);
 }
 
@@ -234,14 +219,6 @@ export async function rlm(query: string, context: string | undefined, options: R
 		readLocal,
 	});
 
-	const PENULTIMATE_DEPTH_WARNING =
-		"\n\nIMPORTANT — DELEGATION CONSTRAINT: You are at the deepest level that can execute code. " +
-		"Any rlm() sub-calls you make will go to a simple one-shot assistant at the maximum depth — " +
-		"it has NO access to the REPL, cannot run code, cannot iterate, and cannot make further sub-calls. " +
-		"It will receive only the query and context you pass, and must answer in a single response. " +
-		"Therefore: pass all necessary information directly in the query, ask simple self-contained questions, " +
-		"and do as much computation as possible yourself before delegating.";
-
 	async function rlmInternal(
 		query: string,
 		context: string | undefined,
@@ -251,44 +228,33 @@ export async function rlm(query: string, context: string | undefined, options: R
 		parentId: string | null,
 		customSystemPrompt?: string,
 		callLLMOverride?: CallLLM,
+		maxIterationsOverride?: number,
 	): Promise<RlmResult> {
 		const callLLM = callLLMOverride ?? opts.callLLM;
 
-		if (depth >= opts.maxDepth) {
-			const msg = context ? `${query}\n\nContext: ${context}` : query;
-			const flatOrientation = buildOrientationBlock(
-				invocationId, parentId, depth, opts.maxDepth,
-				1, lineage, true,
-			);
-			const effectiveFlatPrompt = customSystemPrompt
-				? customSystemPrompt + globalDocsSection + flatOrientation
-				: FLAT_SYSTEM_PROMPT + globalDocsSection + flatOrientation;
-			const answer = await callLLM([{ role: "user", content: msg }], effectiveFlatPrompt);
-			return { answer, iterations: 1, trace: [] };
-		}
+		// Children inherit parent's budget by default; parent can override via maxIterations option
+		const effectiveMaxIterations = maxIterationsOverride !== undefined
+			? Math.min(maxIterationsOverride, opts.maxIterations)
+			: opts.maxIterations;
 
-		// Depth-decaying iteration budget
-		const effectiveMaxIterations = iterationsForDepth(depth, opts.maxIterations);
+		const canDelegate = depth < opts.maxDepth;
 
 		// Build orientation block and effective system prompt
 		const orientationBlock = buildOrientationBlock(
 			invocationId, parentId, depth, opts.maxDepth,
-			effectiveMaxIterations, lineage, false,
+			effectiveMaxIterations, lineage,
 		);
 		let effectiveSystemPrompt: string;
 		if (customSystemPrompt) {
 			// Parent provided custom instructions — use child base template
-			const hasRlm = depth < opts.maxDepth - 1;
-			const childBase = buildChildRepl(hasRlm);
+			const childBase = buildChildRepl(canDelegate);
 			effectiveSystemPrompt = customSystemPrompt + childBase + globalDocsSection + modelTable + orientationBlock;
 		} else if (depth === 0) {
 			// Root agent gets the full system prompt with plugins
-			effectiveSystemPrompt = rootSystemPrompt + orientationBlock +
-				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
+			effectiveSystemPrompt = rootSystemPrompt + orientationBlock;
 		} else {
 			// Non-root child without custom prompt — use base system prompt, no plugins
-			effectiveSystemPrompt = SYSTEM_PROMPT + globalDocsSection + modelTable + orientationBlock +
-				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
+			effectiveSystemPrompt = SYSTEM_PROMPT + globalDocsSection + modelTable + orientationBlock;
 		}
 
 		// Initialize local store for this invocation
@@ -459,7 +425,14 @@ export async function rlm(query: string, context: string | undefined, options: R
 		throw new RlmMaxIterationsError(effectiveMaxIterations, trace);
 	}
 
-	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string }): Promise<string> => {
+	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number }): Promise<string> => {
+		// Reject delegation at max depth
+		if (activeDepth >= opts.maxDepth) {
+			return Promise.reject(
+				new Error(`Cannot delegate: you are at maximum depth (${opts.maxDepth}).`),
+			);
+		}
+
 		// Resolve model override if requested
 		let modelCallLLM: CallLLM | undefined;
 		if (rlmOpts?.model) {
@@ -488,7 +461,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 
 		const promise = (async () => {
 			try {
-				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, rlmOpts?.systemPrompt, modelCallLLM);
+				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, rlmOpts?.systemPrompt, modelCallLLM, rlmOpts?.maxIterations);
 				return result.answer;
 			} finally {
 				activeDepth = savedDepth;
@@ -499,21 +472,6 @@ export async function rlm(query: string, context: string | undefined, options: R
 		promise.finally(() => pendingRlmCalls.delete(promise));
 
 		return promise;
-	});
-
-	env.set("llm", async (q: string, c?: string, llmOpts?: { model?: string }): Promise<string> => {
-		let effectiveCallLLM = opts.callLLM;
-		if (llmOpts?.model) {
-			const entry = opts.models?.[llmOpts.model];
-			if (!entry) {
-				throw new Error(
-					`Unknown model alias "${llmOpts.model}". Available: ${Object.keys(opts.models ?? {}).join(", ") || "none configured"}`,
-				);
-			}
-			effectiveCallLLM = entry.callLLM;
-		}
-		const msg = c ? `${q}\n\nContext: ${c}` : q;
-		return effectiveCallLLM([{ role: "user", content: msg }], FLAT_SYSTEM_PROMPT);
 	});
 
 	return rlmInternal(query, context, 0, [query], "root", null);

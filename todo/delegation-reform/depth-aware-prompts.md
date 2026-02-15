@@ -1,5 +1,7 @@
 # Depth-Aware System Prompts
 
+> **Status (Feb 2026):** Several aspects of this design have been partially implemented through other changes. Flat mode (`FLAT_SYSTEM_PROMPT`) has been removed entirely -- all agents at every depth are full REPL agents. `iterationsForDepth()` has been removed -- children inherit the parent's `maxIterations` by default. `llm()` has been removed. `PENULTIMATE_DEPTH_WARNING` has been removed. The composable sections approach (Option A) and coordinator/solver mode distinction remain aspirational proposals that have not yet been implemented. References to removed features below describe the system as it was at the time of writing.
+
 Design for making the RLM system prompt vary by depth and mode, so the root can act as a coordinator while children act as solvers.
 
 ## Problem

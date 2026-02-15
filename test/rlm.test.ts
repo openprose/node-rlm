@@ -117,44 +117,53 @@ describe("rlm", () => {
 		expect(result.answer).toBe("child answer");
 	});
 
-	it("base case at max depth: degrades to flat callLLM", async () => {
-		let baseSystemPromptSeen = false;
+	it("child at max depth: full REPL but cannot delegate", async () => {
+		const systemPrompts: string[] = [];
 		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 
-			// At max depth, rlm should call callLLM directly with BASE_SYSTEM_PROMPT
-			if (!systemPrompt.includes("javascript")) {
-				baseSystemPromptSeen = true;
-				return "flat answer";
-			}
-
 			if (userMsg === "parent query") {
-				return '```repl\nresult = await rlm("sub query")\nreturn result\n```';
+				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
 			}
-
+			if (userMsg === "sub query") {
+				return '```repl\nreturn "child answer"\n```';
+			}
 			return '```repl\nreturn "unexpected"\n```';
 		};
 
 		const result = await rlm("parent query", undefined, { callLLM, maxDepth: 1 });
-		expect(result.answer).toBe("flat answer");
-		expect(baseSystemPromptSeen).toBe(true);
+		expect(result.answer).toBe("child answer");
+		// Child at maxDepth is a full REPL agent with environment docs
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).toContain("console.log");
+		expect(childPrompt).toContain("return(value)");
+		// But orientation says they're at max depth
+		expect(childPrompt).toContain("maximum delegation depth");
 	});
 
-	it("flat-mode passes through raw response without stripping", async () => {
-		const callLLM: CallLLM = async (messages, systemPrompt) => {
+	it("rlm() at max depth rejects with clear error", async () => {
+		const callLLM: CallLLM = async (messages) => {
 			const userMsg = messages[0]?.content || "";
-			if (!systemPrompt.includes("javascript")) {
-				return '```javascript\nentity\n```';
-			}
 			if (userMsg === "parent query") {
-				return '```repl\nresult = await rlm("classify this")\nreturn result\n```';
+				// Parent delegates to child
+				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+			}
+			if (userMsg === "sub query") {
+				// Child at maxDepth tries to delegate — should fail
+				return '```repl\nconst r = await rlm("grandchild")\nreturn r\n```';
 			}
 			return '```repl\nreturn "unexpected"\n```';
 		};
 
-		const result = await rlm("parent query", undefined, { callLLM, maxDepth: 1 });
-		// Flat-mode no longer strips code fences — raw response is passed through
-		expect(result.answer).toBe('```javascript\nentity\n```');
+		// maxDepth=1: root(0) can delegate, child(1) cannot
+		// The child's rlm() call will error, and the error output
+		// will be fed back to the child. The child will hit max iterations.
+		await expect(rlm("parent query", undefined, {
+			callLLM,
+			maxDepth: 1,
+			maxIterations: 2,
+		})).rejects.toThrow("max iterations");
 	});
 
 	it("trace captures error information from failed code blocks", async () => {
@@ -411,17 +420,16 @@ describe("rlm", () => {
 		expect(childPrompt).not.toContain("Do special things.");
 	});
 
-	it("pluginBodies: not passed to flat-mode children", async () => {
+	it("pluginBodies: not passed to max-depth children", async () => {
 		const systemPrompts: string[] = [];
 		const callLLM: CallLLM = async (messages, systemPrompt) => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
-			if (!systemPrompt.includes("javascript")) {
-				// Flat-mode child
-				return "flat answer";
-			}
 			if (userMsg === "parent task") {
 				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+			}
+			if (userMsg === "sub query") {
+				return '```repl\nreturn "child answer"\n```';
 			}
 			return '```repl\nreturn "unexpected"\n```';
 		};
@@ -433,31 +441,9 @@ describe("rlm", () => {
 		});
 
 		expect(systemPrompts[0]).toContain("## My Plugin");
-		const flatPrompt = systemPrompts[1];
-		expect(flatPrompt).not.toContain("## My Plugin");
-		expect(flatPrompt).not.toContain("Do special things.");
-	});
-
-	it("pluginBodies: not passed to llm() calls", async () => {
-		const systemPrompts: string[] = [];
-		const callLLM: CallLLM = async (messages, systemPrompt) => {
-			systemPrompts.push(systemPrompt);
-			const userMsg = messages[0]?.content || "";
-			if (!systemPrompt.includes("javascript")) {
-				return "llm answer";
-			}
-			return '```repl\nconst r = await llm("quick question")\nreturn r\n```';
-		};
-
-		await rlm("test", undefined, {
-			callLLM,
-			pluginBodies: "## My Plugin\nDo special things.",
-		});
-
-		expect(systemPrompts[0]).toContain("## My Plugin");
-		const llmPrompt = systemPrompts[1];
-		expect(llmPrompt).not.toContain("## My Plugin");
-		expect(llmPrompt).not.toContain("Do special things.");
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).not.toContain("## My Plugin");
+		expect(childPrompt).not.toContain("Do special things.");
 	});
 
 	it("model selection: rlm() child uses the specified model's callLLM", async () => {
@@ -485,31 +471,6 @@ describe("rlm", () => {
 
 		expect(fastModelCalled).toBe(true);
 		expect(result.answer).toBe("FAST_MODEL response");
-	});
-
-	it("model selection: llm() uses the specified model's callLLM", async () => {
-		let fastModelCalled = false;
-		const defaultCallLLM: CallLLM = async (_messages, systemPrompt) => {
-			if (!systemPrompt.includes("javascript")) {
-				return "default llm answer";
-			}
-			return '```repl\nresult = await llm("hello", undefined, { model: "fast" })\nreturn result\n```';
-		};
-
-		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
-			fastModelCalled = true;
-			return "FAST_MODEL llm answer";
-		};
-
-		const result = await rlm("test", undefined, {
-			callLLM: defaultCallLLM,
-			models: {
-				fast: { callLLM: fastCallLLM, tags: ["speed"], description: "A fast model" },
-			},
-		});
-
-		expect(fastModelCalled).toBe(true);
-		expect(result.answer).toBe("FAST_MODEL llm answer");
 	});
 
 	it("model selection: invalid model alias produces error containing 'Unknown model alias'", async () => {
@@ -546,36 +507,6 @@ describe("rlm", () => {
 			sandboxGlobals: { myApi: mockObj },
 		});
 		expect(result.answer).toBe("hello world");
-	});
-
-	it("model selection: no model specified uses default callLLM", async () => {
-		let defaultCalledForChild = false;
-		let fastModelCalled = false;
-
-		const defaultCallLLM: CallLLM = async (messages, systemPrompt) => {
-			const userMsg = messages[0]?.content || "";
-			if (!systemPrompt.includes("javascript")) {
-				defaultCalledForChild = true;
-				return "default llm answer";
-			}
-			return '```repl\nresult = await llm("hello")\nreturn result\n```';
-		};
-
-		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
-			fastModelCalled = true;
-			return "FAST_MODEL llm answer";
-		};
-
-		const result = await rlm("test", undefined, {
-			callLLM: defaultCallLLM,
-			models: {
-				fast: { callLLM: fastCallLLM },
-			},
-		});
-
-		expect(defaultCalledForChild).toBe(true);
-		expect(fastModelCalled).toBe(false);
-		expect(result.answer).toBe("default llm answer");
 	});
 
 	it("globalDocs: included in root system prompt", async () => {
@@ -640,17 +571,16 @@ describe("rlm", () => {
 		expect(childPrompt).toContain("The `myApi` global provides X and Y.");
 	});
 
-	it("globalDocs: included in flat-mode child system prompt", async () => {
+	it("globalDocs: included in max-depth child system prompt", async () => {
 		const systemPrompts: string[] = [];
 		const callLLM: CallLLM = async (messages, systemPrompt) => {
 			systemPrompts.push(systemPrompt);
-			if (!systemPrompt.includes("javascript")) {
-				// Flat-mode child
-				return "flat answer";
-			}
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "parent task") {
 				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+			}
+			if (userMsg === "sub query") {
+				return '```repl\nreturn "child answer"\n```';
 			}
 			return '```repl\nreturn "unexpected"\n```';
 		};
@@ -663,9 +593,9 @@ describe("rlm", () => {
 
 		// Root prompt has globalDocs
 		expect(systemPrompts[0]).toContain("The `myApi` global provides X and Y.");
-		// Flat-mode child also has globalDocs
-		const flatPrompt = systemPrompts[1];
-		expect(flatPrompt).toContain("The `myApi` global provides X and Y.");
+		// Max-depth child also has globalDocs
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).toContain("The `myApi` global provides X and Y.");
 	});
 
 	it("globalDocs + sandboxGlobals: child can use documented sandbox global", async () => {

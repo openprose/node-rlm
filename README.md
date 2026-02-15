@@ -58,7 +58,7 @@ npx node-rlm --query "Hello" --model custom/my-model --base-url http://localhost
 | `--model <provider/id>` | `openrouter/google/gemini-3-flash-preview` | Model in `provider/model-id` format                       |
 | `--base-url <url>`      | --                                         | Custom API base URL (for Ollama, vLLM, etc.)              |
 | `--max-iterations <n>`  | 15                                         | Maximum REPL loop iterations (root)                       |
-| `--max-depth <n>`       | 3                                          | Maximum recursion depth; beyond this, `rlm()` is one-shot |
+| `--max-depth <n>`       | 3                                          | Maximum recursion depth; agents at maxDepth cannot call `rlm()` |
 | `--model-alias <spec>`  | --                                         | Add or override a named model alias (repeatable)          |
 
 #### Model aliases
@@ -80,7 +80,7 @@ npx node-rlm --query "Analyze this dataset" \
   --model-alias smart=openrouter/anthropic/claude-sonnet-4:intelligent,thorough
 ```
 
-The agent sees an "Available Models" table in its system prompt and can delegate with `await rlm("subtask", data, { model: "fast" })` or `await llm("classify this", item, { model: "fast" })`.
+The agent sees an "Available Models" table in its system prompt and can delegate with `await rlm("subtask", data, { model: "fast" })` or `await rlm("classify this", item, { model: "fast", maxIterations: 1 })` for cheap one-shot calls.
 
 ### Providers
 
@@ -136,6 +136,7 @@ Throws `RlmMaxIterationsError` if the iteration budget is exhausted (carries par
 | `maxDepth`      | `number`  | 3          | Recursion depth limit                                        |
 | `pluginBodies`  | `string`  | --         | Extra prompt text appended to the root agent's system prompt |
 | `models`        | `Record<string, ModelEntry>` | -- | Named model aliases for child delegation; build from `DEFAULT_MODEL_ALIASES` or supply your own |
+| `globalDocs`    | `string`  | --         | Documentation appended to every agent's system prompt at every depth (for documenting sandbox globals) |
 
 ### Sandbox globals
 
@@ -146,15 +147,14 @@ These are available to the model inside the REPL:
 | `context`                                       | Task data (reads `__ctx.local.context`, falling back to `__ctx.shared.data`).                                           |
 | `console.log()`                                 | Output visible to the model between iterations.                                                                         |
 | `return(value)`                                 | Ends the loop and sets the final answer. First-iteration returns are intercepted for verification.                      |
-| `await rlm(query, context?, { systemPrompt?, model? })` | Spawn a child RLM. Shared sandbox, own message history. `model` selects an alias (default aliases are pre-configured). Must be awaited. |
-| `await llm(query, context?, { model? })`        | One-shot LLM call. No REPL, no iteration. `model` selects an alias (default aliases are pre-configured).                 |
+| `await rlm(query, context?, { systemPrompt?, model?, maxIterations? })` | Spawn a child RLM. Shared sandbox, own message history. `model` selects an alias (default aliases are pre-configured). `maxIterations` sets the child's iteration budget (omit to inherit parent's budget). Must be awaited. |
 | `__rlm`                                         | Read-only delegation context: `depth`, `maxDepth`, `iteration`, `maxIterations`, `lineage`, `invocationId`, `parentId`. |
 | `__ctx.shared.data`                             | Root context (frozen, readable by all depths).                                                                          |
 | `__ctx.local`                                   | This invocation's writable workspace.                                                                                   |
 | `__ctx.readLocal(id)`                           | Read-only view of another invocation's local store.                                                                     |
 | `require()`                                     | Node.js built-in modules only.                                                                                          |
 
-The sandbox is shared across depths. Iteration budget decays with depth: root gets `maxIterations`, children are capped at 7, 4, 3.
+The sandbox is shared across depths. Children inherit the parent's `maxIterations` by default; the parent can override via the `maxIterations` option on `rlm()`. All agents at every depth are full REPL agents with code execution and iteration loops; agents at `depth >= maxDepth` simply cannot call `rlm()`.
 
 ## Plugins
 

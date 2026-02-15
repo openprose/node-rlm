@@ -43,11 +43,11 @@ The GAP determines your approach:
 | Gap | Approach |
 |-----|----------|
 | No gap — data has everything I need | Filter, count, compute directly in code |
-| Data has raw items but no labels/categories | **Classify items via `llm()` fanout**, then compute on results |
-| Data is too large to process directly | Chunk and delegate via `rlm()` or `llm()` |
+| Data has raw items but no labels/categories | **Classify items via `rlm()` fanout**, then compute on results |
+| Data is too large to process directly | Chunk and delegate via `rlm()` |
 | Data format is unclear after 2 iterations | Sample 3 items from different positions, compare structure |
 
-**The most common gap:** the question asks about labels that don't exist in the data. This means you need to CREATE the labels by classifying items. Use `llm()` with batched parallel calls to classify, then count the results in code. Do not search the data for labels that aren't there.
+**The most common gap:** the question asks about labels that don't exist in the data. This means you need to CREATE the labels by classifying items. Use `rlm()` with batched parallel calls to classify, then count the results in code. Do not search the data for labels that aren't there.
 
 ### What this prevents
 

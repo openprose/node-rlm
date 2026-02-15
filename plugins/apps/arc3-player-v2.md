@@ -165,7 +165,7 @@ Between execution iterations, check your progress:
 
 If stuck on a level for more than ~50 actions with no progress, consider:
 - Trying a completely different approach
-- Using `llm()` to get a fresh perspective: `await llm("Given this game state, what should I try next?", JSON.stringify({grid: renderRegion(grid, 0, 63, 0, 63), actions: arc3.actionCount, level: f.levels_completed}))`
+- Delegating for a fresh perspective: `await rlm("Given this game state, what should I try next?", JSON.stringify({grid: renderRegion(grid, 0, 63, 0, 63), actions: arc3.actionCount, level: f.levels_completed}), { maxIterations: 3 })`
 - Moving on (if the game allows) — completing easy levels is better than perfecting hard ones
 
 ### Key Rules

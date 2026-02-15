@@ -1,5 +1,7 @@
 # Delegation Reform Proposal
 
+> **Status (Feb 2026):** Many changes proposed in this document have been implemented. Specifically: `llm()` has been removed (only `rlm()` exists now), flat mode has been removed (all agents at every depth are full REPL agents), `iterationsForDepth()` has been removed (children inherit the parent's `maxIterations` by default, overridable via `rlm("query", ctx, { maxIterations: N })`), `FLAT_SYSTEM_PROMPT` and `PENULTIMATE_DEPTH_WARNING` have been removed, and `buildOrientationBlock` has been simplified. The diagnosis (sections 1-2) remains accurate as a historical analysis of the problems that motivated these changes. The proposed prompt in section 2.5 is superseded by the current implementation in `src/system-prompt.ts`.
+
 A comprehensive analysis of why the RLM model resists delegation, and concrete changes to make it use its recursive capabilities.
 
 Based on analysis of:

@@ -93,4 +93,3 @@ Use double-underscore prefixed names with the child's role to avoid collisions:
 ### When it does NOT apply
 
 - If the prompt and expected return are both short (a sentence each), inline is fine.
-- `llm()` calls have no sandbox access — pass all data directly in the query and context parameters.

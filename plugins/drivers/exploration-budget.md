@@ -24,7 +24,7 @@ Your iterations are finite. Spend them deliberately.
 // I will [specific plan].
 ```
 
-**Phase 3 — Execute (iterations 4+):** Build, run, debug, refine. If delegating, use `Promise.all()` — never sequential `llm()` loops across iterations.
+**Phase 3 — Execute (iterations 4+):** Build, run, debug, refine. If delegating, use `Promise.all()` — never sequential `rlm()` loops across iterations.
 
 **Phase 4 — Verify and return:** Log your candidate answer, confirm it in output, then `return()`.
 
@@ -47,4 +47,4 @@ If you are still exploring at the midpoint, you are stuck. Stop. Re-read the que
 
 ### Common stall: "I can't find the labels"
 
-If the question asks about labels, categories, or classifications, and you've confirmed they're not annotated in the data — **you need to generate them.** This is a classification task, not an extraction task. Use `llm()` to classify items into the categories mentioned in the question, then compute on the results.
+If the question asks about labels, categories, or classifications, and you've confirmed they're not annotated in the data — **you need to generate them.** This is a classification task, not an extraction task. Delegate to `rlm()` to classify items into the categories mentioned in the question, then compute on the results.
