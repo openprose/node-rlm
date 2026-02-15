@@ -8,12 +8,22 @@ export async function loadArc3Tasks(
 	games?: string[],
 	maxTasks?: number | null,
 ): Promise<EvalTask[]> {
+	// Always fetch the full game list — game IDs have suffixes (e.g. "ls20-cb3b57cc")
+	// and the user may pass short prefixes like "ls20".
+	const available = await listGames();
 	let gameIds: string[];
 
 	if (games && games.length > 0) {
-		gameIds = games;
+		// Resolve each user-provided name to a full game ID via prefix match
+		gameIds = games.map((prefix) => {
+			const match = available.find((g) => g.game_id === prefix || g.game_id.startsWith(prefix + "-"));
+			if (!match) {
+				const known = available.map((g) => g.game_id).join(", ");
+				throw new Error(`Game '${prefix}' not found. Available: ${known}`);
+			}
+			return match.game_id;
+		});
 	} else {
-		const available = await listGames();
 		gameIds = available.map((g) => g.game_id);
 	}
 

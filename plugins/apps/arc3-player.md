@@ -47,7 +47,7 @@ Fetches the current scorecard summary. Call this when the game ends (state = WIN
 {
   game_id: string,
   guid: string,           // unique frame ID (used internally)
-  frame: number[][][],    // 64x64 grid of pixel values (each cell is an array of color channel values)
+  frame: number[][][],    // shape: [1][64][64] — see below
   state: "NOT_FINISHED" | "NOT_STARTED" | "WIN" | "GAME_OVER",
   levels_completed: number,
   win_levels: number,
@@ -55,7 +55,16 @@ Fetches the current scorecard summary. Call this when the game ends (state = WIN
 }
 ```
 
-The `frame` is a 3D array (`number[][][]`) representing a 64x64 grid where each cell contains an array of color channel values. Analyze the visual patterns to understand the game mechanics.
+**IMPORTANT: Frame indexing.** The `frame` field has shape `[1][64][64]`. To read a pixel:
+
+```javascript
+const grid = frame.frame[0];  // 64x64 grid (the [0] unwraps the outer array)
+const pixel = grid[row][col]; // color index 0-15
+```
+
+- `frame.frame.length` is 1 (not 64) — always index `frame.frame[0]` first
+- `frame.frame[0]` is the 64x64 grid: `frame.frame[0][row][col]` gives a color index (integer 0-15)
+- Row 0 is the top of the screen, row 63 is the bottom
 
 ### Action Semantics
 
@@ -84,10 +93,27 @@ const score = await arc3.getScore();
 return(JSON.stringify(score));
 ```
 
-### Strategy Tips
+### Strategy
 
-- Start by observing the initial frame to understand the game layout
-- Track what changes between frames to understand action effects
-- Use `available_actions` to know what's possible
-- Minimize actions — efficiency is the metric
-- Use `arc3.observe()` to re-examine state without API calls
+**Act early, learn by doing.** Don't spend many iterations analyzing frames before taking actions. Take an action, observe what changed, adjust.
+
+**Use a game loop.** Take multiple actions per iteration using a loop. You have limited iterations but can take many actions per iteration:
+
+```javascript
+const frame = await arc3.start();
+const grid = frame.frame[0]; // 64x64 grid
+// ... analyze grid, decide on a sequence of actions ...
+
+// Take multiple actions in one iteration
+for (const action of plannedActions) {
+  const next = await arc3.step(action);
+  if (arc3.completed) break;
+  // ... observe next.frame[0], adjust plan ...
+}
+```
+
+**Track changes between frames.** After each action, compare the new `frame[0]` to the previous one to understand what the action did.
+
+**Check `available_actions`** before choosing — not all actions are valid in every state.
+
+**Minimize total actions** — efficiency is the scoring metric, not iterations.
