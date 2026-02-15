@@ -577,4 +577,157 @@ describe("rlm", () => {
 		expect(fastModelCalled).toBe(false);
 		expect(result.answer).toBe("default llm answer");
 	});
+
+	it("globalDocs: included in root system prompt", async () => {
+		let capturedSystemPrompt = "";
+		const callLLM: CallLLM = async (_messages, systemPrompt) => {
+			capturedSystemPrompt = systemPrompt;
+			return '```repl\nreturn "done"\n```';
+		};
+
+		await rlm("test", undefined, {
+			callLLM,
+			globalDocs: "The `myApi` global provides X and Y.",
+		});
+
+		expect(capturedSystemPrompt).toContain("## Sandbox Globals");
+		expect(capturedSystemPrompt).toContain("The `myApi` global provides X and Y.");
+	});
+
+	it("globalDocs: included in child system prompt (without customSystemPrompt)", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "child task") {
+				return '```repl\nreturn "child done"\n```';
+			}
+			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			globalDocs: "The `myApi` global provides X and Y.",
+		});
+
+		// Root prompt has globalDocs
+		expect(systemPrompts[0]).toContain("The `myApi` global provides X and Y.");
+		// Child prompt also has globalDocs
+		expect(systemPrompts[1]).toContain("The `myApi` global provides X and Y.");
+	});
+
+	it("globalDocs: included in child system prompt (with customSystemPrompt)", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "child task") {
+				return '```repl\nreturn "child done"\n```';
+			}
+			return '```repl\nconst r = await rlm("child task", undefined, { systemPrompt: "You are a helper." })\nreturn r\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			globalDocs: "The `myApi` global provides X and Y.",
+		});
+
+		// Child with custom systemPrompt also has globalDocs
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).toContain("You are a helper.");
+		expect(childPrompt).toContain("The `myApi` global provides X and Y.");
+	});
+
+	it("globalDocs: included in flat-mode child system prompt", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			if (!systemPrompt.includes("javascript")) {
+				// Flat-mode child
+				return "flat answer";
+			}
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "parent task") {
+				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+			}
+			return '```repl\nreturn "unexpected"\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 1,
+			globalDocs: "The `myApi` global provides X and Y.",
+		});
+
+		// Root prompt has globalDocs
+		expect(systemPrompts[0]).toContain("The `myApi` global provides X and Y.");
+		// Flat-mode child also has globalDocs
+		const flatPrompt = systemPrompts[1];
+		expect(flatPrompt).toContain("The `myApi` global provides X and Y.");
+	});
+
+	it("globalDocs + sandboxGlobals: child can use documented sandbox global", async () => {
+		const mockApi = { greet: (name: string) => "hello " + name };
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "greet world") {
+				// Child agent -- verify globalDocs is in prompt and use the global
+				if (!systemPrompt.includes("myApi.greet")) {
+					return '```repl\nreturn "FAIL: no globalDocs"\n```';
+				}
+				return '```repl\nreturn myApi.greet("world")\n```';
+			}
+			return '```repl\nconst r = await rlm("greet world")\nreturn r\n```';
+		};
+
+		const result = await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			sandboxGlobals: { myApi: mockApi },
+			globalDocs: "`myApi.greet(name)` -- returns a greeting string.",
+		});
+
+		expect(result.answer).toBe("hello world");
+	});
+
+	it("globalDocs: not present in system prompt when not provided", async () => {
+		let capturedSystemPrompt = "";
+		const callLLM: CallLLM = async (_messages, systemPrompt) => {
+			capturedSystemPrompt = systemPrompt;
+			return '```repl\nreturn "done"\n```';
+		};
+
+		await rlm("test", undefined, { callLLM });
+
+		expect(capturedSystemPrompt).not.toContain("## Sandbox Globals");
+	});
+
+	it("globalDocs vs pluginBodies: plugins are root-only, globalDocs is everywhere", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "child task") {
+				return '```repl\nreturn "child done"\n```';
+			}
+			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			pluginBodies: "## My Plugin\nRoot-only strategy.",
+			globalDocs: "The `myApi` global provides X.",
+		});
+
+		// Root has both
+		expect(systemPrompts[0]).toContain("## My Plugin");
+		expect(systemPrompts[0]).toContain("The `myApi` global provides X.");
+
+		// Child has globalDocs but NOT pluginBodies
+		expect(systemPrompts[1]).not.toContain("## My Plugin");
+		expect(systemPrompts[1]).toContain("The `myApi` global provides X.");
+	});
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildModelTable, SYSTEM_PROMPT } from "../src/system-prompt.js";
+import { buildModelTable, formatGlobalDocs, SYSTEM_PROMPT } from "../src/system-prompt.js";
 
 describe("SYSTEM_PROMPT", () => {
 	it("contains return(", () => {
@@ -56,5 +56,21 @@ describe("buildModelTable", () => {
 		const result = buildModelTable(models);
 
 		expect(result).toContain("| basic | - | - |");
+	});
+});
+
+describe("formatGlobalDocs", () => {
+	it("returns empty string when globalDocs is undefined", () => {
+		expect(formatGlobalDocs(undefined)).toBe("");
+	});
+
+	it("returns empty string when globalDocs is empty string", () => {
+		expect(formatGlobalDocs("")).toBe("");
+	});
+
+	it("wraps content in a Sandbox Globals section", () => {
+		const result = formatGlobalDocs("The `foo` global does X.");
+		expect(result).toContain("## Sandbox Globals");
+		expect(result).toContain("The `foo` global does X.");
 	});
 });

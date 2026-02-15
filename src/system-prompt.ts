@@ -127,6 +127,15 @@ export function buildModelTable(
 	);
 }
 
+/**
+ * Wrap globalDocs content for inclusion in system prompts.
+ * Returns empty string if globalDocs is undefined/empty.
+ */
+export function formatGlobalDocs(globalDocs?: string): string {
+	if (!globalDocs) return "";
+	return `\n\n## Sandbox Globals\n\n${globalDocs}`;
+}
+
 export const FLAT_SYSTEM_PROMPT = `You are a helpful assistant answering a question.
 
 Answer the question directly and concisely. Give only the answer itself with no explanation, preamble, or formatting.

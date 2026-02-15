@@ -32,6 +32,8 @@ export interface HarnessConfig {
 	models?: Record<string, ModelEntry>;
 	/** Max code blocks to execute per LLM response (1 = enforce single-block). */
 	maxBlocksPerIteration?: number;
+	/** Documentation for sandbox globals, included in every agent's system prompt at all depths. */
+	globalDocs?: string;
 	/** Raw --filter string for resumability tracking. */
 	filter?: string;
 	/** Number of attempts per task for pass@N evaluation (default: 1). */
@@ -107,7 +109,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -198,6 +200,7 @@ async function runSingleTask(
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>,
 	cleanupTask?: (task: EvalTask) => Promise<void>,
 	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined,
+	globalDocs?: string,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -227,6 +230,7 @@ async function runSingleTask(
 			...(models && { models }),
 			...(maxBlocksPerIteration && { maxBlocksPerIteration }),
 			...(sandboxGlobals && { sandboxGlobals }),
+			...(globalDocs && { globalDocs }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;

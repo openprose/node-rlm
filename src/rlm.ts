@@ -1,5 +1,5 @@
 import { JsEnvironment } from "./environment.js";
-import { buildChildRepl, buildModelTable, FLAT_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./system-prompt.js";
+import { buildChildRepl, buildModelTable, FLAT_SYSTEM_PROMPT, formatGlobalDocs, SYSTEM_PROMPT } from "./system-prompt.js";
 
 export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string>;
 
@@ -26,6 +26,13 @@ export interface RlmOptions {
 	maxBlocksPerIteration?: number;
 	/** Extra globals to inject into the REPL sandbox. */
 	sandboxGlobals?: Record<string, unknown>;
+	/**
+	 * Documentation for sandbox globals, appended to the Environment section
+	 * of every agent's system prompt at every depth (root, children, flat).
+	 * Use this to document APIs injected via sandboxGlobals so that all agents
+	 * — including children spawned via rlm() — know they exist.
+	 */
+	globalDocs?: string;
 }
 
 export interface RlmResult {
@@ -142,10 +149,12 @@ export async function rlm(query: string, context: string | undefined, options: R
 		models: options.models,
 		maxBlocksPerIteration: options.maxBlocksPerIteration,
 		sandboxGlobals: options.sandboxGlobals,
+		globalDocs: options.globalDocs,
 	};
 
 	const modelTable = buildModelTable(opts.models);
-	const basePrompt = SYSTEM_PROMPT + modelTable;
+	const globalDocsSection = formatGlobalDocs(opts.globalDocs);
+	const basePrompt = SYSTEM_PROMPT + globalDocsSection + modelTable;
 	const rootSystemPrompt = opts.pluginBodies ? `${basePrompt}\n\n---\n\n${opts.pluginBodies}` : basePrompt;
 
 	const env = new JsEnvironment();
@@ -252,8 +261,8 @@ export async function rlm(query: string, context: string | undefined, options: R
 				1, lineage, true,
 			);
 			const effectiveFlatPrompt = customSystemPrompt
-				? customSystemPrompt + flatOrientation
-				: FLAT_SYSTEM_PROMPT + flatOrientation;
+				? customSystemPrompt + globalDocsSection + flatOrientation
+				: FLAT_SYSTEM_PROMPT + globalDocsSection + flatOrientation;
 			const answer = await callLLM([{ role: "user", content: msg }], effectiveFlatPrompt);
 			return { answer, iterations: 1, trace: [] };
 		}
@@ -271,14 +280,14 @@ export async function rlm(query: string, context: string | undefined, options: R
 			// Parent provided custom instructions — use child base template
 			const hasRlm = depth < opts.maxDepth - 1;
 			const childBase = buildChildRepl(hasRlm);
-			effectiveSystemPrompt = customSystemPrompt + childBase + modelTable + orientationBlock;
+			effectiveSystemPrompt = customSystemPrompt + childBase + globalDocsSection + modelTable + orientationBlock;
 		} else if (depth === 0) {
 			// Root agent gets the full system prompt with plugins
 			effectiveSystemPrompt = rootSystemPrompt + orientationBlock +
 				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
 		} else {
 			// Non-root child without custom prompt — use base system prompt, no plugins
-			effectiveSystemPrompt = SYSTEM_PROMPT + modelTable + orientationBlock +
+			effectiveSystemPrompt = SYSTEM_PROMPT + globalDocsSection + modelTable + orientationBlock +
 				(depth === opts.maxDepth - 1 ? PENULTIMATE_DEPTH_WARNING : "");
 		}
 

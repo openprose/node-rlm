@@ -312,6 +312,7 @@ function buildModelAliases(aliases: string[], apiKey: string): Record<string, Mo
 interface BenchmarkConfig {
 	loadTasks: () => Promise<EvalTask[]>;
 	scoringFn: ScoringFunction;
+	globalDocs?: string;
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	cleanupTask?: (task: EvalTask) => Promise<void>;
 	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined;
@@ -355,12 +356,21 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 				process.exit(1);
 			}
 			const clients = new Map<string, Arc3Client>();
+
+			// Load arc3 globalDocs from markdown file
+			const arc3DocsPath = join(
+				new URL(".", import.meta.url).pathname,
+				"arc3-global-docs.md",
+			);
+			const arc3GlobalDocs = readFileSync(arc3DocsPath, "utf-8");
+
 			return {
 				loadTasks: () => loadArc3Tasks(
 					args.game ? args.game.split(",").map((s) => s.trim()) : undefined,
 					args.maxTasks,
 				),
 				scoringFn: arc3Score,
+				globalDocs: arc3GlobalDocs,
 				setupSandbox: (task) => {
 					const gameId = task.metadata?.gameId as string;
 					const client = new Arc3Client(gameId);
@@ -577,6 +587,7 @@ async function main(): Promise<void> {
 		...(benchmarkConfig.setupSandbox && { setupSandbox: benchmarkConfig.setupSandbox }),
 		...(benchmarkConfig.cleanupTask && { cleanupTask: benchmarkConfig.cleanupTask }),
 		...(benchmarkConfig.getResultMetadata && { getResultMetadata: benchmarkConfig.getResultMetadata }),
+		...(benchmarkConfig.globalDocs && { globalDocs: benchmarkConfig.globalDocs }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});
