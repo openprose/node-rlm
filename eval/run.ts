@@ -36,7 +36,7 @@ import { generateSNIAHTasks } from "./datasets/s-niah.js";
 import { loadArcTasks } from "./datasets/arc.js";
 import { loadArc3Tasks } from "./datasets/arc3.js";
 import { Arc3Client } from "./arc3-client.js";
-import { loadStack } from "../src/plugins.js";
+import { loadStack, loadPlugins } from "../src/plugins.js";
 import type { CallLLM, ModelEntry } from "../src/rlm.js";
 import { DEFAULT_MODEL_ALIASES } from "../src/models.js";
 import type { EvalResult, EvalTask, ScoringFunction } from "./types.js";
@@ -84,6 +84,7 @@ interface CliArgs {
 	filter: string | null;
 	selectedProblems: string[];
 	modelAliases: string[];
+	childApps: string[];
 	maxBlocksPerIteration: number | null;
 	attempts: number;
 	game: string | null;
@@ -120,6 +121,7 @@ Options:
   --rate-burst <n>         Burst capacity (default: 10)
   --with-labels            OOLONG: use labeled context (context_window_text_with_labels)
   --model-alias <spec>     Register a model alias: alias=model[:tag1,tag2] (repeatable)
+  --child-app <name>       Load a named app plugin for child delegation (repeatable)
   --filter <expr>          OOLONG: filter tasks by field values (comma=AND, pipe=OR)
                            e.g. "task_group=TASK_TYPE.NUMERIC_ONE_CLASS"
                            e.g. "answer_type=ANSWER_TYPE.NUMERIC|ANSWER_TYPE.COMPARISON"
@@ -143,6 +145,7 @@ function parseArgs(argv: string[]): CliArgs {
 	const args: Record<string, string> = {};
 	const flags = new Set<string>();
 	const modelAliases: string[] = [];
+	const childApps: string[] = [];
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--help" || arg === "-h") {
@@ -154,6 +157,8 @@ function parseArgs(argv: string[]): CliArgs {
 			const key = arg.slice(2);
 			if (key === "model-alias") {
 				modelAliases.push(argv[i + 1]);
+			} else if (key === "child-app") {
+				childApps.push(argv[i + 1]);
 			} else {
 				args[key] = argv[i + 1];
 			}
@@ -191,6 +196,7 @@ function parseArgs(argv: string[]): CliArgs {
 			? args["selected-problems"].split(",").map((s) => s.trim())
 			: [],
 		modelAliases,
+		childApps,
 		maxBlocksPerIteration: args["max-blocks-per-iteration"] ? parseInt(args["max-blocks-per-iteration"], 10) : null,
 		attempts: parseInt(args.attempts ?? "1", 10),
 		game: args.game ?? null,
@@ -313,6 +319,7 @@ interface BenchmarkConfig {
 	loadTasks: () => Promise<EvalTask[]>;
 	scoringFn: ScoringFunction;
 	globalDocs?: string;
+	childApps?: Record<string, string>;
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	cleanupTask?: (task: EvalTask) => Promise<void>;
 	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined;
@@ -504,6 +511,9 @@ async function main(): Promise<void> {
 	if (args.drivers.length > 0) {
 		console.log(`Extra Drivers:   ${args.drivers.join(", ")}`);
 	}
+	if (args.childApps.length > 0) {
+		console.log(`Child Apps:      ${args.childApps.join(", ")}`);
+	}
 	console.log();
 
 	// Resolve model and create callLLM
@@ -548,6 +558,19 @@ async function main(): Promise<void> {
 		console.log();
 	}
 
+	// Load child app plugins (for delegation via `app` option)
+	let cliChildApps: Record<string, string> | undefined;
+	if (args.childApps.length > 0) {
+		console.log("Loading child apps...");
+		cliChildApps = {};
+		for (const name of args.childApps) {
+			const body = await loadPlugins([name], "apps");
+			cliChildApps[name] = body;
+			console.log(`  ${name}: ${body.length} chars`);
+		}
+		console.log();
+	}
+
 	// Load tasks
 	console.log("Loading tasks...");
 	const benchmarkConfig = getBenchmarkConfig(args);
@@ -588,6 +611,9 @@ async function main(): Promise<void> {
 		...(benchmarkConfig.cleanupTask && { cleanupTask: benchmarkConfig.cleanupTask }),
 		...(benchmarkConfig.getResultMetadata && { getResultMetadata: benchmarkConfig.getResultMetadata }),
 		...(benchmarkConfig.globalDocs && { globalDocs: benchmarkConfig.globalDocs }),
+		...((benchmarkConfig.childApps || cliChildApps) && {
+			childApps: { ...benchmarkConfig.childApps, ...cliChildApps },
+		}),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

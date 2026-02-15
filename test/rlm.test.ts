@@ -634,6 +634,91 @@ describe("rlm", () => {
 		expect(capturedSystemPrompt).not.toContain("## Sandbox Globals");
 	});
 
+	it("app option: child receives app plugin as system prompt", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "child task") {
+				return '```repl\nreturn "child done"\n```';
+			}
+			return '```repl\nconst r = await rlm("child task", undefined, { app: "test-app" })\nreturn r\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			childApps: { "test-app": "You are a test app.\n\nDo test things." },
+		});
+
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).toContain("You are a test app.");
+		expect(childPrompt).toContain("Do test things.");
+		// Child should also get the Environment section from buildChildRepl
+		expect(childPrompt).toContain("## Environment");
+	});
+
+	it("app option: unknown app name rejects with available list", async () => {
+		let callIndex = 0;
+		const callLLM: CallLLM = async (messages, _systemPrompt) => {
+			callIndex++;
+			if (callIndex === 1) {
+				return '```repl\nconst r = await rlm("child task", undefined, { app: "nonexistent" })\nreturn r\n```';
+			}
+			return '```repl\nreturn "saw error"\n```';
+		};
+
+		const result = await rlm("test", undefined, {
+			callLLM,
+			maxDepth: 3,
+			childApps: { "test-app": "body1", "other-app": "body2" },
+		});
+
+		const allOutput = result.trace.map((t) => `${t.output}\n${t.error ?? ""}`).join("\n");
+		expect(allOutput).toContain("Unknown app");
+		expect(allOutput).toContain("test-app");
+		expect(allOutput).toContain("other-app");
+	});
+
+	it("app option: app + systemPrompt are concatenated", async () => {
+		const systemPrompts: string[] = [];
+		const callLLM: CallLLM = async (messages, systemPrompt) => {
+			systemPrompts.push(systemPrompt);
+			const userMsg = messages[0]?.content || "";
+			if (userMsg === "child task") {
+				return '```repl\nreturn "child done"\n```';
+			}
+			return '```repl\nconst r = await rlm("child task", undefined, { app: "test-app", systemPrompt: "Extra instructions." })\nreturn r\n```';
+		};
+
+		await rlm("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			childApps: { "test-app": "You are a test app.\n\nDo test things." },
+		});
+
+		const childPrompt = systemPrompts[1];
+		expect(childPrompt).toContain("You are a test app.");
+		expect(childPrompt).toContain("Do test things.");
+		expect(childPrompt).toContain("Extra instructions.");
+	});
+
+	it("childApps: not visible to root agent", async () => {
+		let capturedSystemPrompt = "";
+		const callLLM: CallLLM = async (_messages, systemPrompt) => {
+			capturedSystemPrompt = systemPrompt;
+			return '```repl\nreturn "done"\n```';
+		};
+
+		await rlm("test", undefined, {
+			callLLM,
+			childApps: { "test-app": "You are a test app.\n\nDo test things." },
+		});
+
+		expect(capturedSystemPrompt).not.toContain("You are a test app.");
+		expect(capturedSystemPrompt).not.toContain("Do test things.");
+	});
+
 	it("globalDocs vs pluginBodies: plugins are root-only, globalDocs is everywhere", async () => {
 		const systemPrompts: string[] = [];
 		const callLLM: CallLLM = async (messages, systemPrompt) => {

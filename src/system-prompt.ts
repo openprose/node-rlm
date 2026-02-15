@@ -9,8 +9,9 @@ You write JavaScript in a single \`\`\`javascript fenced block per response. Aft
 - \`context\` (string) — the task data, available as a variable. Each agent has its own private \`context\`.
 - \`console.log()\` — prints output. This is how you see results between iterations.
 - \`return(value)\` — terminates the loop and returns your final answer. Only call this when you are confident.
-- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations? })\` — spawn a child RLM with its own iteration loop.
+- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations?, app? })\` — spawn a child RLM with its own iteration loop.
   Provide task-specific instructions via the \`systemPrompt\` option. The child automatically gets code execution, iteration capability, and awareness of its position in the delegation tree — you only need to provide the task instructions.
+  Use \`app\` to load a named app plugin for the child (pre-configured by the harness). The app body becomes the child's system prompt. If both \`app\` and \`systemPrompt\` are provided, the app body comes first, followed by your systemPrompt.
   Use \`model\` to select an alias from the Available Models table (if configured). Omit to use the current model.
   Use \`maxIterations\` to set the child's iteration budget. Omit to inherit your own budget.
   Delegation depth is finite — check \`__rlm.depth\` and \`__rlm.maxDepth\` to see how deep you can go.
@@ -76,7 +77,7 @@ Respond with plain text and exactly one fenced code block. Then stop and wait fo
  */
 export function buildChildRepl(canDelegate: boolean): string {
 	const rlmDoc = canDelegate
-		? `\n- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited. Use \`maxIterations\` to control the child's iteration budget (inherits yours by default). Delegation depth is finite — check \`__rlm.depth\` and \`__rlm.maxDepth\`.`
+		? `\n- \`await rlm(query, context?, { systemPrompt?, model?, maxIterations?, app? })\` — delegate to a child RLM for complex subtasks needing code execution and iteration. Must be awaited. Use \`app\` to load a named app plugin for the child. Use \`maxIterations\` to control the child's iteration budget (inherits yours by default). Delegation depth is finite — check \`__rlm.depth\` and \`__rlm.maxDepth\`.`
 		: "";
 	return (
 		`\n\n## Environment\n\n` +

@@ -38,6 +38,8 @@ export interface HarnessConfig {
 	filter?: string;
 	/** Number of attempts per task for pass@N evaluation (default: 1). */
 	attempts?: number;
+	/** Pre-loaded app plugin bodies keyed by name, available for child agents via `app` option. */
+	childApps?: Record<string, string>;
 	/** Create per-task sandbox globals. Called before rlm() for each task. */
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	/** Cleanup after each task (success or error). */
@@ -109,7 +111,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs, config.childApps);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -201,6 +203,7 @@ async function runSingleTask(
 	cleanupTask?: (task: EvalTask) => Promise<void>,
 	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined,
 	globalDocs?: string,
+	childApps?: Record<string, string>,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -231,6 +234,7 @@ async function runSingleTask(
 			...(maxBlocksPerIteration && { maxBlocksPerIteration }),
 			...(sandboxGlobals && { sandboxGlobals }),
 			...(globalDocs && { globalDocs }),
+			...(childApps && { childApps }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;

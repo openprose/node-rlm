@@ -33,6 +33,12 @@ export interface RlmOptions {
 	 * — including children spawned via rlm() — know they exist.
 	 */
 	globalDocs?: string;
+	/**
+	 * Pre-loaded app plugin bodies keyed by name, available for child agents.
+	 * When a parent calls `rlm(query, context, { app: "name" })`, the named
+	 * app body is looked up here and used as the child's system prompt.
+	 */
+	childApps?: Record<string, string>;
 }
 
 export interface RlmResult {
@@ -135,6 +141,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		maxBlocksPerIteration: options.maxBlocksPerIteration,
 		sandboxGlobals: options.sandboxGlobals,
 		globalDocs: options.globalDocs,
+		childApps: options.childApps,
 	};
 
 	const modelTable = buildModelTable(opts.models);
@@ -425,12 +432,30 @@ export async function rlm(query: string, context: string | undefined, options: R
 		throw new RlmMaxIterationsError(effectiveMaxIterations, trace);
 	}
 
-	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number }): Promise<string> => {
+	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number; app?: string }): Promise<string> => {
 		// Reject delegation at max depth
 		if (activeDepth >= opts.maxDepth) {
 			return Promise.reject(
 				new Error(`Cannot delegate: you are at maximum depth (${opts.maxDepth}).`),
 			);
+		}
+
+		// Resolve app plugin if requested
+		let resolvedSystemPrompt: string | undefined = rlmOpts?.systemPrompt;
+		if (rlmOpts?.app) {
+			const appBody = opts.childApps?.[rlmOpts.app];
+			if (!appBody) {
+				const available = Object.keys(opts.childApps ?? {});
+				return Promise.reject(
+					new Error(
+						`Unknown app "${rlmOpts.app}". Available: ${available.length > 0 ? available.join(", ") : "none configured"}`,
+					),
+				);
+			}
+			// App body comes first; if systemPrompt is also provided, concatenate
+			resolvedSystemPrompt = resolvedSystemPrompt
+				? appBody + "\n\n" + resolvedSystemPrompt
+				: appBody;
 		}
 
 		// Resolve model override if requested
@@ -461,7 +486,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 
 		const promise = (async () => {
 			try {
-				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, rlmOpts?.systemPrompt, modelCallLLM, rlmOpts?.maxIterations);
+				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, resolvedSystemPrompt, modelCallLLM, rlmOpts?.maxIterations);
 				return result.answer;
 			} finally {
 				activeDepth = savedDepth;
