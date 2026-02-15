@@ -314,6 +314,7 @@ interface BenchmarkConfig {
 	scoringFn: ScoringFunction;
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	cleanupTask?: (task: EvalTask) => Promise<void>;
+	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined;
 }
 
 function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
@@ -365,6 +366,14 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 					const client = new Arc3Client(gameId);
 					clients.set(task.id, client);
 					return { arc3: client };
+				},
+				getResultMetadata: (task) => {
+					const client = clients.get(task.id);
+					if (!client?.scorecardId) return undefined;
+					return {
+						scorecardId: client.scorecardId,
+						replayUrl: `https://three.arcprize.org/scorecards/${client.scorecardId}`,
+					};
 				},
 				cleanupTask: async (task) => {
 					const client = clients.get(task.id);
@@ -567,6 +576,7 @@ async function main(): Promise<void> {
 		...(args.attempts > 1 && { attempts: args.attempts }),
 		...(benchmarkConfig.setupSandbox && { setupSandbox: benchmarkConfig.setupSandbox }),
 		...(benchmarkConfig.cleanupTask && { cleanupTask: benchmarkConfig.cleanupTask }),
+		...(benchmarkConfig.getResultMetadata && { getResultMetadata: benchmarkConfig.getResultMetadata }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});

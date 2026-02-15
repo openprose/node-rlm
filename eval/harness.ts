@@ -40,6 +40,8 @@ export interface HarnessConfig {
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	/** Cleanup after each task (success or error). */
 	cleanupTask?: (task: EvalTask) => Promise<void>;
+	/** Return benchmark-specific metadata to attach to the result (e.g. scorecard IDs). Called after rlm() completes, before cleanup. */
+	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined;
 	/** Progress callback, called after each task completes. */
 	onProgress?: (completed: number, total: number, result: EvalResult) => void;
 }
@@ -105,7 +107,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -195,6 +197,7 @@ async function runSingleTask(
 	maxBlocksPerIteration?: number,
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>,
 	cleanupTask?: (task: EvalTask) => Promise<void>,
+	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -228,6 +231,7 @@ async function runSingleTask(
 
 		const wallTimeMs = Date.now() - startTime;
 		const score = scoringFn(result.answer, task.expected, task.metadata);
+		const metadata = getResultMetadata?.(task);
 
 		return {
 			taskId: task.id,
@@ -238,6 +242,7 @@ async function runSingleTask(
 			trace: result.trace,
 			wallTimeMs,
 			charCount: { input: totalInputChars, output: totalOutputChars },
+			...(metadata && { metadata }),
 		};
 	} catch (err) {
 		const wallTimeMs = Date.now() - startTime;
@@ -246,6 +251,7 @@ async function runSingleTask(
 		// Preserve trace data from all RLM failures (max-iteration, callLLM errors, etc.)
 		const trace = err instanceof RlmError ? err.trace : [];
 		const iterations = err instanceof RlmError ? err.iterations : 0;
+		const metadata = getResultMetadata?.(task);
 
 		return {
 			taskId: task.id,
@@ -257,6 +263,7 @@ async function runSingleTask(
 			wallTimeMs,
 			charCount: { input: totalInputChars, output: totalOutputChars },
 			error: errMsg,
+			...(metadata && { metadata }),
 		};
 	} finally {
 		await cleanupTask?.(task);

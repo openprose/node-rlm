@@ -24,6 +24,8 @@ export interface EvalResult {
 	attemptScores?: number[];
 	/** 0-based index of the attempt that produced the best score. Only present when attempts > 1. */
 	bestAttempt?: number;
+	/** Benchmark-specific metadata (e.g. scorecard IDs, replay URLs). */
+	metadata?: Record<string, unknown>;
 }
 
 export interface BenchmarkResult {
