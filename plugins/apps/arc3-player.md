@@ -1,7 +1,7 @@
 ---
 name: arc3-player
 kind: app
-version: 1.2.0
+version: 1.3.0
 description: Play one ARC-3 level — learn mechanics by experimenting, then execute strategically
 author: sl
 tags: [arc, arc3, exploration, learning]
@@ -12,15 +12,24 @@ requires: []
 
 You play ONE level of an interactive 64x64 grid game. The rules are unknown — learn them by experimenting. You have a limited action budget, so balance exploration (learning what things do) with exploitation (completing the level efficiently).
 
-### Rules
+### Rules (CRITICAL — read these FIRST)
 
-1. You MUST return a result before hitting the iteration limit. An incomplete return with partial knowledge is infinitely better than a timeout with no return.
-2. Reserve the last 2 iterations as a safety margin — the deadline guard handles this automatically via `__maxIter`.
-3. Every iteration MUST start with the deadline guard below. Copy it exactly — do NOT skip it.
-4. Test each available action ONCE in your first real iteration (the discovery protocol). Do not skip this.
-5. Track `__actionsThisLevel` after every `arc3.step()` call. Return if it exceeds 40.
-6. NEVER call `arc3.start()`. The game is already running. Calling `arc3.start()` resets ALL progress across ALL levels. You only have `arc3.step()`, `arc3.observe()`, and `arc3.actionCount`.
-7. Budget at most 40 game actions per level. If you exceed 40 actions, return immediately with whatever knowledge you have.
+1. **YOUR MOST IMPORTANT RULE:** At the TOP of EVERY code block you emit (no exceptions), paste this EXACT guard:
+   ```javascript
+   if (typeof __iterCount === 'undefined') __iterCount = 0;
+   __iterCount++;
+   if (__iterCount >= 12) {
+     __level_result = { knowledge: __k || {}, actions: __actionsThisLevel || 0, completed: false };
+     return("Emergency return at iter " + __iterCount);
+   }
+   ```
+   This guard MUST be the literal first 4 lines of every code block. No exceptions. Not after other code. Not in a function. The literal first lines.
+2. You MUST return a result before hitting the iteration limit. An incomplete return with partial knowledge is infinitely better than a timeout with no return.
+3. Test each available action ONCE in your first real iteration (the discovery protocol). Do not skip this.
+4. Track `__actionsThisLevel` after every `arc3.step()` call. Return if it exceeds 40.
+5. NEVER call `arc3.start()`. The game is already running. Calling `arc3.start()` resets ALL progress across ALL levels. You only have `arc3.step()`, `arc3.observe()`, and `arc3.actionCount`.
+6. Budget at most 40 game actions per level. Return immediately if you exceed this.
+7. Plan your work: iteration 0 = setup, iteration 1 = discovery, iterations 2-10 = play, iteration 11 = return results.
 
 ### API
 
@@ -43,7 +52,8 @@ __k = {
   openQuestions: prior.openQuestions || [],
 };
 __iterCount = 0;
-__maxIter = 20; // Return by __maxIter - 2 = iteration 18. Do NOT change this.
+// HARD DEADLINE: Return by iteration 12 no matter what.
+// Plan: iter 0 = setup, iter 1 = discovery, iters 2-10 = play, iter 11 = return.
 
 // === Perceptual Toolkit ===
 // These are general vision algorithms — they encode NO game knowledge.
@@ -155,13 +165,12 @@ console.log(`Available actions: ${frame0.available_actions}`);
 Test each action exactly once, diff the full grid, record what changed. This is the foundation for all subsequent reasoning.
 
 ```javascript
-// === DEADLINE GUARD (copy this exactly into every iteration) ===
+// === DEADLINE GUARD (MUST be first 4 lines of EVERY code block) ===
 if (typeof __iterCount === 'undefined') __iterCount = 0;
-if (typeof __maxIter === 'undefined') __maxIter = 20;
 __iterCount++;
-if (__iterCount >= __maxIter - 2) {
-  __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: arc3.observe().levels_completed > __startLevel };
-  return(`Level ${__startLevel + 1}: emergency return at iter ${__iterCount}. Results in __level_result.`);
+if (__iterCount >= 12) {
+  __level_result = { knowledge: __k || {}, actions: __actionsThisLevel || 0, completed: false };
+  return("Emergency return at iter " + __iterCount);
 }
 
 // === DISCOVERY PROTOCOL: Test each action once, diff everything ===
@@ -214,18 +223,17 @@ for (const d of discoveries) console.log(`  Action ${d.action}: ${d.mazeChanges}
 Each iteration: **deadline guard → observe → diff → update knowledge → decide → act**.
 
 ```javascript
-// === DEADLINE GUARD (copy this exactly — MUST be first thing every iteration) ===
+// === DEADLINE GUARD (MUST be first 4 lines of EVERY code block) ===
 if (typeof __iterCount === 'undefined') __iterCount = 0;
-if (typeof __maxIter === 'undefined') __maxIter = 20;
 __iterCount++;
-if (__iterCount >= __maxIter - 2) {
-  __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: arc3.observe().levels_completed > __startLevel };
-  return(`Level ${__startLevel + 1}: emergency return at iter ${__iterCount}. Results in __level_result.`);
+if (__iterCount >= 12) {
+  __level_result = { knowledge: __k || {}, actions: __actionsThisLevel || 0, completed: false };
+  return("Emergency return at iter " + __iterCount);
 }
 // === ACTION BUDGET GUARD ===
 if (__actionsThisLevel > 40) {
-  __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: false };
-  return(`Level ${__startLevel + 1}: action budget exceeded (${__actionsThisLevel}). Results in __level_result.`);
+  __level_result = { knowledge: __k || {}, actions: __actionsThisLevel, completed: false };
+  return("Action budget exceeded: " + __actionsThisLevel);
 }
 
 // 1. Observe current state
@@ -264,6 +272,8 @@ __grid = grid;
 6. **Record evidence, not just conclusions.** In `__k`, store what you observed ("took action 1 near [r,c], bottom-left region changed from pattern A to B") alongside your hypothesis. Evidence lets you correct wrong hypotheses later.
 
 7. **Surprises are the most valuable data.** When something unexpected happens — investigate, don't skip.
+
+8. **The player character is the largest multi-color object that moves.** Do NOT assume the smallest or most visually distinctive object is the player. Test movement first: the entity that changes position when you take directional actions IS your character. Static objects (even if they look like players) are interactive map objects, not the avatar.
 
 ### On Completion
 
