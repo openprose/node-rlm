@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run 017 - v1.1.0 Learning-Loop Trajectory (FAIL)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { color: #e94560; font-size: 24px; margin-bottom: 6px; border-bottom: 2px solid #e94560; padding-bottom: 8px; }
+  h2 { color: #60a5fa; font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid #333; padding-bottom: 6px; }
+  h3 { color: #c084fc; font-size: 15px; margin: 16px 0 8px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
+  .subtitle a { color: #60a5fa; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 14px; text-align: center; }
+  .stat-card .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .stat-card .value { font-size: 28px; font-weight: bold; margin-top: 4px; }
+  .stat-card .value.score { color: #e94560; }
+  .stat-card .value.levels { color: #ffd700; }
+  .stat-card .value.actions { color: #00d4ff; }
+  .stat-card .value.time { color: #a78bfa; }
+  .stat-card .value.iters { color: #34d399; }
+  .stat-card .value.cost { color: #f59e0b; }
+
+  .level-bar { display: flex; gap: 4px; margin-bottom: 24px; align-items: center; }
+  .level-bar .label { color: #888; font-size: 12px; margin-right: 8px; }
+  .level-cell { width: 60px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; }
+  .level-cell.failed { background: #451a1a; color: #f87171; border: 1px solid #7f1d1d; }
+  .level-cell.pending { background: #1e1e3a; color: #555; border: 1px solid #333; }
+
+  .color-legend { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; padding: 10px; background: #0f0f23; border-radius: 6px; border: 1px solid #333; }
+  .color-legend .swatch { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #1a1a2e; }
+  .color-legend .swatch .box { width: 14px; height: 14px; border-radius: 2px; border: 1px solid #555; }
+
+  .grid-container { margin: 16px 0; overflow-x: auto; }
+  .pixel-grid { display: inline-block; line-height: 0; border: 1px solid #333; border-radius: 4px; overflow: hidden; }
+  .pixel-row { display: flex; }
+  .pixel-cell { width: 6px; height: 6px; }
+
+  .timeline { position: relative; padding-left: 40px; }
+  .timeline::before { content: ''; position: absolute; left: 18px; top: 0; bottom: 0; width: 2px; background: #333; }
+
+  .iteration { position: relative; margin-bottom: 16px; }
+  .iteration .dot { position: absolute; left: -30px; top: 12px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid; }
+  .iteration.parent .dot { border-color: #3b82f6; background: #1e3a5f; }
+  .iteration.child .dot { border-color: #f87171; background: #451a1a; }
+  .iteration.discovery .dot { border-color: #4ade80; background: #14532d; }
+  .iteration.death .dot { border-color: #fbbf24; background: #78350f; }
+
+  .iter-header { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 14px; border-radius: 6px; transition: background 0.15s; user-select: none; }
+  .iter-header:hover { background: #16213e; }
+  .iter-header .arrow { font-size: 12px; transition: transform 0.2s; color: #666; flex-shrink: 0; width: 16px; }
+  .iteration.open .iter-header .arrow { transform: rotate(90deg); }
+  .iter-header .iter-num { font-weight: bold; font-size: 15px; flex-shrink: 0; }
+  .iteration.parent .iter-num { color: #3b82f6; }
+  .iteration.child .iter-num { color: #f87171; }
+  .iteration.discovery .iter-num { color: #4ade80; }
+  .iteration.death .iter-num { color: #fbbf24; }
+  .iter-header .iter-role { font-size: 11px; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+  .iteration.parent .iter-role { background: #1e3a5f; color: #60a5fa; }
+  .iteration.child .iter-role { background: #451a1a; color: #f87171; }
+  .iteration.discovery .iter-role { background: #14532d; color: #4ade80; }
+  .iteration.death .iter-role { background: #78350f; color: #fbbf24; }
+  .iter-header .iter-summary { color: #aaa; font-size: 12px; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .iter-header .iter-badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; }
+  .badge.error { background: #7f1d1d; color: #fca5a5; }
+  .badge.fuel { background: #3b1a5e; color: #c084fc; }
+  .badge.moved { background: #164e63; color: #22d3ee; }
+  .badge.wasted { background: #78350f; color: #fbbf24; }
+  .badge.scan { background: #1e3a5f; color: #60a5fa; }
+  .badge.death { background: #7f1d1d; color: #fbbf24; }
+  .badge.delegation { background: #14532d; color: #4ade80; }
+  .badge.reset { background: #7f1d1d; color: #fca5a5; }
+  .badge.discovery { background: #14532d; color: #4ade80; }
+
+  .iter-body { display: none; padding: 12px 14px 16px; border-left: 2px solid #333; margin-left: 7px; }
+  .iteration.open .iter-body { display: block; }
+
+  .reasoning { background: #0f0f23; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: #bbb; }
+  .reasoning .label { color: #e94560; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+
+  .key-event { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
+  .key-event.success { background: #14532d22; border-left: 3px solid #4ade80; }
+  .key-event.failure { background: #7f1d1d22; border-left: 3px solid #f87171; }
+  .key-event.info { background: #164e6322; border-left: 3px solid #22d3ee; }
+  .key-event.warn { background: #78350f22; border-left: 3px solid #fbbf24; }
+
+  .metrics-row { display: flex; gap: 16px; margin: 8px 0; flex-wrap: wrap; }
+  .metric { font-size: 12px; }
+  .metric .k { color: #666; }
+  .metric .v { color: #ddd; font-weight: bold; }
+  .highlight-gold { color: #fbbf24; font-weight: bold; }
+  .highlight-red { color: #f87171; font-weight: bold; }
+  .highlight-green { color: #4ade80; }
+
+  .code-block { background: #0a0a1a; border: 1px solid #333; border-radius: 6px; padding: 10px 12px; margin: 8px 0; font-size: 12px; color: #8be9fd; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+
+  .failure-banner { background: linear-gradient(135deg, #7f1d1d 0%, #451a1a 100%); border: 2px solid #e94560; border-radius: 8px; padding: 16px 20px; margin: 16px 0; text-align: center; }
+  .failure-banner .big { font-size: 32px; font-weight: bold; color: #e94560; }
+  .failure-banner .reason { color: #fca5a5; font-size: 14px; margin-top: 4px; }
+
+  .improvement-banner { background: linear-gradient(135deg, #14532d 0%, #1e3a5f 100%); border: 2px solid #4ade80; border-radius: 8px; padding: 16px 20px; margin: 16px 0; text-align: center; }
+  .improvement-banner .big { font-size: 24px; font-weight: bold; color: #4ade80; }
+  .improvement-banner .detail { color: #86efac; font-size: 13px; margin-top: 4px; }
+
+  .section-divider { border: 0; border-top: 1px dashed #333; margin: 24px 0; }
+
+  .action-sequence { display: flex; gap: 3px; flex-wrap: wrap; margin: 6px 0; }
+  .action-cell { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 3px; font-size: 10px; font-weight: bold; }
+  .action-cell.up { background: #1e3a5f; color: #60a5fa; }
+  .action-cell.down { background: #3b1a5e; color: #c084fc; }
+  .action-cell.left { background: #164e63; color: #22d3ee; }
+  .action-cell.right { background: #854d0e; color: #fbbf24; }
+
+  .grid-comparison { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .grid-panel { flex: 0 0 auto; }
+  .grid-panel .panel-label { font-size: 12px; color: #888; margin-bottom: 4px; text-align: center; }
+
+  .diff-table { font-size: 11px; border-collapse: collapse; margin: 8px 0; }
+  .diff-table th, .diff-table td { padding: 2px 8px; border: 1px solid #333; }
+  .diff-table th { background: #16213e; color: #888; }
+  .diff-table .old { color: #f87171; }
+  .diff-table .new { color: #4ade80; }
+</style>
+</head>
+<body>
+
+<h1>Run 017 -- v1.1.0 Learning-Loop (FAIL)</h1>
+<div class="subtitle">arc3-ls20-cb3b57cc | anthropic/claude-opus-4-6 | 2026-02-16 | <a href="https://three.arcprize.org/scorecards/0906a1f7-936b-41d3-83ae-b53025ce1680">scorecard</a></div>
+
+<div class="failure-banner">
+  <div class="big">0.0% -- TOTAL FAILURE</div>
+  <div class="reason">Correct delegation pattern used (app: "arc3-player"), but children timed out x2. Parent ran out of iterations before solving level 1.</div>
+</div>
+
+<div class="improvement-banner">
+  <div class="big">v1.1.0 Improvements over v1.0.0</div>
+  <div class="detail">Correct delegation with app:"arc3-player" | __level_task/__level_result used | Wall navigation discovered | Marker reached twice | Systematic diff-based discovery</div>
+</div>
+
+<div class="summary-grid">
+  <div class="stat-card"><div class="label">Score</div><div class="value score">0.0%</div></div>
+  <div class="stat-card"><div class="label">Levels</div><div class="value levels">0/7</div></div>
+  <div class="stat-card"><div class="label">Actions</div><div class="value actions">~80</div></div>
+  <div class="stat-card"><div class="label">Iterations</div><div class="value iters">30/30</div></div>
+  <div class="stat-card"><div class="label">Wall Time</div><div class="value time">17m 3s</div></div>
+  <div class="stat-card"><div class="label">Cost</div><div class="value cost">$4.42</div></div>
+</div>
+
+<div class="level-bar">
+  <span class="label">Levels:</span>
+  <div class="level-cell failed">L1 FAIL</div>
+  <div class="level-cell pending">L2</div>
+  <div class="level-cell pending">L3</div>
+  <div class="level-cell pending">L4</div>
+  <div class="level-cell pending">L5</div>
+  <div class="level-cell pending">L6</div>
+  <div class="level-cell pending">L7</div>
+</div>
+
+<h2>Color Palette</h2>
+<div class="color-legend">
+  <div class="swatch"><div class="box" style="background:#000000"></div> 0: Black</div>
+  <div class="swatch"><div class="box" style="background:#0074D9"></div> 1: Blue</div>
+  <div class="swatch"><div class="box" style="background:#2ECC40"></div> 3: Green (path)</div>
+  <div class="swatch"><div class="box" style="background:#FFDC00"></div> 4: Yellow (wall)</div>
+  <div class="swatch"><div class="box" style="background:#AAAAAA"></div> 5: Grey</div>
+  <div class="swatch"><div class="box" style="background:#7FDBFF"></div> 8: Azure</div>
+  <div class="swatch"><div class="box" style="background:#870C25"></div> 9: Maroon</div>
+  <div class="swatch"><div class="box" style="background:#1A3D6D"></div> b: Teal (fuel)</div>
+  <div class="swatch"><div class="box" style="background:#992D2A"></div> c: Crimson (entity)</div>
+</div>
+
+<h2>Grid Evolution</h2>
+<div class="grid-comparison" id="grid-gallery"></div>
+
+<hr class="section-divider">
+
+<h2>v1.0.0 vs v1.1.0 Delegation</h2>
+<div style="margin: 12px 0;">
+  <table class="diff-table" style="width: 100%; max-width: 700px;">
+    <tr><th>Aspect</th><th class="old">v1.0.0 (Run 016)</th><th class="new">v1.1.0 (Run 017)</th></tr>
+    <tr><td>Delegation pattern</td><td class="old">Inline systemPrompt (BROKEN)</td><td class="new">app: "arc3-player" (CORRECT)</td></tr>
+    <tr><td>__level_task</td><td class="old">Not used</td><td class="new">Used with knowledge</td></tr>
+    <tr><td>__level_result</td><td class="old">Not used</td><td class="new">Checked (child never wrote)</td></tr>
+    <tr><td>Child API access</td><td class="old">None</td><td class="new">Full arc3 API</td></tr>
+    <tr><td>Knowledge curation</td><td class="old">None</td><td class="new">Merge + promote</td></tr>
+    <tr><td>Movement discovery</td><td class="old">Iter 8 (accidental)</td><td class="new">Iter 11 (systematic diff)</td></tr>
+    <tr><td>Wall navigation</td><td class="old">Never</td><td class="new">Down-around-up</td></tr>
+    <tr><td>Marker reached</td><td class="old">Never</td><td class="new">Twice</td></tr>
+  </table>
+</div>
+
+<hr class="section-divider">
+
+<h2>Iteration Timeline (30 iterations)</h2>
+<div class="timeline">
+
+  <div class="iteration parent open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#0</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Game start + knowledge init (duplicate code block)</span>
+      <span class="iter-badges"><span class="badge scan">INIT</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Reasoning</div>Called arc3.start() and initialized __knowledge accumulator. Emitted code block twice (duplicate).</div>
+      <div class="key-event info">State: NOT_FINISHED, Levels: 0</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions:</span> <span class="v">0</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration child open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#1</span>
+      <span class="iter-role">CHILD #1</span>
+      <span class="iter-summary">CORRECT delegation: app:"arc3-player" + __level_task -- child timed out after 35 actions</span>
+      <span class="iter-badges">
+        <span class="badge delegation">CORRECT</span>
+        <span class="badge error">TIMEOUT</span>
+      </span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Delegation (Correct Pattern)</div>Used <code>rlm(..., { app: "arc3-player", model: "intelligent", maxIterations: 25 })</code> with __level_task. Included retry + knowledge curation code. Child consumed all 30 parent iterations and burned 35 game actions blind.</div>
+      <div class="code-block">__level_task = { level, knowledge: __knowledge };
+const summary = await rlm(
+  'Play level 1/7 of an interactive grid game...',
+  { app: "arc3-player", model: "intelligent", maxIterations: 25 }
+);</div>
+      <div class="key-event success"><span class="highlight-green">CORRECT DELEGATION</span>: app:"arc3-player" (fixed from v1.0.0)</div>
+      <div class="key-event failure">Child burned 35 game actions, returned nothing</div>
+      <div class="key-event failure">No discovery protocol, no deadline guard</div>
+      <div class="metrics-row">
+        <div class="metric"><span class="k">Actions after:</span> <span class="v highlight-red">35</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#2-5</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Post-child scan: grid visualization, color distribution, feature identification</span>
+      <span class="iter-badges"><span class="badge scan">4x SCAN</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Grid Analysis</div>After child timeout: color distribution, 2x sampled view, 1:1 detail rows, pixel locations for rare colors. Identified reference pattern, canvas, bottom-left template, movable block, and 0/1 marker.</div>
+      <div class="key-event info">Colors: {0:3, 1:2, 3:944, 4:2609, 5:439, 8:12, 9:45, 11:32, 12:10}</div>
+      <div class="key-event info">Reference (rows 8-16), Canvas (rows 25-49), Template (rows 53-62)</div>
+      <div class="key-event warn">Misidentified 0/1 cross as "player/cursor"</div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#6-10</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Naive tests: all dirs + undo + brute force -- checked wrong pixels, "cursor" never moved</span>
+      <span class="iter-badges"><span class="badge wasted">~15 WASTED</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Wasted Exploration</div>Tested DOWN, RIGHT, UP, LEFT, undo(7), 5xRIGHT+5xDOWN. Checked ONLY the 0/1 pixels each time. Cursor never moved. Missed that c(12)/9 block was moving.</div>
+      <div class="key-event failure">Checked wrong pixels for movement (0/1 instead of 12/9)</div>
+      <div class="key-event failure">~15 game actions consumed with no observation</div>
+      <div class="action-sequence">
+        <div class="action-cell down">D</div><div class="action-cell right">R</div><div class="action-cell up">U</div><div class="action-cell left">L</div>
+        <div class="action-cell right">R</div><div class="action-cell right">R</div><div class="action-cell right">R</div><div class="action-cell right">R</div><div class="action-cell right">R</div>
+        <div class="action-cell down">D</div><div class="action-cell down">D</div><div class="action-cell down">D</div><div class="action-cell down">D</div><div class="action-cell down">D</div>
+      </div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions after:</span> <span class="v">50</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration discovery open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#11</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">BREAKTHROUGH: Full-grid diff reveals block movement + fuel depletion</span>
+      <span class="iter-badges"><span class="badge discovery">DISCOVERY</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Key Discovery</div>Compared ALL 4096 pixels before/after each of the 4 actions. Found: UP/DOWN move the c/9 block by 5px. LEFT moved block off-canvas (massive diff). Each action depletes 2 fuel pixels.</div>
+      <div class="key-event success"><span class="highlight-green">BLOCK MOVEMENT</span>: UP/DOWN/LEFT/RIGHT move c/9 block by 5px</div>
+      <div class="key-event success">FUEL DEPLETION: each action costs 2 pixels (color 11 -&gt; 3)</div>
+      <div class="key-event warn">LEFT caused block to leave canvas -- massive 4000+ pixel diff</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions:</span> <span class="v">54</span> (+4 probes)</div></div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#12-14</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Recovery + canvas structure mapping (wall, corridors, two halves)</span>
+      <span class="iter-badges"><span class="badge scan">ANALYSIS</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Canvas Mapping</div>Recovered from LEFT scroll. Mapped: LEFT section (cols 14-28), WALL (cols 29-33), RIGHT section (cols 34-53), bottom corridor (rows 45-49), top corridor (rows 17-24).</div>
+      <div class="key-event info">Canvas split by wall at cols 29-33 (rows 30-44)</div>
+      <div class="key-event info">Bottom corridor open at rows 45-49 (bypass wall)</div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#15-18</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Movement confirmed, wall collision, navigation planning</span>
+      <span class="iter-badges"><span class="badge moved">MECHANICS</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Mechanics</div>Confirmed: 5px per action, walls block, need to navigate around. Block at cols 34-38 after 4 LEFTs, blocked by wall. Planned down-around-up strategy.</div>
+      <div class="key-event success">5px/action in all 4 directions confirmed</div>
+      <div class="key-event success">Wall collision at cols 29-33 confirmed</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions:</span> <span class="v">63</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration discovery open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#19-21</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Wall navigation: 2D+3L+3U. Block reaches marker -- borders activate!</span>
+      <span class="iter-badges">
+        <span class="badge discovery">MARKER REACHED</span>
+        <span class="badge moved">NAVIGATION</span>
+      </span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Block Reaches Marker</div>2 DOWNs to corridor, 3 LEFTs past wall, 3 UPs to marker position. Block overlapped 0/1 marker. Borders activated (5-&gt;0) on reference and answer templates.</div>
+      <div class="action-sequence">
+        <div class="action-cell down">D</div><div class="action-cell down">D</div>
+        <div class="action-cell left">L</div><div class="action-cell left">L</div><div class="action-cell left">L</div>
+        <div class="action-cell up">U</div><div class="action-cell up">U</div><div class="action-cell up">U</div>
+      </div>
+      <div class="key-event success"><span class="highlight-green">BLOCK AT MARKER</span>: c(12) rows 30-31, c(9) rows 32-34, cols 19-23</div>
+      <div class="key-event success">Color 0 borders activated around reference + answer template</div>
+      <div class="key-event warn">Still NOT_FINISHED -- more needed to complete level</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions:</span> <span class="v">71</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#22</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Post-placement analysis: left canvas has block, right empty</span>
+      <span class="iter-badges"><span class="badge scan">SCAN</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">State Check</div>Left canvas: block at marker. Right canvas: empty (all 3s). Bottom-left answer template changed.</div>
+      <div class="key-event info">Right canvas completely empty -- possibly needs filling</div>
+    </div>
+  </div>
+
+  <div class="iteration child open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#23</span>
+      <span class="iter-role">CHILD #2</span>
+      <span class="iter-summary">Second delegation with rich knowledge -- child RESET the game via arc3.start()</span>
+      <span class="iter-badges">
+        <span class="badge delegation">CORRECT</span>
+        <span class="badge reset">GAME RESET</span>
+      </span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Catastrophic Child</div>Delegated again with app:"arc3-player" and comprehensive knowledge. Child timed out AND called arc3.start(), resetting all progress.</div>
+      <div class="code-block">__level_task = { level: 1, knowledge: {
+  mechanics: { movement, walls, borders },
+  rules: ["5px steps", "Walls block"],
+  openQuestions: ["What is the win condition?"]
+}};
+await rlm(..., { app: "arc3-player", maxIterations: 20 });</div>
+      <div class="key-event failure"><span class="highlight-red">GAME RESET</span>: Child called arc3.start()</div>
+      <div class="key-event failure">All 71 actions of progress destroyed</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions after:</span> <span class="v highlight-red">0 (reset)</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration parent" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#24-25</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Discovered reset. Precise layout mapping. Planned 7-action optimal path.</span>
+      <span class="iter-badges"><span class="badge scan">FRESH START</span></span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Fresh Start</div>Noticed actions=0, grid initial. Precisely mapped all elements. Abandoned delegation -- solving directly.</div>
+      <div class="key-event info">Block: c(12) at r45-46, c39-43; c(9) at r47-49, c39-43</div>
+      <div class="key-event info">Marker: 0/1 cross centered at (32,21)</div>
+      <div class="key-event info">Optimal path: 4L+3U = 7 actions (corridor is open)</div>
+    </div>
+  </div>
+
+  <div class="iteration discovery open" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#26</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Optimal path: 4L+3U in 7 actions -- block reaches marker (10x more efficient)</span>
+      <span class="iter-badges">
+        <span class="badge discovery">OPTIMAL</span>
+        <span class="badge moved">7 ACTIONS</span>
+      </span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Optimal Execution</div>4 LEFTs (through open corridor at rows 45+) then 3 UPs. 7 actions total. 10x more efficient than first attempt.</div>
+      <div class="action-sequence">
+        <div class="action-cell left">L</div><div class="action-cell left">L</div><div class="action-cell left">L</div><div class="action-cell left">L</div>
+        <div class="action-cell up">U</div><div class="action-cell up">U</div><div class="action-cell up">U</div>
+      </div>
+      <div class="key-event success"><span class="highlight-green">BLOCK AT MARKER</span>: 7 actions (was ~71 first time)</div>
+      <div class="key-event warn">Still NOT_FINISHED</div>
+      <div class="metrics-row"><div class="metric"><span class="k">Actions:</span> <span class="v">7</span></div></div>
+    </div>
+  </div>
+
+  <div class="iteration death" onclick="this.classList.toggle('open')">
+    <div class="dot"></div>
+    <div class="iter-header">
+      <span class="arrow">&#9654;</span>
+      <span class="iter-num">#27-29</span>
+      <span class="iter-role">PARENT</span>
+      <span class="iter-summary">Post-placement: borders activate, answer pattern mutates. RUN TERMINATED at max iters.</span>
+      <span class="iter-badges">
+        <span class="badge scan">ANALYSIS</span>
+        <span class="badge error">MAX ITERS</span>
+      </span>
+    </div>
+    <div class="iter-body">
+      <div class="reasoning"><div class="label">Terminal</div>Borders activated again. Moving block after placement mutated the bottom-left answer pattern. Agent was beginning to understand deeper mechanics but ran out of iterations.</div>
+      <div class="key-event success">Borders activated on placement (confirmed)</div>
+      <div class="key-event info">Moving block post-placement changes answer template</div>
+      <div class="key-event failure"><span class="highlight-red">RUN TERMINATED</span>: Max iterations (30) reached</div>
+      <div class="key-event failure">Win condition never determined</div>
+      <div class="metrics-row">
+        <div class="metric"><span class="k">Final actions:</span> <span class="v">~12</span></div>
+        <div class="metric"><span class="k">Score:</span> <span class="v highlight-red">0.0%</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<h2>Action Accounting</h2>
+<div style="margin: 12px 0;">
+  <table class="diff-table" style="width: 100%; max-width: 700px;">
+    <tr><th>Phase</th><th>Actions</th><th>Useful?</th></tr>
+    <tr><td>Child #1 (timed out)</td><td class="highlight-red">35</td><td class="old">No output</td></tr>
+    <tr><td>Parent: naive tests (iter 6-10)</td><td class="highlight-red">~15</td><td class="old">Wrong pixels</td></tr>
+    <tr><td>Parent: diff discovery (iter 11)</td><td>4</td><td class="new">Breakthrough</td></tr>
+    <tr><td>Parent: recovery + analysis (iter 12-14)</td><td>2</td><td>Partial</td></tr>
+    <tr><td>Parent: mechanics (iter 15-18)</td><td>9</td><td class="new">Confirmed</td></tr>
+    <tr><td>Parent: navigation (iter 19-21)</td><td>8</td><td class="new">Marker reached</td></tr>
+    <tr><td>Child #2 (reset game)</td><td class="highlight-red">??</td><td class="old">RESET</td></tr>
+    <tr><td>Parent: optimal path (iter 26)</td><td>7</td><td class="new">Efficient</td></tr>
+    <tr><td>Parent: investigation (iter 27-29)</td><td>~5</td><td>Incomplete</td></tr>
+    <tr style="font-weight:bold"><td>TOTAL</td><td>~80</td><td class="old">0 levels</td></tr>
+  </table>
+</div>
+
+<hr class="section-divider">
+
+<h2>Root Cause Analysis</h2>
+<div class="key-event failure" style="font-size: 14px; padding: 12px;">
+  <strong>1. CHILD INEFFICIENCY</strong>: Both children consumed all iterations without returning. Child #1 burned 35 actions blind. Child #2 reset the game. No discovery protocol or deadline guard.
+</div>
+<div class="key-event failure" style="font-size: 14px; padding: 12px;">
+  <strong>2. SLOW PARENT DISCOVERY</strong>: 5 iterations (6-10) checking wrong pixels. Full-grid diff should have been first approach.
+</div>
+<div class="key-event failure" style="font-size: 14px; padding: 12px;">
+  <strong>3. GAME RESET BY CHILD</strong>: Child #2 called arc3.start(), destroying 71 actions of progress. Children should never reset the game.
+</div>
+<div class="key-event failure" style="font-size: 14px; padding: 12px;">
+  <strong>4. ITERATION BUDGET</strong>: 30 iterations insufficient with 2 child timeouts. Parent made great progress in final 6 iterations.
+</div>
+<div class="key-event success" style="font-size: 14px; padding: 12px;">
+  <strong>5. CORRECT DELEGATION (FIXED)</strong>: app:"arc3-player" + __level_task used correctly. Protocol is right; child quality is the bottleneck.
+</div>
+
+<script>
+const grids = {
+  "initial": {
+    label: "Initial State",
+    note: "Entity at r45,c39. Marker at r31-33. Fuel bar full.",
+    data: [
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435599955344444444444444444444444",
+      "5555444444444444444444444444444435555955344444444444444444444444",
+      "5555444444444444444444444444444435595955344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333330333333344444333333333333333333334444444444",
+      "5555444444444433333310033333344444333333333333333333334444444444",
+      "5555444444444433333331333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "555544444444444444433333333333333333333ccccc33333333334444444444",
+      "555544444444444444433333333333333333333ccccc33333333334444444444",
+      "5555444444444444444333333333333333333339999933333333334444444444",
+      "5555444444444444444333333333333333333339999933333333334444444444",
+      "5555444444444444444333333333333333333339999933333333334444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "4444444444444444444444444444444444444444444444444444444444444444",
+      "4555555555544444444444444444444444444444444444444444444444444444",
+      "4555555555544444444444444444444444444444444444444444444444444444",
+      "4559999995544444444444444444444444444444444444444444444444444444",
+      "4559999995544444444444444444444444444444444444444444444444444444",
+      "4559955555544444444444444444444444444444444444444444444444444444",
+      "4559955555544444444444444444444444444444444444444444444444444444",
+      "4559955995544444444444444444444444444444444444444444444444444444",
+      "4559955995545555555555555555555555555555555555555555555555555555",
+      "4555555555545bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb588588588",
+      "4555555555545bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb588588588",
+      "4444444444445555555555555555555555555555555555555555555555555555"
+    ]
+  },
+  "post-child": {
+    label: "After Child #1 (35 actions)",
+    note: "Child moved block. Fuel partially depleted. No result returned.",
+    data: [
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435599955344444444444444444444444",
+      "5555444444444444444444444444444435555955344444444444444444444444",
+      "5555444444444444444444444444444435595955344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444435555555344444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333330333333344444333333333333333333334444444444",
+      "5555444444444433333310033333344444333333333333333333334444444444",
+      "5555444444444433333331333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444ccccc3333333333333333333333333333334444444444",
+      "5555444444444444444ccccc3333333333333333333333333333334444444444",
+      "5555444444444444444999993333333333333333333333333333334444444444",
+      "5555444444444444444999993333333333333333333333333333334444444444",
+      "5555444444444444444999993333333333333333333333333333334444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "4444444444444444444444444444444444444444444444444444444444444444",
+      "4555555555544444444444444444444444444444444444444444444444444444",
+      "4555555555544444444444444444444444444444444444444444444444444444",
+      "4559999995544444444444444444444444444444444444444444444444444444",
+      "4559999995544444444444444444444444444444444444444444444444444444",
+      "4559955555544444444444444444444444444444444444444444444444444444",
+      "4559955555544444444444444444444444444444444444444444444444444444",
+      "4559955995544444444444444444444444444444444444444444444444444444",
+      "4559955995545555555555555555555555555555555555555555555555555555",
+      "455555555554533333333333333333333333333bbbbbbbbbbbbbbbb588588588",
+      "455555555554533333333333333333333333333bbbbbbbbbbbbbbbb588588588",
+      "4444444444445555555555555555555555555555555555555555555555555555"
+    ]
+  },
+  "block-at-cursor": {
+    label: "Block at Marker (iter 20-21)",
+    note: "Block at r30,c19. Borders activated. ~71 actions used.",
+    data: [
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444430000000344444444444444444444444",
+      "5555444444444444444444444444444430555550344444444444444444444444",
+      "5555444444444444444444444444444430599950344444444444444444444444",
+      "5555444444444444444444444444444430555950344444444444444444444444",
+      "5555444444444444444444444444444430595950344444444444444444444444",
+      "5555444444444444444444444444444430555550344444444444444444444444",
+      "5555444444444444444444444444444430000000344444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333ccccc3333344444333333333333333333334444444444",
+      "5555444444444433333ccccc3333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "4444444444444444444444444444444444444444444444444444444444444444",
+      "4000000000044444444444444444444444444444444444444444444444444444",
+      "4055555555044444444444444444444444444444444444444444444444444444",
+      "4059999995044444444444444444444444444444444444444444444444444444",
+      "4059999995044444444444444444444444444444444444444444444444444444",
+      "4059955555044444444444444444444444444444444444444444444444444444",
+      "4059955555044444444444444444444444444444444444444444444444444444",
+      "4059955995044444444444444444444444444444444444444444444444444444",
+      "4059955995045555555555555555555555555555555555555555555555555555",
+      "4055555555045333333333333333333333333333333333333333333588588588",
+      "4000000000045333333333333333333333333333333333333333333588588588",
+      "4444444444445555555555555555555555555555555555555555555555555555"
+    ]
+  },
+  "final": {
+    label: "Final State (iter 27, after reset+7)",
+    note: "Game reset by child #2. Block at marker via optimal 7-action path.",
+    data: [
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444430000000344444444444444444444444",
+      "5555444444444444444444444444444430555550344444444444444444444444",
+      "5555444444444444444444444444444430599950344444444444444444444444",
+      "5555444444444444444444444444444430555950344444444444444444444444",
+      "5555444444444444444444444444444430595950344444444444444444444444",
+      "5555444444444444444444444444444430555550344444444444444444444444",
+      "5555444444444444444444444444444430000000344444444444444444444444",
+      "5555444444444444444444444444444433333333344444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444444444444444444444444333334444444444444444444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333333333333333333333333333333333333334444444444",
+      "5555444444444433333ccccc3333344444333333333333333333334444444444",
+      "5555444444444433333ccccc3333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333999993333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444433333333333333344444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333334444444444333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444333333333333333333333333333333333334444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "5555444444444444444444444444444444444444444444444444444444444444",
+      "4444444444444444444444444444444444444444444444444444444444444444",
+      "4000000000044444444444444444444444444444444444444444444444444444",
+      "4055555555044444444444444444444444444444444444444444444444444444",
+      "4059955995044444444444444444444444444444444444444444444444444444",
+      "4059955995044444444444444444444444444444444444444444444444444444",
+      "4055555995044444444444444444444444444444444444444444444444444444",
+      "4055555995044444444444444444444444444444444444444444444444444444",
+      "4059999995044444444444444444444444444444444444444444444444444444",
+      "4059999995045555555555555555555555555555555555555555555555555555",
+      "4055555555045bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb3333333588588588",
+      "4000000000045bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb3333333588588588",
+      "4444444444445555555555555555555555555555555555555555555555555555"
+    ]
+  }
+};
+
+const palette = {
+  '0': '#000000', '1': '#0074D9', '2': '#FF4136', '3': '#2ECC40',
+  '4': '#FFDC00', '5': '#AAAAAA', '6': '#F012BE', '7': '#FF851B',
+  '8': '#7FDBFF', '9': '#870C25', 'a': '#111111', 'b': '#1A3D6D',
+  'c': '#992D2A', 'd': '#1F7A2C', 'e': '#9B8B00', 'f': '#666666'
+};
+
+function renderGrid(gridData, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  Object.entries(gridData).forEach(([key, gridInfo]) => {
+    const panel = document.createElement('div');
+    panel.className = 'grid-panel';
+    const label = document.createElement('div');
+    label.className = 'panel-label';
+    label.innerHTML = '<strong>' + gridInfo.label + '</strong><br><span style="font-size:10px;color:#666">' + gridInfo.note + '</span>';
+    panel.appendChild(label);
+    const pixelGrid = document.createElement('div');
+    pixelGrid.className = 'pixel-grid';
+    gridInfo.data.forEach(rowStr => {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'pixel-row';
+      for (let i = 0; i < rowStr.length; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'pixel-cell';
+        cell.style.backgroundColor = palette[rowStr[i]] || '#333';
+        rowDiv.appendChild(cell);
+      }
+      pixelGrid.appendChild(rowDiv);
+    });
+    panel.appendChild(pixelGrid);
+    container.appendChild(panel);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderGrid(grids, 'grid-gallery');
+});
+</script>
+
+</body>
+</html>
