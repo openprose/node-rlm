@@ -1,7 +1,7 @@
 ---
 name: arc3-player
 kind: app
-version: 1.6.0
+version: 1.7.0
 description: Play one ARC-3 level — learn mechanics by experimenting, then execute strategically
 author: sl
 tags: [arc, arc3, exploration, learning]
@@ -20,7 +20,7 @@ You play ONE level of an interactive 64x64 grid game. The rules are unknown — 
    ```
    This checks the iteration deadline and action budget. It is already defined from setup. Just call it.
 2. NEVER call `arc3.start()`. The game is already running. Calling it resets ALL progress.
-3. Use `step(action)` to take actions. `arc3.step()` has been replaced — both call the same budget-enforced wrapper (35 actions max). There is no way to bypass the action counter.
+3. Use `step(action)` to take actions. `arc3.step()` has been replaced — both call the same budget-enforced wrapper (25 actions max). There is no way to bypass the action counter.
 4. Iteration 1: call `await __discover()` to test each direction and get a diff analysis. Do not skip this.
 5. Plan your work: iter 0 = setup, iter 1 = discover, iters 2-8 = play, iter 9 = return results.
 6. Return a result before timeout. Partial knowledge is infinitely better than no return.
@@ -70,28 +70,31 @@ __guard = function() {
 __guard.msg = "";
 
 // === INTERCEPT arc3.step — budget enforcement is UNAVOIDABLE ===
-const __originalStep = arc3.step.bind(arc3);
+// IIFE hides the original step function in a closure — no bypass possible
 __returnPayload = null;
-arc3.step = async function(action) {
-  __actionsThisLevel++;
-  if (__actionsThisLevel > 35) {
-    __done = true;
-    __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'budget' });
-    return { state: 'BUDGET_EXCEEDED', frame: [arc3.observe().frame[0]], levels_completed: arc3.observe().levels_completed, available_actions: [] };
-  }
-  const result = await __originalStep(action);
-  if (result.state === 'GAME_OVER') {
-    __k.rules.push("GAME_OVER at " + __actionsThisLevel + " actions");
-    __done = true;
-    __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'game_over' });
-  }
-  if (result.levels_completed > __startLevel) {
-    __done = true;
-    __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: true });
-  }
-  return result;
-};
-// step() is a convenience alias — both go through the same interceptor
+(function() {
+  const _origStep = arc3.step.bind(arc3);
+  arc3.step = async function(action) {
+    __actionsThisLevel++;
+    if (__actionsThisLevel > 25) {
+      __done = true;
+      __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'budget' });
+      return { state: 'BUDGET_EXCEEDED', frame: [arc3.observe().frame[0]], levels_completed: arc3.observe().levels_completed, available_actions: [] };
+    }
+    const result = await _origStep(action);
+    if (result.state === 'GAME_OVER') {
+      __k.rules.push("GAME_OVER at " + __actionsThisLevel + " actions");
+      __done = true;
+      __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'game_over' });
+    }
+    if (result.levels_completed > __startLevel) {
+      __done = true;
+      __returnPayload = JSON.stringify({ knowledge: __k, actions: __actionsThisLevel, completed: true });
+    }
+    return result;
+  };
+})();
+// step() is a convenience alias — both go through the interceptor
 async function step(action) { return arc3.step(action); }
 
 // === PERCEPTUAL TOOLKIT (general vision algorithms — no game knowledge) ===

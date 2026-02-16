@@ -1,7 +1,7 @@
 ---
 name: arc3-orchestrator
 kind: app
-version: 1.6.0
+version: 1.7.0
 description: Delegate each ARC-3 level to a child agent, accumulate game knowledge across levels
 author: sl
 tags: [arc, arc3, delegation, orchestrator]
@@ -81,22 +81,29 @@ if (__levelAttempts[level] > 2) {
     `Read __level_task.knowledge for discoveries from prior levels. ` +
     `Do NOT try to complete the level. Focus on mapping the environment ` +
     `and interacting with objects you have not seen before. ` +
+    `CRITICAL: Start EVERY code block with: if (__guard()) return(__guard.msg); ` +
     `Return a JSON string with your observations. Minimize actions.`,
-    { app: "arc3-player", model: "intelligent", maxIterations: 15 }
+    { app: "arc3-player", model: "intelligent" }
   );
 } else {
   summary = await rlm(
     `Play level ${level}/7 of an interactive grid game. ` +
     `Read __level_task.knowledge for discoveries from prior levels. ` +
     `Learn mechanics through experimentation, then complete the level efficiently. ` +
+    `CRITICAL: Start EVERY code block with: if (__guard()) return(__guard.msg); ` +
     `Return a JSON string with {knowledge, actions, completed}. ` +
     `Minimize actions — you are scored on efficiency.`,
-    { app: "arc3-player", model: "intelligent", maxIterations: 25 }
+    { app: "arc3-player", model: "intelligent" }
   );
 }
 // === END MANDATORY BLOCK ===
 
-console.log(`Level ${level} (attempt ${__levelAttempts[level]}): ${summary}`);
+// Timeout diagnostic: empty summary = child timed out without returning
+if (!summary || summary.length === 0) {
+  console.log(`CHILD TIMEOUT: Level ${level} attempt ${__levelAttempts[level]} — child used all iterations without returning.`);
+} else {
+  console.log(`Level ${level} (attempt ${__levelAttempts[level]}): ${summary.slice(0, 300)}`);
+}
 
 // Curate knowledge from child's RETURN VALUE (the only working child→parent channel)
 let childResult = null;
