@@ -1,7 +1,7 @@
 ---
 name: arc3-orchestrator
 kind: app
-version: 1.1.0
+version: 1.2.0
 description: Delegate each ARC-3 level to a child agent, accumulate game knowledge across levels
 author: sl
 tags: [arc, arc3, delegation, orchestrator]
@@ -27,18 +27,29 @@ The child MUST receive the `arc3-player` app plugin via the `app` parameter. Thi
 - Frame: `{ frame: number[][][], state, levels_completed, win_levels, available_actions }`
 - State: `NOT_STARTED | NOT_FINISHED | WIN | GAME_OVER`
 
-### Iteration 0: Start the game (ONLY these 3 lines)
+### Iteration 0: Start the game (ONLY this code block — emit EXACTLY ONE block)
 
 ```javascript
-const init = await arc3.start();
-__knowledge = { objectTypes: {}, mechanics: {}, rules: [], openQuestions: [] };
-console.log("Game started. State:", init.state, "Levels:", init.levels_completed);
+if (typeof __knowledge !== 'undefined') {
+  console.log("Already started. Skipping.");
+} else {
+  const init = await arc3.start();
+  __knowledge = { objectTypes: {}, mechanics: {}, rules: [], openQuestions: [] };
+  __outerIter = 0;
+  console.log("Game started. State:", init.state, "Levels:", init.levels_completed);
+}
 // DO NOT analyze the grid. DO NOT print the grid. Proceed to delegation immediately.
 ```
 
 ### Iteration 1+: Delegate one level (COPY THIS EXACTLY)
 
 ```javascript
+// === ITERATION BUDGET GUARD ===
+__outerIter++;
+if (__outerIter >= 28) {
+  return(JSON.stringify(await arc3.getScore()));
+}
+
 // === MANDATORY DELEGATION BLOCK — DO NOT MODIFY ===
 const obs = arc3.observe();
 const level = obs.levels_completed + 1;
@@ -100,14 +111,26 @@ const post = arc3.observe();
 if (post.state === "WIN" || post.state === "GAME_OVER") {
   return(JSON.stringify(await arc3.getScore()));
 }
+// Proceed to next iteration — delegate the next level (or retry this one)
 ```
+
+### After delegation: ONLY these actions are allowed
+
+1. Read `__level_result` if available. Curate knowledge (code above does this).
+2. Check `arc3.observe().state`. If WIN or GAME_OVER, return scorecard.
+3. If child failed: re-delegate with `maxIterations: 10` and exploration-only scope (code above does this).
+4. Proceed to next outer iteration to delegate the next level.
+
+**You MUST NOT call `arc3.step()` from the orchestrator. You MUST NOT analyze the grid. You MUST NOT print the grid. The orchestrator is a manager, not a player.**
 
 ### Rules
 
-1. Call `arc3.start()` exactly once in iteration 0 — emit only ONE code block
+1. Call `arc3.start()` exactly once in iteration 0 — emit only ONE code block, never duplicate it
 2. Delegate exactly one level per outer iteration using `app: "arc3-player"` — never `systemPrompt`
 3. Pass knowledge via `__level_task` / `__level_result` sandbox variables — never inline data in prompts
 4. NEVER play the game directly from the orchestrator — always delegate to a child agent
-5. Curate knowledge between levels: promote confirmed discoveries, remove contradicted ones
-6. Return the scorecard JSON on WIN or GAME_OVER
-7. If a child times out, re-delegate with a reduced scope — do not take over manually
+5. NEVER call `arc3.step()` from the orchestrator — only children call `arc3.step()`
+6. Curate knowledge between levels: promote confirmed discoveries, remove contradicted ones
+7. Return the scorecard JSON on WIN or GAME_OVER
+8. If a child times out, re-delegate with a reduced scope — do not take over manually
+9. Track `__outerIter` — return scorecard by iteration 28 to avoid timeout

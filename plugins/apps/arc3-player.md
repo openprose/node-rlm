@@ -1,7 +1,7 @@
 ---
 name: arc3-player
 kind: app
-version: 1.1.0
+version: 1.2.0
 description: Play one ARC-3 level — learn mechanics by experimenting, then execute strategically
 author: sl
 tags: [arc, arc3, exploration, learning]
@@ -15,10 +15,12 @@ You play ONE level of an interactive 64x64 grid game. The rules are unknown — 
 ### Rules
 
 1. You MUST return a result before hitting the iteration limit. An incomplete return with partial knowledge is infinitely better than a timeout with no return.
-2. Reserve the last 2 iterations as a safety margin — always return by iteration 18 (of 20).
-3. Every iteration MUST start with the deadline guard below.
+2. Reserve the last 2 iterations as a safety margin — the deadline guard handles this automatically via `__maxIter`.
+3. Every iteration MUST start with the deadline guard below. Copy it exactly — do NOT skip it.
 4. Test each available action ONCE in your first real iteration (the discovery protocol). Do not skip this.
-5. Track `__actionsThisLevel` after every `arc3.step()` call.
+5. Track `__actionsThisLevel` after every `arc3.step()` call. Return if it exceeds 40.
+6. NEVER call `arc3.start()`. The game is already running. Calling `arc3.start()` resets ALL progress across ALL levels. You only have `arc3.step()`, `arc3.observe()`, and `arc3.actionCount`.
+7. Budget at most 40 game actions per level. If you exceed 40 actions, return immediately with whatever knowledge you have.
 
 ### API
 
@@ -41,6 +43,7 @@ __k = {
   openQuestions: prior.openQuestions || [],
 };
 __iterCount = 0;
+__maxIter = 20; // Return by __maxIter - 2 = iteration 18. Do NOT change this.
 
 // === Perceptual Toolkit ===
 // These are general vision algorithms — they encode NO game knowledge.
@@ -152,11 +155,13 @@ console.log(`Available actions: ${frame0.available_actions}`);
 Test each action exactly once, diff the full grid, record what changed. This is the foundation for all subsequent reasoning.
 
 ```javascript
-// === DEADLINE GUARD ===
+// === DEADLINE GUARD (copy this exactly into every iteration) ===
+if (typeof __iterCount === 'undefined') __iterCount = 0;
+if (typeof __maxIter === 'undefined') __maxIter = 20;
 __iterCount++;
-if (__iterCount >= 18) {
+if (__iterCount >= __maxIter - 2) {
   __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: arc3.observe().levels_completed > __startLevel };
-  return(`Level ${__startLevel + 1}: ${__level_result.completed ? 'done' : 'incomplete'}, ${__actionsThisLevel} actions.`);
+  return(`Level ${__startLevel + 1}: emergency return at iter ${__iterCount}. Results in __level_result.`);
 }
 
 // === DISCOVERY PROTOCOL: Test each action once, diff everything ===
@@ -190,8 +195,18 @@ for (const action of frame0.available_actions.slice(0, 4)) { // test first 4 act
 __grid = arc3.observe().frame[0];
 console.log(`Discovery done. ${__actionsThisLevel} actions used.`);
 
-// Analyze: which colors moved in the maze region? That's likely your entity.
-// Which colors changed in the HUD? That's likely a resource meter.
+// === POST-DISCOVERY ANALYSIS (do not skip) ===
+// 1. Which colors moved in the maze region (r < 52)? That's your character.
+const movingColors = new Set();
+for (const d of discoveries) {
+  for (const mc of d.mazeExamples) { movingColors.add(mc.was); movingColors.add(mc.now); }
+}
+console.log("Colors that moved in maze:", [...movingColors]);
+// 2. How many maze pixels changed per action? 25 pixels = 5x5 block = 5px step.
+for (const d of discoveries) console.log(`  Action ${d.action}: ${d.mazeChanges} maze px, ${d.hudChanges} HUD px`);
+// 3. Direction mapping: action 1=up (block row decreases), 2=down, 3=left, 4=right
+// 4. If any action caused 0 maze changes, you may be blocked by a wall.
+// 5. HUD changes = resource meters (fuel, lives, level counter). Track which rows changed.
 ```
 
 ### Core Loop (Iteration 2+)
@@ -199,11 +214,18 @@ console.log(`Discovery done. ${__actionsThisLevel} actions used.`);
 Each iteration: **deadline guard → observe → diff → update knowledge → decide → act**.
 
 ```javascript
-// === DEADLINE GUARD (MUST be first thing every iteration) ===
+// === DEADLINE GUARD (copy this exactly — MUST be first thing every iteration) ===
+if (typeof __iterCount === 'undefined') __iterCount = 0;
+if (typeof __maxIter === 'undefined') __maxIter = 20;
 __iterCount++;
-if (__iterCount >= 18) {
+if (__iterCount >= __maxIter - 2) {
   __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: arc3.observe().levels_completed > __startLevel };
-  return(`Level ${__startLevel + 1}: ${__level_result.completed ? 'done' : 'incomplete'}, ${__actionsThisLevel} actions.`);
+  return(`Level ${__startLevel + 1}: emergency return at iter ${__iterCount}. Results in __level_result.`);
+}
+// === ACTION BUDGET GUARD ===
+if (__actionsThisLevel > 40) {
+  __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: false };
+  return(`Level ${__startLevel + 1}: action budget exceeded (${__actionsThisLevel}). Results in __level_result.`);
 }
 
 // 1. Observe current state
