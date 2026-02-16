@@ -1,7 +1,7 @@
 ---
 name: arc3-player
 kind: app
-version: 1.4.0
+version: 1.5.0
 description: Play one ARC-3 level — learn mechanics by experimenting, then execute strategically
 author: sl
 tags: [arc, arc3, exploration, learning]
@@ -19,19 +19,19 @@ You play ONE level of an interactive 64x64 grid game. The rules are unknown — 
    if (__guard()) return(__guard.msg);
    ```
    This checks the iteration deadline and action budget. It is already defined from setup. Just call it.
-2. NEVER call `arc3.start()`. The game is already running. Calling it resets ALL progress. You only have `step()`, `arc3.observe()`, and `arc3.actionCount`.
-3. Use `step(action)` instead of `arc3.step(action)`. The `step()` wrapper tracks actions and detects GAME_OVER.
+2. NEVER call `arc3.start()`. The game is already running. Calling it resets ALL progress.
+3. Use `step(action)` to take actions. `arc3.step()` has been replaced — both call the same budget-enforced wrapper. There is no way to bypass the action counter.
 4. Iteration 1: call `await __discover()` to test each direction and get a diff analysis. Do not skip this.
-5. Plan your work: iter 0 = setup, iter 1 = discover, iters 2-9 = play, iter 10 = return results.
+5. Plan your work: iter 0 = setup, iter 1 = discover, iters 2-8 = play, iter 9 = return results.
 6. Return a result before timeout. Partial knowledge is infinitely better than no return.
 
 ### API
 
-- `arc3.step(action)` → frame after action (check `available_actions` for valid action numbers)
+- `step(action)` → frame after action (budget-enforced, auto-tracks actions)
 - `arc3.observe()` → current frame (free, no action cost)
-- `arc3.actionCount` → total actions taken
 - Frame: `{ frame: number[][][], state, levels_completed, available_actions }`
 - `frame.frame[0]` is the 64x64 grid. `frame.frame[0][row][col]` → color index 0-15.
+- When action budget is exceeded, `step()` returns `{ state: 'BUDGET_EXCEEDED' }` and stops taking actions.
 
 ### Iteration 0: Setup
 
@@ -48,37 +48,47 @@ __k = {
 };
 __iterCount = 0;
 __actionsThisLevel = 0;
+__done = false;
 
 // === GUARD: Call `if (__guard()) return(__guard.msg);` as first line of every code block ===
 __guard = function() {
   __iterCount++;
-  if (__iterCount >= 12) {
-    __level_result = { knowledge: __k || {}, actions: __actionsThisLevel || 0, completed: false };
-    __guard.msg = "Emergency return at iter " + __iterCount + ". Results in __level_result.";
+  if (__done) {
+    __guard.msg = "Level done. Results in __level_result.";
     return true;
   }
-  if (__actionsThisLevel > 25) {
-    __level_result = { knowledge: __k || {}, actions: __actionsThisLevel, completed: false };
-    __guard.msg = "Action budget exceeded (" + __actionsThisLevel + "). Results in __level_result.";
+  if (__iterCount >= 10) {
+    __level_result = __level_result || { knowledge: __k || {}, actions: __actionsThisLevel || 0, completed: false };
+    __guard.msg = "Emergency return at iter " + __iterCount + ". Results in __level_result.";
     return true;
   }
   return false;
 };
 __guard.msg = "";
 
-// === STEP WRAPPER: Use step(action) instead of arc3.step(action) ===
-async function step(action) {
+// === INTERCEPT arc3.step — budget enforcement is UNAVOIDABLE ===
+const __originalStep = arc3.step.bind(arc3);
+arc3.step = async function(action) {
   __actionsThisLevel++;
-  const result = await arc3.step(action);
+  if (__actionsThisLevel > 20) {
+    __level_result = __level_result || { knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'budget' };
+    __done = true;
+    return { state: 'BUDGET_EXCEEDED', frame: [arc3.observe().frame[0]], levels_completed: arc3.observe().levels_completed, available_actions: [] };
+  }
+  const result = await __originalStep(action);
   if (result.state === 'GAME_OVER') {
-    __k.rules.push("GAME_OVER reached at " + __actionsThisLevel + " actions");
+    __k.rules.push("GAME_OVER at " + __actionsThisLevel + " actions");
     __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: false, reason: 'game_over' };
+    __done = true;
   }
   if (result.levels_completed > __startLevel) {
     __level_result = { knowledge: __k, actions: __actionsThisLevel, completed: true };
+    __done = true;
   }
   return result;
-}
+};
+// step() is a convenience alias — both go through the same interceptor
+async function step(action) { return arc3.step(action); }
 
 // === PERCEPTUAL TOOLKIT (general vision algorithms — no game knowledge) ===
 function diffGrids(a, b) {
