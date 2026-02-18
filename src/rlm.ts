@@ -329,6 +329,28 @@ export async function rlm(query: string, context: string | undefined, options: R
 			invocationStack.pop();
 		}
 
+		/** Build an iteration context line for the next LLM turn. */
+		function buildIterationContext(nextIteration: number): string {
+			const remaining = effectiveMaxIterations - nextIteration;
+			if (remaining <= 1) {
+				return (
+					`[ITERATION ${nextIteration + 1}/${effectiveMaxIterations} — FINAL ITERATION] ` +
+					`You MUST return a result NOW. Call return(answer) with your best answer. ` +
+					`Do not start new work. Wrap up and return immediately.`
+				);
+			}
+			if (remaining === 2) {
+				return (
+					`[ITERATION ${nextIteration + 1}/${effectiveMaxIterations} — SECOND TO LAST] ` +
+					`Next iteration is your last. Finalize your work and prepare to return a result.`
+				);
+			}
+			return (
+				`[ITERATION ${nextIteration + 1}/${effectiveMaxIterations}] ` +
+				`${remaining} iterations remaining.`
+			);
+		}
+
 		const messages: Array<{ role: string; content: string }> = [{ role: "user", content: query }];
 		const trace: TraceEntry[] = [];
 
@@ -347,6 +369,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 					iteration,
 				);
 			}
+
 			let codeBlocks = extractCodeBlocks(response);
 
 			// Auto-fix malformed fence: "javascript\n" without opening ```
@@ -453,17 +476,22 @@ export async function rlm(query: string, context: string | undefined, options: R
 			}
 			trace.push(entry);
 
+			// Build iteration context for the next turn (if there will be one)
+			const nextIterContext = (effectiveMaxIterations > 1 && iteration + 1 < effectiveMaxIterations)
+				? buildIterationContext(iteration + 1) + "\n"
+				: "";
+
 			if (codeBlocks.length > 0) {
 				let outputMsg = combinedOutput || "(no output)";
 				if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
 				messages.push({ role: "assistant", content: response });
-				messages.push({ role: "user", content: outputMsg });
+				messages.push({ role: "user", content: nextIterContext + outputMsg });
 			} else if (!response.trim()) {
 				// Empty response (e.g., MALFORMED_FUNCTION_CALL from Gemini)
 				messages.push({ role: "assistant", content: response });
 				messages.push({
 					role: "user",
-					content:
+					content: nextIterContext +
 						"[ERROR] Your response was empty. You must respond with a ```javascript code block " +
 						"containing code to execute. Write code to explore the data, compute a result, " +
 						"and eventually return(answer).",
@@ -480,7 +508,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 						"Fix the opening fence and retry."
 					: "[WARNING] No code block found. Your response must include a ```javascript fenced " +
 						"code block to make progress. Plain text alone does nothing — write code to execute.";
-				messages.push({ role: "user", content: nudge });
+				messages.push({ role: "user", content: nextIterContext + nudge });
 			}
 		}
 
@@ -540,8 +568,14 @@ export async function rlm(query: string, context: string | undefined, options: R
 			: `${callerInvocationId}.${childDepthLabel}`;
 
 		const promise = (async () => {
+			// Save and isolate the parent's childTraceSlot so the child's
+			// rlmInternal (which resets childTraceSlot.current per-iteration)
+			// doesn't clobber the parent's accumulator — preventing circular refs.
+			const parentTraceSlot = childTraceSlot.current;
+			childTraceSlot.current = null;
 			try {
 				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, resolvedSystemPrompt, modelCallLLM, rlmOpts?.maxIterations);
+				childTraceSlot.current = parentTraceSlot;
 				if (opts.traceChildren && childTraceSlot.current) {
 					childTraceSlot.current.push({
 						query: q,
@@ -553,6 +587,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 				}
 				return result.answer;
 			} catch (err) {
+				childTraceSlot.current = parentTraceSlot;
 				if (opts.traceChildren && childTraceSlot.current && err instanceof RlmError) {
 					childTraceSlot.current.push({
 						query: q,

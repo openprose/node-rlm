@@ -12,6 +12,7 @@ on:
           - s-niah
           - arc
           - arc3
+          - arc-compound
       model:
         description: "Model (provider/id, e.g. google/gemini-2.5-flash)"
         required: true
@@ -50,6 +51,10 @@ on:
         description: "Attempts per task for pass@N (default: 1)"
         required: false
         default: "1"
+      trace-full:
+        description: "Enable all trace options (child traces, snapshots, action logs)"
+        type: boolean
+        default: false
       analyze:
         description: Run trajectory analysis after eval
         type: boolean
@@ -82,7 +87,7 @@ jobs:
         run: npx tsx eval/download.ts --from-release
 
       - name: Cache ARC eval data
-        if: inputs.benchmark == 'arc'
+        if: inputs.benchmark == 'arc' || inputs.benchmark == 'arc-compound'
         id: cache-arc
         uses: actions/cache@v4
         with:
@@ -90,7 +95,7 @@ jobs:
           key: arc-eval-data-v1
 
       - name: Download ARC dataset
-        if: inputs.benchmark == 'arc' && steps.cache-arc.outputs.cache-hit != 'true'
+        if: (inputs.benchmark == 'arc' || inputs.benchmark == 'arc-compound') && steps.cache-arc.outputs.cache-hit != 'true'
         run: npx tsx eval/download.ts --dataset arc
 
       - name: Run eval
@@ -123,6 +128,9 @@ jobs:
           fi
           if [ "${{ inputs.attempts }}" != "1" ] && [ "${{ inputs.attempts }}" != "" ]; then
             ARGS="$ARGS --attempts ${{ inputs.attempts }}"
+          fi
+          if [ "${{ inputs.trace-full }}" = "true" ]; then
+            ARGS="$ARGS --trace-full"
           fi
           npx tsx eval/run.ts $ARGS
 

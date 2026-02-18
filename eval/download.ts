@@ -357,6 +357,10 @@ async function main(): Promise<void> {
 			console.log("ARC-3 is API-based — no download needed.");
 			console.log("Set ARC3_API_KEY environment variable before running.");
 			break;
+		case "arc-compound":
+			console.log("ARC compound uses the same data as ARC.");
+			console.log("Run 'npx tsx eval/download.ts --dataset arc' if not already downloaded.");
+			break;
 		default:
 			console.error(`Unknown dataset: ${args.dataset}`);
 			console.error("Available datasets: oolong, s-niah, arc, arc3");

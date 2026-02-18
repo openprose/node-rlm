@@ -78,6 +78,61 @@ export async function loadArcTasks(
 	});
 }
 
+/**
+ * Load all ARC tasks as a single compound meta-task.
+ * The meta-task has minimal query/context -- all real task data is loaded
+ * into the sandbox via setupSandbox in the benchmark config.
+ */
+export async function loadArcCompoundBundle(
+	maxTasks?: number | null,
+	selectedProblems?: string[],
+): Promise<{ metaTask: EvalTask; solutions: ArcSolutions; challenges: ArcChallenges }> {
+	const challengesPath = join(DATA_DIR, "arc-agi_evaluation_challenges.json");
+	const solutionsPath = join(DATA_DIR, "arc-agi_evaluation_solutions.json");
+
+	if (!existsSync(challengesPath) || !existsSync(solutionsPath)) {
+		throw new Error(
+			`ARC data not found at ${DATA_DIR}. Run 'npx tsx eval/download.ts --dataset arc' first.`,
+		);
+	}
+
+	const challenges: ArcChallenges = JSON.parse(readFileSync(challengesPath, "utf-8"));
+	const solutions: ArcSolutions = JSON.parse(readFileSync(solutionsPath, "utf-8"));
+
+	let taskIds = Object.keys(challenges);
+
+	if (selectedProblems && selectedProblems.length > 0) {
+		const selected = new Set(selectedProblems);
+		taskIds = taskIds.filter((id) => selected.has(id));
+	}
+
+	if (maxTasks && maxTasks > 0) {
+		taskIds = taskIds.slice(0, maxTasks);
+	}
+
+	// Build expected: a JSON object mapping taskId -> expected grid(s)
+	const expectedMap: Record<string, unknown> = {};
+	for (const taskId of taskIds) {
+		const challenge = challenges[taskId];
+		const solution = solutions[taskId];
+		if (!solution) throw new Error(`No solution found for ARC task ${taskId}`);
+		expectedMap[taskId] = challenge.test.length === 1 ? solution[0] : solution;
+	}
+
+	const metaTask: EvalTask = {
+		id: "arc-compound",
+		query: `You are running a compound ARC-AGI-2 learning session with ${taskIds.length} tasks. The orchestrator plugin describes your full workflow. Task data is pre-loaded on globalThis.__arcTasks. Read from the environment.`,
+		context: "",
+		expected: JSON.stringify(expectedMap),
+		metadata: {
+			taskIds,
+			taskCount: taskIds.length,
+		},
+	};
+
+	return { metaTask, solutions, challenges };
+}
+
 function buildArcQuery(challenge: ArcChallenge): string {
 	const numTests = challenge.test.length;
 	const returnFormat = numTests === 1

@@ -44,7 +44,7 @@ gh workflow run eval.yml -f benchmark=<bench> -f model=<model> [flags...]
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `benchmark` | yes | — | `oolong`, `s-niah`, `arc`, or `arc3` |
+| `benchmark` | yes | — | `oolong`, `s-niah`, `arc`, `arc3`, or `arc-compound` |
 | `model` | yes | `qwen/qwen3-coder` | Provider/model ID for OpenRouter |
 | `max-tasks` | no | all | Limit number of tasks |
 | `max-iterations` | no | `15` | Max REPL iterations per task |
@@ -56,6 +56,7 @@ gh workflow run eval.yml -f benchmark=<bench> -f model=<model> [flags...]
 | `game` | no | — | ARC-3: comma-separated game IDs (e.g. `ls20,ft09`) |
 | `max-blocks-per-iteration` | no | — | Use `1` for single-block enforcement |
 | `attempts` | no | `1` | Attempts per task for pass@N (e.g., `2` for pass@2) |
+| `trace-full` | no | `false` | Enable all trace options (child traces, snapshots, action logs) |
 | `analyze` | no | `true` | Run trajectory distillation after eval |
 
 ## ARC task IDs
@@ -118,6 +119,33 @@ gh workflow run eval.yml \
   -f max-iterations=25 \
   -f concurrency=3 \
   -f app=arc3-player
+```
+
+### ARC-AGI-2 compound learning (first test — 3 tasks, full trace)
+
+```bash
+gh workflow run eval.yml \
+  -f benchmark=arc-compound \
+  -f model="anthropic/claude-opus-4-6" \
+  -f app=arc-compound-orchestrator \
+  -f max-iterations=100 \
+  -f max-depth=2 \
+  -f selected-problems="0934a4d8,135a2760,136b0064" \
+  -f trace-full=true \
+  -f analyze=true
+```
+
+### ARC compound — 5 tasks, no trace (faster)
+
+```bash
+gh workflow run eval.yml \
+  -f benchmark=arc-compound \
+  -f model="anthropic/claude-opus-4-6" \
+  -f app=arc-compound-orchestrator \
+  -f max-iterations=100 \
+  -f max-depth=2 \
+  -f selected-problems="0934a4d8,135a2760,136b0064,195c6913,247ef758" \
+  -f analyze=true
 ```
 
 ### OOLONG with Gemini Flash

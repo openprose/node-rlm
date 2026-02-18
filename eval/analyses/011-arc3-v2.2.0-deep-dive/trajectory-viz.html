@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC-3 v2.2.0 Run Trajectory -- arc3-ls20-cb3b57cc</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --cyan: #39d353;
+    --pink: #f778ba;
+    --orch-color: #58a6ff;
+    --mgr-color: #bc8cff;
+    --react-color: #3fb950;
+    --synth-color: #d29922;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px;
+  }
+
+  h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+  h2 { font-size: 18px; margin: 24px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 14px; margin: 12px 0 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .header { margin-bottom: 24px; }
+  .header .subtitle { color: var(--text-muted); font-size: 14px; }
+
+  /* Scorecard */
+  .scorecard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    text-align: center;
+  }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: #fff; }
+  .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.red .value { color: var(--red); }
+  .stat-card.orange .value { color: var(--orange); }
+  .stat-card.accent .value { color: var(--accent); }
+
+  /* Level bar chart */
+  .level-chart {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    height: 200px;
+    margin: 16px 0;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .level-bar-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .level-bar-container {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: calc(100% - 30px);
+    width: 100%;
+    justify-content: center;
+  }
+  .level-bar {
+    width: 24px;
+    border-radius: 3px 3px 0 0;
+    position: relative;
+    min-height: 2px;
+    transition: height 0.3s;
+  }
+  .level-bar.actions { background: var(--accent); opacity: 0.8; }
+  .level-bar.baseline { background: var(--text-muted); opacity: 0.4; }
+  .level-bar .bar-label {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .level-label {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .level-score {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Delegation tree */
+  .tree { margin: 16px 0; }
+  .tree-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 4px 0;
+    overflow: hidden;
+  }
+  .tree-node.orch { border-left: 3px solid var(--orch-color); }
+  .tree-node.mgr { border-left: 3px solid var(--mgr-color); margin-left: 24px; }
+  .tree-node.react { border-left: 3px solid var(--react-color); margin-left: 48px; }
+  .tree-node.synth { border-left: 3px solid var(--synth-color); margin-left: 48px; }
+
+  .tree-header {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  .tree-header:hover { background: var(--surface2); }
+
+  .tree-toggle {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 16px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+  .tree-node.open > .tree-header .tree-toggle { transform: rotate(90deg); }
+
+  .tree-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .badge-orch { background: rgba(88,166,255,0.15); color: var(--orch-color); }
+  .badge-mgr { background: rgba(188,140,255,0.15); color: var(--mgr-color); }
+  .badge-react { background: rgba(63,185,80,0.15); color: var(--react-color); }
+  .badge-synth { background: rgba(210,153,34,0.15); color: var(--synth-color); }
+  .badge-completed { background: rgba(63,185,80,0.2); color: var(--green); }
+  .badge-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-gameover { background: rgba(248,81,73,0.3); color: var(--red); font-weight: 700; }
+
+  .tree-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .tree-meta { font-size: 11px; color: var(--text-muted); }
+
+  .tree-body {
+    display: none;
+    padding: 8px 12px 12px 36px;
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    line-height: 1.5;
+  }
+  .tree-node.open > .tree-body { display: block; }
+
+  .tree-body .output-line { color: var(--text-muted); font-family: monospace; font-size: 11px; }
+  .tree-body .output-line.highlight { color: var(--green); font-weight: 600; }
+  .tree-body .output-line.error { color: var(--red); }
+
+  /* Knowledge chart */
+  .knowledge-chart {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+  }
+  .chart-svg { width: 100%; height: 250px; }
+
+  /* Action timeline */
+  .timeline {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    margin: 2px 0;
+  }
+  .timeline-label {
+    width: 80px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    padding-right: 8px;
+    flex-shrink: 0;
+  }
+  .timeline-bar-container {
+    flex: 1;
+    height: 20px;
+    position: relative;
+  }
+  .timeline-segment {
+    position: absolute;
+    height: 100%;
+    border-radius: 2px;
+    opacity: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #fff;
+    font-weight: 600;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .timeline-segment:hover { opacity: 1; }
+  .timeline-segment.l1 { background: var(--green); }
+  .timeline-segment.l2 { background: var(--accent); }
+  .timeline-segment.l3 { background: var(--orange); }
+  .timeline-segment.diag { background: var(--text-muted); }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  /* Summary table */
+  table.summary {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 12px 0;
+  }
+  table.summary th {
+    text-align: left;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  table.summary td {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+  }
+  table.summary tr:hover td { background: var(--surface); }
+
+  .mono { font-family: monospace; }
+  .dim { color: var(--text-muted); }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .orange { color: var(--orange); }
+
+  /* Findings */
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 8px 0;
+  }
+  .finding-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .finding-body { font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARC-3 v2.2.0 Trajectory Visualization</h1>
+  <div class="subtitle">
+    Task: arc3-ls20-cb3b57cc &middot; Model: Opus 4.6 (3-tier) &middot; 2026-02-16 &middot; 77.8 min &middot; $0.59
+  </div>
+</div>
+
+<!-- Scorecard -->
+<div class="scorecard">
+  <div class="stat-card orange">
+    <div class="value">17%</div>
+    <div class="label">Score</div>
+  </div>
+  <div class="stat-card green">
+    <div class="value">2/7</div>
+    <div class="label">Levels</div>
+  </div>
+  <div class="stat-card accent">
+    <div class="value">431</div>
+    <div class="label">Actions</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">14</div>
+    <div class="label">Orch Iters</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">12</div>
+    <div class="label">Delegations</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">21</div>
+    <div class="label">Grandchildren</div>
+  </div>
+  <div class="stat-card green">
+    <div class="value">100%</div>
+    <div class="label">Child Return Rate</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">$0.59</div>
+    <div class="label">Cost</div>
+  </div>
+</div>
+
+<!-- Level Bar Chart -->
+<h2>Per-Level Performance</h2>
+<div class="level-chart" id="levelChart"></div>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Actions used</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted);opacity:0.4"></div> Human baseline</div>
+</div>
+
+<!-- Action Timeline -->
+<h2>Action Timeline by Orchestrator Iteration</h2>
+<div class="timeline" id="actionTimeline"></div>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Level 1</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Level 2</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Level 3</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted)"></div> Diagnostic (no actions)</div>
+</div>
+
+<!-- Knowledge Growth Chart -->
+<h2>Knowledge Growth Over Iterations</h2>
+<div class="knowledge-chart">
+  <svg class="chart-svg" id="knowledgeChart" viewBox="0 0 800 250"></svg>
+</div>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Mechanics</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Rules</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Hazards (x5 scale)</div>
+</div>
+
+<!-- Delegation Tree -->
+<h2>Delegation Tree</h2>
+<div class="tree" id="delegationTree"></div>
+
+<!-- Delegation Summary Table -->
+<h2>Delegation Summary</h2>
+<table class="summary">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Orch Iter</th>
+      <th>Level</th>
+      <th>Attempt</th>
+      <th>Mgr Iters</th>
+      <th>React Iters</th>
+      <th>React Actions</th>
+      <th>Synth?</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody id="delegationTableBody"></tbody>
+</table>
+
+<!-- Protocol Compliance -->
+<h2>Protocol Compliance Analysis</h2>
+<div id="protocolFindings"></div>
+
+<script>
+// ========== DATA ==========
+const levelData = [
+  { level: 1, actions: 25, baseline: 29, score: 100, completed: true, attempts: 1 },
+  { level: 2, actions: 214, baseline: 41, score: 19.2, completed: true, attempts: 6 },
+  { level: 3, actions: 192, baseline: 172, score: 0, completed: false, attempts: 5 },
+  { level: 4, actions: 0, baseline: 49, score: 0, completed: false, attempts: 0 },
+  { level: 5, actions: 0, baseline: 53, score: 0, completed: false, attempts: 0 },
+  { level: 6, actions: 0, baseline: 62, score: 0, completed: false, attempts: 0 },
+  { level: 7, actions: 0, baseline: 82, score: 0, completed: false, attempts: 0 },
+];
+
+const iterData = [
+  { iter: 0, level: null, attempt: null, actions: 0, cumActions: 0, mechanics: 0, rules: 0, hazards: 0, delegated: false, desc: "Game start, init" },
+  { iter: 1, level: 1, attempt: 1, actions: 25, cumActions: 25, mechanics: 5, rules: 6, hazards: 2, delegated: true, desc: "L1 attempt 1 -- COMPLETED", completed: true },
+  { iter: 2, level: 2, attempt: 1, actions: 32, cumActions: 57, mechanics: 9, rules: 12, hazards: 2, delegated: true, desc: "L2 attempt 1 -- not completed" },
+  { iter: 3, level: 2, attempt: 2, actions: 40, cumActions: 97, mechanics: 17, rules: 15, hazards: 2, delegated: true, desc: "L2 attempt 2 -- timeout error", error: true },
+  { iter: 4, level: 2, attempt: 3, actions: 30, cumActions: 127, mechanics: 18, rules: 20, hazards: 2, delegated: true, desc: "L2 attempt 3 -- exploration-only", exploration: true },
+  { iter: 5, level: 2, attempt: 4, actions: 50, cumActions: 177, mechanics: 19, rules: 23, hazards: 3, delegated: true, desc: "L2 attempt 4 -- fuel mechanic discovered" },
+  { iter: 6, level: null, attempt: null, actions: 0, cumActions: 177, mechanics: 19, rules: 23, hazards: 3, delegated: false, desc: "Diagnostic -- review knowledge" },
+  { iter: 7, level: 2, attempt: 5, actions: 40, cumActions: 217, mechanics: 20, rules: 10, hazards: 3, delegated: true, desc: "L2 attempt 5 -- map grid first strategy" },
+  { iter: 8, level: 2, attempt: 6, actions: 22, cumActions: 239, mechanics: 24, rules: 13, hazards: 3, delegated: true, desc: "L2 attempt 6 -- BFS pathfinding, COMPLETED", completed: true },
+  { iter: 9, level: 3, attempt: 1, actions: 35, cumActions: 274, mechanics: 26, rules: 20, hazards: 3, delegated: true, desc: "L3 attempt 1 -- finds collectibles" },
+  { iter: 10, level: 3, attempt: 2, actions: 40, cumActions: 314, mechanics: 28, rules: 25, hazards: 3, delegated: true, desc: "L3 attempt 2 -- collects items" },
+  { iter: 11, level: 3, attempt: 3, actions: 50, cumActions: 364, mechanics: 29, rules: 27, hazards: 3, delegated: true, desc: "L3 attempt 3 -- BFS exploration", exploration: true },
+  { iter: 12, level: 3, attempt: 4, actions: 50, cumActions: 414, mechanics: 33, rules: 34, hazards: 3, delegated: true, desc: "L3 attempt 4 -- fuel mechanic details" },
+  { iter: 13, level: 3, attempt: 5, actions: 17, cumActions: 431, mechanics: 39, rules: 40, hazards: 3, delegated: true, desc: "L3 attempt 5 -- GAME_OVER", gameOver: true },
+];
+
+const delegations = [
+  { id: "D1", iter: 1, level: 1, attempt: 1, mgrIters: 2, reactIters: 14, reactActions: 25, synth: false, completed: true,
+    reactObs: ["64x64 grid, 17 components", "Player: 5x5 block (colors 12/9)", "Maze: color-3 corridors, color-4 walls", "Navigated to goal, LEVEL COMPLETED"],
+    childAnswer: "25 actions, completed=true, 5 mechanics" },
+  { id: "D2", iter: 2, level: 2, attempt: 1, mgrIters: 2, reactIters: 15, reactActions: 32, synth: false, completed: false,
+    reactObs: ["Level 2 maze, 13x13 cells", "Player at (32,20)", "Explored extensively, got stuck", "2nd react: early return intercepted"],
+    childAnswer: "32 actions, completed=false, 8 mechanics" },
+  { id: "D3", iter: 3, level: 2, attempt: 2, mgrIters: 2, reactIters: 15, reactActions: 40, synth: true, completed: false,
+    reactObs: ["Retry with prior knowledge", "40 actions, exploring new paths", "Player position found", "Timeout error"],
+    childAnswer: "40 actions, completed=false, 9 mechanics" },
+  { id: "D4", iter: 4, level: 2, attempt: 3, mgrIters: 2, reactIters: 10, reactActions: 30, synth: true, completed: false,
+    reactObs: ["Exploration-only mode", "Maps maze structure", "12x12 cell layout", "Identifies corridors"],
+    childAnswer: "30 actions, completed=false, 8 mechanics" },
+  { id: "D5", iter: 5, level: 2, attempt: 4, mgrIters: 2, reactIters: 10, reactActions: 50, synth: true, completed: false,
+    reactObs: ["Discovers timer/fuel mechanic", "HUD bar tracks remaining moves", "50 actions used", "Color 11 depletions"],
+    childAnswer: "50 actions, completed=false, 8 mechanics" },
+  { id: "D6", iter: 7, level: 2, attempt: 5, mgrIters: 2, reactIters: 12, reactActions: 40, synth: true, completed: false,
+    reactObs: ["Maps grid first strategy", "Finds color-11 collectibles", "Player position tracking", "40 actions, not completed"],
+    childAnswer: "40 actions, completed=false, 10 mechanics" },
+  { id: "D7", iter: 8, level: 2, attempt: 6, mgrIters: 2, reactIters: 11, reactActions: 22, synth: false, completed: true,
+    reactObs: ["EXPLICIT BFS ALGORITHM from orchestrator", "Builds 12x12 ASCII cell map", "Computes BFS path to goal", "Navigates using path, LEVEL COMPLETED in 22 actions"],
+    childAnswer: "22 actions, completed=true, 5 mechanics" },
+  { id: "D8", iter: 9, level: 3, attempt: 1, mgrIters: 2, reactIters: 8, reactActions: 35, synth: false, completed: false,
+    reactObs: ["New level, prior knowledge helps", "Finds collectibles", "35 actions, exploring", "2nd react: early return"],
+    childAnswer: "35 actions, completed=false, 11 mechanics" },
+  { id: "D9", iter: 10, level: 3, attempt: 2, mgrIters: 2, reactIters: 8, reactActions: 40, synth: true, completed: false,
+    reactObs: ["Collects color-11 items", "Navigates to special cells", "40 actions used", "Level not completed"],
+    childAnswer: "40 actions, completed=false, 11 mechanics" },
+  { id: "D10", iter: 11, level: 3, attempt: 3, mgrIters: 2, reactIters: 13, reactActions: 50, synth: true, completed: false,
+    reactObs: ["Exploration-only (escalation)", "BFS: 108 reachable cells", "Paths to all special objects", "50 actions, extensive mapping"],
+    childAnswer: "50 actions, completed=false, 11 mechanics" },
+  { id: "D11", iter: 12, level: 3, attempt: 4, mgrIters: 2, reactIters: 16, reactActions: 50, synth: true, completed: false,
+    reactObs: ["Detailed fuel mechanic analysis", "Color 11 depletes 2px/action", "Maze corridors mapped", "50 actions"],
+    childAnswer: "50 actions, completed=false, 10 mechanics" },
+  { id: "D12", iter: 13, level: 3, attempt: 5, mgrIters: 2, reactIters: 8, reactActions: 17, synth: false, completed: false,
+    reactObs: ["17 actions taken", "Fuel depleted", "GAME_OVER triggered", "Level not completed"],
+    childAnswer: "17 actions, completed=false, GAME_OVER", gameOver: true },
+];
+
+const protocolChecks = [
+  { check: "One delegation per orchestrator iteration?",
+    pass: false,
+    detail: "11 of 14 iterations had exactly one delegation. Iter 0 had none (init). Iter 6 had none (diagnostic pause). This is expected behavior -- the diagnostic pause was a valuable self-reflection that led to the L2 breakthrough." },
+  { check: "Level-manager delegates to react then synthesizer?",
+    pass: true,
+    detail: "Yes, in all 12 delegations. 9 of 12 included a synthesizer after the react agent. 3 skipped the synthesizer when the level was completed or game ended (D1, D7, D12) -- correct behavior per the plugin design (skip synthesis on completion)." },
+  { check: "Escalation protocol (>2 attempts -> exploration-only)?",
+    pass: false,
+    detail: "PARTIALLY. Iter 4 (attempt 3) correctly triggered exploration-only mode. However, iter 5 (attempt 4) violated the protocol -- the orchestrator sent 'MUST complete this time' despite being past the 2-attempt threshold. The __levelAttempts counter was correctly tracking (3, 4, 5, 6) but the orchestrator's reasoning overrode the protocol. For L3, the escalation triggered at attempt 3 (iter 11) correctly." },
+  { check: "Stagnation detection fires?",
+    pass: true,
+    detail: "Stagnation detection was implemented and tracking via __stagnantRuns, but it never fired because every delegation took new game actions. Unlike run-025 where stale state caused 0-action delegations, this run had all react agents taking real actions. __stagnantRuns stayed at 0 throughout." },
+  { check: "All children return results (no timeouts)?",
+    pass: true,
+    detail: "100% child return rate. All 12 level-manager delegations returned JSON results. All 12 react agents returned answers. All 9 synthesizers returned knowledge. This is a major improvement over run-025 (v2.0.0) which had 93% wasted react iterations." },
+  { check: "Knowledge transfer works (child -> parent via return string)?",
+    pass: true,
+    detail: "Yes. Knowledge grew steadily from 5 mechanics after L1 to 39 by the end. The orchestrator correctly parsed child JSON return values, promoted confirmed mechanics (confidence >= 0.8 -> 1.0), and deduplicated rules. Sandbox variable isolation was respected -- no contamination between children." },
+  { check: "Orchestrator never calls arc3.step()?",
+    pass: true,
+    detail: "Correct. The orchestrator only called arc3.start() (iter 0), arc3.observe() (free), and arc3.getScore() (end). All step() calls were made by react agents at depth 2." },
+  { check: "Action budgets respected by react agents?",
+    pass: false,
+    detail: "NOT consistently. React agents regularly exceeded their declared budgets: D2 budgeted 32 but may have taken more. D3 budgeted 40. D5 budgeted 50. The action budget in __level_task was advisory, not enforced. React agents used the budget as a rough guideline." },
+];
+
+// ========== RENDER FUNCTIONS ==========
+
+function renderLevelChart() {
+  const container = document.getElementById('levelChart');
+  const maxVal = Math.max(...levelData.map(d => Math.max(d.actions, d.baseline)));
+
+  levelData.forEach(d => {
+    const group = document.createElement('div');
+    group.className = 'level-bar-group';
+
+    const barContainer = document.createElement('div');
+    barContainer.className = 'level-bar-container';
+
+    const actBar = document.createElement('div');
+    actBar.className = 'level-bar actions';
+    const actH = d.actions > 0 ? Math.max((d.actions / maxVal) * 100, 3) : 0;
+    actBar.style.height = actH + '%';
+    if (d.actions > 0) {
+      const label = document.createElement('div');
+      label.className = 'bar-label';
+      label.textContent = d.actions;
+      actBar.appendChild(label);
+    }
+
+    const baseBar = document.createElement('div');
+    baseBar.className = 'level-bar baseline';
+    const baseH = Math.max((d.baseline / maxVal) * 100, 3);
+    baseBar.style.height = baseH + '%';
+    const baseLabel = document.createElement('div');
+    baseLabel.className = 'bar-label';
+    baseLabel.textContent = d.baseline;
+    baseBar.appendChild(baseLabel);
+
+    barContainer.appendChild(actBar);
+    barContainer.appendChild(baseBar);
+
+    const levelLabel = document.createElement('div');
+    levelLabel.className = 'level-label';
+    levelLabel.textContent = `L${d.level}`;
+    levelLabel.style.color = d.completed ? 'var(--green)' : (d.actions > 0 ? 'var(--orange)' : 'var(--text-muted)');
+
+    const scoreLabel = document.createElement('div');
+    scoreLabel.className = 'level-score';
+    scoreLabel.textContent = d.completed ? `${d.score}%` : (d.actions > 0 ? `${d.score}%` : '--');
+
+    group.appendChild(barContainer);
+    group.appendChild(levelLabel);
+    group.appendChild(scoreLabel);
+    container.appendChild(group);
+  });
+}
+
+function renderActionTimeline() {
+  const container = document.getElementById('actionTimeline');
+  const maxActions = 431;
+
+  iterData.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+
+    const label = document.createElement('div');
+    label.className = 'timeline-label';
+    label.textContent = `Iter ${d.iter}`;
+
+    const barContainer = document.createElement('div');
+    barContainer.className = 'timeline-bar-container';
+
+    if (d.actions > 0) {
+      const prevCum = d.cumActions - d.actions;
+      const seg = document.createElement('div');
+      seg.className = 'timeline-segment';
+      if (d.level === 1) seg.classList.add('l1');
+      else if (d.level === 2) seg.classList.add('l2');
+      else if (d.level === 3) seg.classList.add('l3');
+      else seg.classList.add('diag');
+
+      seg.style.left = (prevCum / maxActions * 100) + '%';
+      seg.style.width = Math.max((d.actions / maxActions * 100), 1.5) + '%';
+      seg.title = `${d.desc}\n${d.actions} actions (cumulative: ${d.cumActions})`;
+      seg.textContent = d.actions;
+      barContainer.appendChild(seg);
+    } else {
+      const seg = document.createElement('div');
+      seg.className = 'timeline-segment diag';
+      const prevCum = d.cumActions;
+      seg.style.left = Math.max((prevCum / maxActions * 100) - 0.5, 0) + '%';
+      seg.style.width = '1%';
+      seg.style.opacity = '0.3';
+      seg.title = d.desc;
+      barContainer.appendChild(seg);
+    }
+
+    row.appendChild(label);
+    row.appendChild(barContainer);
+    container.appendChild(row);
+  });
+}
+
+function renderKnowledgeChart() {
+  const svg = document.getElementById('knowledgeChart');
+  const w = 800, h = 250;
+  const pad = { top: 20, right: 20, bottom: 30, left: 40 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const maxY = 45;
+  const numIters = iterData.length;
+
+  function x(i) { return pad.left + (i / (numIters - 1)) * cw; }
+  function y(v) { return pad.top + ch - (v / maxY) * ch; }
+
+  // Grid lines
+  let gridHtml = '';
+  for (let v = 0; v <= maxY; v += 10) {
+    gridHtml += `<line x1="${pad.left}" y1="${y(v)}" x2="${w - pad.right}" y2="${y(v)}" stroke="var(--border)" stroke-width="0.5"/>`;
+    gridHtml += `<text x="${pad.left - 5}" y="${y(v) + 4}" fill="var(--text-muted)" font-size="10" text-anchor="end">${v}</text>`;
+  }
+
+  // X axis labels
+  iterData.forEach((d, i) => {
+    if (i % 2 === 0 || i === numIters - 1) {
+      gridHtml += `<text x="${x(i)}" y="${h - 5}" fill="var(--text-muted)" font-size="10" text-anchor="middle">${d.iter}</text>`;
+    }
+  });
+
+  // Level completion markers
+  const l1Complete = iterData.findIndex(d => d.completed && d.level === 1);
+  const l2Complete = iterData.findIndex(d => d.completed && d.level === 2);
+  const gameOverIdx = iterData.findIndex(d => d.gameOver);
+
+  if (l1Complete >= 0) {
+    gridHtml += `<line x1="${x(l1Complete)}" y1="${pad.top}" x2="${x(l1Complete)}" y2="${pad.top + ch}" stroke="var(--green)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
+    gridHtml += `<text x="${x(l1Complete)}" y="${pad.top - 5}" fill="var(--green)" font-size="9" text-anchor="middle">L1 done</text>`;
+  }
+  if (l2Complete >= 0) {
+    gridHtml += `<line x1="${x(l2Complete)}" y1="${pad.top}" x2="${x(l2Complete)}" y2="${pad.top + ch}" stroke="var(--green)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
+    gridHtml += `<text x="${x(l2Complete)}" y="${pad.top - 5}" fill="var(--green)" font-size="9" text-anchor="middle">L2 done</text>`;
+  }
+  if (gameOverIdx >= 0) {
+    gridHtml += `<line x1="${x(gameOverIdx)}" y1="${pad.top}" x2="${x(gameOverIdx)}" y2="${pad.top + ch}" stroke="var(--red)" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`;
+    gridHtml += `<text x="${x(gameOverIdx)}" y="${pad.top - 5}" fill="var(--red)" font-size="9" text-anchor="middle">GAME OVER</text>`;
+  }
+
+  // Lines
+  function makePath(data, key, color) {
+    const points = data.map((d, i) => `${x(i)},${y(d[key])}`).join(' ');
+    return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/>`;
+  }
+
+  function makeDots(data, key, color) {
+    return data.map((d, i) => `<circle cx="${x(i)}" cy="${y(d[key])}" r="3" fill="${color}"/>`).join('');
+  }
+
+  const hazardData = iterData.map(d => ({ ...d, hazardsScaled: d.hazards * 5 }));
+
+  gridHtml += makePath(iterData, 'mechanics', 'var(--accent)');
+  gridHtml += makePath(iterData, 'rules', 'var(--green)');
+  gridHtml += makePath(hazardData, 'hazardsScaled', 'var(--orange)');
+  gridHtml += makeDots(iterData, 'mechanics', 'var(--accent)');
+  gridHtml += makeDots(iterData, 'rules', 'var(--green)');
+  gridHtml += makeDots(hazardData, 'hazardsScaled', 'var(--orange)');
+
+  svg.innerHTML = gridHtml;
+}
+
+function renderDelegationTree() {
+  const container = document.getElementById('delegationTree');
+
+  // Iter 0: init
+  container.innerHTML += createTreeNode('orch', 'Iter 0', 'Game Init', 'arc3.start(), initialize __knowledge, __levelAttempts',
+    '<div class="output-line">Game started. State: NOT_FINISHED. Levels: 0</div><div class="output-line">Available actions: 1,2,3,4</div>');
+
+  delegations.forEach(d => {
+    const levelClass = d.level === 1 ? 'l1' : d.level === 2 ? 'l2' : 'l3';
+    const statusBadge = d.completed ? '<span class="tree-badge badge-completed">COMPLETED</span>' :
+                        d.gameOver ? '<span class="tree-badge badge-gameover">GAME OVER</span>' :
+                        '<span class="tree-badge badge-failed">not completed</span>';
+
+    // Orchestrator node
+    let orchBody = `<div class="output-line">Delegating Level ${d.level}, attempt ${d.attempt}</div>`;
+    orchBody += `<div class="output-line">Child returned: ${d.childAnswer}</div>`;
+
+    const orchNode = createTreeNode('orch', `Iter ${d.iter}`, `${d.id}: Level ${d.level} Attempt ${d.attempt}`,
+      `${d.reactActions} actions ${statusBadge}`, orchBody, true);
+
+    // Manager node
+    let mgrBody = `<div class="output-line">Manager: ${d.mgrIters} iterations</div>`;
+    mgrBody += `<div class="output-line">Spawned: 1 react${d.synth ? ' + 1 synthesizer' : ''}</div>`;
+    const mgrNode = createTreeNode('mgr', d.id, `Level Manager`, `${d.mgrIters} iters`, mgrBody);
+
+    // React node
+    let reactBody = d.reactObs.map(o => `<div class="output-line">${o}</div>`).join('');
+    const reactLabel = d.completed ? 'COMPLETED' : (d.gameOver ? 'GAME_OVER' : `${d.reactActions} actions`);
+    const reactNode = createTreeNode('react', '', `React Agent`, `${d.reactIters} iters, ${reactLabel}`, reactBody);
+
+    // Synth node
+    let synthNode = '';
+    if (d.synth) {
+      synthNode = createTreeNode('synth', '', `Synthesizer`, 'knowledge extracted',
+        '<div class="output-line">Analyzed react observations, produced structured knowledge</div>');
+    }
+
+    container.innerHTML += orchNode;
+    // Insert children inside the last orch node
+    const orchNodes = container.querySelectorAll('.tree-node.orch');
+    const lastOrch = orchNodes[orchNodes.length - 1];
+    const orchBodyEl = lastOrch.querySelector('.tree-body');
+    orchBodyEl.innerHTML += mgrNode + reactNode + synthNode;
+  });
+
+  // Add diagnostic iter 6
+  const iter6Html = createTreeNode('orch', 'Iter 6', 'Diagnostic Pause',
+    'No delegation -- knowledge review',
+    '<div class="output-line">Orchestrator reviews all 23 rules and 19 mechanics</div>' +
+    '<div class="output-line">Identifies contradictions in accumulated knowledge</div>' +
+    '<div class="output-line">Leads to refined strategy for L2 attempt 5</div>');
+
+  // Insert iter 6 at the right position
+  const allOrch = container.querySelectorAll('.tree-node.orch');
+  if (allOrch.length > 6) {
+    allOrch[6].parentNode.insertBefore(createNodeFromHTML(iter6Html), allOrch[6]);
+  }
+}
+
+function createNodeFromHTML(html) {
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  return temp.firstElementChild;
+}
+
+function createTreeNode(type, tag, title, meta, body, startOpen) {
+  const openClass = startOpen ? ' open' : '';
+  return `
+    <div class="tree-node ${type}${openClass}">
+      <div class="tree-header" onclick="this.parentElement.classList.toggle('open')">
+        <span class="tree-toggle">&#9654;</span>
+        <span class="tree-badge badge-${type}">${type === 'orch' ? 'ORCH' : type === 'mgr' ? 'MGR' : type === 'react' ? 'REACT' : 'SYNTH'}</span>
+        ${tag ? `<span class="tree-meta">${tag}</span>` : ''}
+        <span class="tree-title">${title}</span>
+        <span class="tree-meta">${meta}</span>
+      </div>
+      <div class="tree-body">${body || ''}</div>
+    </div>`;
+}
+
+function renderDelegationTable() {
+  const tbody = document.getElementById('delegationTableBody');
+  delegations.forEach(d => {
+    const resultClass = d.completed ? 'green' : (d.gameOver ? 'red' : 'orange');
+    const resultText = d.completed ? 'Completed' : (d.gameOver ? 'GAME OVER' : 'Not completed');
+    tbody.innerHTML += `
+      <tr>
+        <td class="mono">${d.id}</td>
+        <td>${d.iter}</td>
+        <td>L${d.level}</td>
+        <td>${d.attempt}</td>
+        <td>${d.mgrIters}</td>
+        <td>${d.reactIters}</td>
+        <td>${d.reactActions}</td>
+        <td>${d.synth ? 'Yes' : 'No'}</td>
+        <td class="${resultClass}">${resultText}</td>
+      </tr>`;
+  });
+}
+
+function renderProtocolFindings() {
+  const container = document.getElementById('protocolFindings');
+  protocolChecks.forEach(p => {
+    const icon = p.pass ? '<span class="green">PASS</span>' : '<span class="orange">PARTIAL</span>';
+    container.innerHTML += `
+      <div class="finding">
+        <div class="finding-title">${icon} &mdash; ${p.check}</div>
+        <div class="finding-body">${p.detail}</div>
+      </div>`;
+  });
+}
+
+// ========== INIT ==========
+renderLevelChart();
+renderActionTimeline();
+renderKnowledgeChart();
+renderDelegationTree();
+renderDelegationTable();
+renderProtocolFindings();
+</script>
+</body>
+</html>

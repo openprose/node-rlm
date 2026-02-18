@@ -1,0 +1,110 @@
+RLM Eval Harness
+================
+
+Benchmark:       arc-compound
+Model:           anthropic/claude-opus-4-6
+Concurrency:     5
+Max Iterations:  100
+Max Depth:       2
+Selected:        0934a4d8, 135a2760, 136b0064
+Trace Actions:   yes (recording action log per task)
+Trace Children:  yes (capturing child agent traces)
+Trace Snapshots: yes (capturing env snapshots per iteration)
+Rate Limit:      5 req/s (burst: 10)
+App:             arc-compound-orchestrator
+
+Resolving model...
+  Using: anthropic/claude-opus-4-6 (openrouter)
+  Rate limit: 5 req/s, burst: 10
+  Model aliases: fast, orchestrator, intelligent
+
+Loading plugins...
+  App: arc-compound-orchestrator
+  Plugin bodies: 10770 chars
+
+Loading tasks...
+  Loaded 1 tasks
+  Sample task: "You are running a compound ARC-AGI-2 learning session with 3 tasks. The orchestrator plugin describe..."
+  Context length: 0 chars
+  Expected: "{"0934a4d8":[[7,7,9],[7,2,9],[7,2,9],[7,7,9],[4,4,7],[4,4,7],[6,6,1],[6,6,6],[1,"
+
+Running evaluation...
+
+[anthropic/claude-opus-4-6 #1] 9659ms, in=19111c, out=2281c, finish=stop
+[anthropic/claude-opus-4-6 #2] 7238ms, in=22764c, out=1784c, finish=stop
+[anthropic/claude-opus-4-6 #1] 3868ms, in=10871c, out=730c, finish=stop
+[anthropic/claude-opus-4-6 #2] 13460ms, in=21566c, out=2658c, finish=stop
+[anthropic/claude-opus-4-6 #3] 14118ms, in=24991c, out=2819c, finish=stop
+[anthropic/claude-opus-4-6 #4] 12765ms, in=27887c, out=2531c, finish=stop
+[anthropic/claude-opus-4-6 #5] 11166ms, in=30573c, out=2507c, finish=stop
+[anthropic/claude-opus-4-6 #6] 18262ms, in=33734c, out=3084c, finish=stop
+[anthropic/claude-opus-4-6 #7] 25308ms, in=38064c, out=2435c, finish=stop
+[anthropic/claude-opus-4-6 #8] 13966ms, in=40572c, out=2672c, finish=stop
+[anthropic/claude-opus-4-6 #9] 10395ms, in=45138c, out=2088c, finish=stop
+[anthropic/claude-opus-4-6 #10] 15753ms, in=49019c, out=2876c, finish=stop
+[anthropic/claude-opus-4-6 #11] 21346ms, in=53191c, out=3443c, finish=stop
+[anthropic/claude-opus-4-6 #12] 15879ms, in=57865c, out=3248c, finish=stop
+[anthropic/claude-opus-4-6 #13] 14903ms, in=61166c, out=3151c, finish=stop
+[anthropic/claude-opus-4-6 #14] 22371ms, in=67330c, out=3705c, finish=stop
+[anthropic/claude-opus-4-6 #15] 14995ms, in=73290c, out=2230c, finish=stop
+[anthropic/claude-opus-4-6 #16] 20260ms, in=77643c, out=3758c, finish=stop
+[anthropic/claude-opus-4-6 #17] 21925ms, in=81642c, out=3649c, finish=stop
+[anthropic/claude-opus-4-6 #18] 16456ms, in=86218c, out=2492c, finish=stop
+[google/gemini-3-flash-preview #1] 6643ms, in=13272c, out=3628c, finish=stop
+[google/gemini-3-flash-preview #2] 5168ms, in=17596c, out=2553c, finish=stop
+[anthropic/claude-opus-4-6 #3] 6707ms, in=24792c, out=1766c, finish=stop
+[anthropic/claude-opus-4-6 #19] 3887ms, in=10871c, out=730c, finish=stop
+[anthropic/claude-opus-4-6 #20] 12801ms, in=15920c, out=2099c, finish=stop
+[anthropic/claude-opus-4-6 #21] 15584ms, in=18999c, out=1778c, finish=stop
+[anthropic/claude-opus-4-6 #22] 22748ms, in=21054c, out=3228c, finish=stop
+[anthropic/claude-opus-4-6 #23] 13920ms, in=24393c, out=1736c, finish=stop
+[anthropic/claude-opus-4-6 #24] 6320ms, in=26945c, out=772c, finish=stop
+[anthropic/claude-opus-4-6 #25] 19380ms, in=29209c, out=3308c, finish=stop
+[anthropic/claude-opus-4-6 #26] 4076ms, in=32686c, out=688c, finish=stop
+[anthropic/claude-opus-4-6 #27] 10021ms, in=33587c, out=2336c, finish=stop
+[anthropic/claude-opus-4-6 #28] 22749ms, in=36143c, out=3770c, finish=stop
+[anthropic/claude-opus-4-6 #29] 28862ms, in=40368c, out=3836c, finish=stop
+[anthropic/claude-opus-4-6 #30] 20438ms, in=44470c, out=4161c, finish=stop
+[anthropic/claude-opus-4-6 #31] 18127ms, in=49016c, out=4495c, finish=stop
+[anthropic/claude-opus-4-6 #32] 17521ms, in=54569c, out=2282c, finish=stop
+[anthropic/claude-opus-4-6 #33] 23086ms, in=57550c, out=5137c, finish=stop
+[anthropic/claude-opus-4-6 #34] 11462ms, in=62778c, out=1725c, finish=stop
+[google/gemini-3-flash-preview #3] 5449ms, in=13272c, out=2923c, finish=stop
+[google/gemini-3-flash-preview #4] 6931ms, in=16936c, out=3664c, finish=stop
+[anthropic/claude-opus-4-6 #4] 5350ms, in=26783c, out=1773c, finish=stop
+[anthropic/claude-opus-4-6 #35] 4188ms, in=10871c, out=730c, finish=stop
+[anthropic/claude-opus-4-6 #36] 14726ms, in=14196c, out=2433c, finish=stop
+[anthropic/claude-opus-4-6 #37] 15894ms, in=18179c, out=2944c, finish=stop
+[anthropic/claude-opus-4-6 #38] 17357ms, in=22161c, out=2995c, finish=stop
+[anthropic/claude-opus-4-6 #39] 27164ms, in=27267c, out=3301c, finish=stop
+[anthropic/claude-opus-4-6 #40] 25062ms, in=31094c, out=3336c, finish=stop
+[anthropic/claude-opus-4-6 #41] 18247ms, in=34541c, out=3215c, finish=stop
+[anthropic/claude-opus-4-6 #42] 27938ms, in=39104c, out=3344c, finish=stop
+[anthropic/claude-opus-4-6 #43] 30570ms, in=42696c, out=3483c, finish=stop
+[anthropic/claude-opus-4-6 #44] 19467ms, in=46301c, out=3326c, finish=stop
+[anthropic/claude-opus-4-6 #45] 28613ms, in=50568c, out=2903c, finish=stop
+[anthropic/claude-opus-4-6 #46] 33837ms, in=53704c, out=3809c, finish=stop
+[anthropic/claude-opus-4-6 #47] 23520ms, in=57726c, out=2725c, finish=stop
+[anthropic/claude-opus-4-6 #48] 26836ms, in=61112c, out=4856c, finish=stop
+[anthropic/claude-opus-4-6 #49] 8632ms, in=66084c, out=1018c, finish=stop
+[google/gemini-3-flash-preview #5] 6583ms, in=13272c, out=3407c, finish=stop
+[google/gemini-3-flash-preview #6] 5530ms, in=17523c, out=2655c, finish=stop
+[anthropic/claude-opus-4-6 #5] 6728ms, in=28780c, out=919c, finish=stop
+[anthropic/claude-opus-4-6 #6] 10869ms, in=30005c, out=1979c, finish=stop
+[anthropic/claude-opus-4-6 #50] 53490ms, in=11082c, out=9707c, finish=length
+[anthropic/claude-opus-4-6 #51] 29070ms, in=127699c, out=6003c, finish=stop
+[anthropic/claude-opus-4-6 #7] 12071ms, in=32575c, out=1888c, finish=stop
+[anthropic/claude-opus-4-6 #52] 39855ms, in=11145c, out=11379c, finish=length
+[anthropic/claude-opus-4-6 #53] 67899ms, in=40869c, out=10962c, finish=length
+[anthropic/claude-opus-4-6 #54] 59130ms, in=57013c, out=11105c, finish=length
+[anthropic/claude-opus-4-6 #55] 37325ms, in=68604c, out=11738c, finish=length
+[anthropic/claude-opus-4-6 #56] 43220ms, in=80878c, out=11045c, finish=length
+[anthropic/claude-opus-4-6 #57] 47078ms, in=94089c, out=8975c, finish=stop
+[anthropic/claude-opus-4-6 #58] 38028ms, in=103763c, out=8815c, finish=stop
+[anthropic/claude-opus-4-6 #59] 24531ms, in=113537c, out=6270c, finish=stop
+[anthropic/claude-opus-4-6 #60] 13673ms, in=119898c, out=1772c, finish=stop
+[anthropic/claude-opus-4-6 #8] 9971ms, in=34701c, out=2280c, finish=stop
+[anthropic/claude-opus-4-6 #61] 48394ms, in=11133c, out=11147c, finish=length
+[anthropic/claude-opus-4-6 #62] 46435ms, in=109748c, out=10639c, finish=length
+[anthropic/claude-opus-4-6 #63] 61358ms, in=131228c, out=11195c, finish=length
+[anthropic/claude-opus-4-6 #64] 48891ms, in=148293c, out=9738c, finish=length

@@ -386,7 +386,16 @@ function loadPartialResults(
 }
 
 function saveResults(filePath: string, result: BenchmarkResult): void {
-	writeFileSync(filePath, JSON.stringify(result, null, 2));
+	// Use a cycle-breaking replacer — child traces can share references
+	const seen = new WeakSet();
+	const json = JSON.stringify(result, (_key, value) => {
+		if (typeof value === "object" && value !== null) {
+			if (seen.has(value)) return "[circular]";
+			seen.add(value);
+		}
+		return value;
+	}, 2);
+	writeFileSync(filePath, json);
 }
 
 function mean(arr: number[]): number {

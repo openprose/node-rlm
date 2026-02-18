@@ -49,6 +49,18 @@ npx tsx eval/run.ts --benchmark arc3 --model anthropic/claude-opus-4-6 \
 npx tsx eval/run.ts --benchmark arc3 --model anthropic/claude-opus-4-6 \
   --game "ls20,ft09" --max-iterations 25 --concurrency 3 --app arc3-player
 
+# ARC-AGI-2 compound learning (all tasks in one session)
+# Download ARC data first, then:
+npx tsx eval/run.ts --benchmark arc-compound --model anthropic/claude-opus-4-6 \
+  --app arc-compound-orchestrator \
+  --max-iterations 100 --max-depth 2 --trace-full
+
+# ARC compound: start small (3 tasks, full trace)
+npx tsx eval/run.ts --benchmark arc-compound --model anthropic/claude-opus-4-6 \
+  --app arc-compound-orchestrator \
+  --selected-problems "0934a4d8,135a2760,136b0064" \
+  --max-iterations 100 --max-depth 2 --trace-full
+
 # With options
 npx tsx eval/run.ts --benchmark s-niah --model anthropic/claude-sonnet-4-20250514 \
   --concurrency 10 --max-iterations 10 --max-depth 3 --tasks-per-length 4
@@ -148,7 +160,7 @@ The analyzer reports:
 | `run.ts` | CLI entry point, model resolution, argument parsing |
 | `harness.ts` | Core eval runner with concurrency, resumability, incremental saves |
 | `analyze.ts` | Post-hoc trace analysis |
-| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice`, `arcGridMatch`, `arc3Score` |
+| `scoring.ts` | Scoring functions: `exactMatch`, `oolongScore`, `f1Score`, `multipleChoice`, `arcGridMatch`, `arc3Score`, `arcCompoundScore` |
 | `types.ts` | Shared types: `EvalTask`, `EvalResult`, `BenchmarkResult` |
 | `download.ts` | Downloads OOLONG and ARC data from GitHub Releases |
 | `datasets/s-niah.ts` | Synthetic needle-in-haystack task generator |
@@ -156,6 +168,7 @@ The analyzer reports:
 | `datasets/arc.ts` | ARC-AGI-2 dataset loader |
 | `datasets/arc3.ts` | ARC-AGI-3 task loader (API-based) |
 | `arc3-client.ts` | ARC-AGI-3 REST API client |
+| `arc-compound-global-docs.md` | ARC-AGI-2 compound sandbox API docs (injected at all depths) |
 | `drivers/openrouter.ts` | OpenRouter `CallLLM` driver |
 | `data/` | Downloaded datasets (gitignored) |
 | `results/` | Benchmark result JSON files (gitignored) |

@@ -30,10 +30,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fromOpenRouter } from "./drivers/openrouter.js";
 import { runEval } from "./harness.js";
-import { oolongScore, exactMatch, arcGridMatch, arc3Score } from "./scoring.js";
+import { oolongScore, exactMatch, arcGridMatch, arc3Score, arcCompoundScore, gridsEqual } from "./scoring.js";
 import { loadOolongTasks } from "./datasets/oolong.js";
 import { generateSNIAHTasks } from "./datasets/s-niah.js";
-import { loadArcTasks } from "./datasets/arc.js";
+import { loadArcTasks, loadArcCompoundBundle } from "./datasets/arc.js";
 import { loadArc3Tasks } from "./datasets/arc3.js";
 import { Arc3Client } from "./arc3-client.js";
 import { loadStack, loadPlugins } from "../src/plugins.js";
@@ -103,6 +103,7 @@ Benchmarks:
   s-niah          Single Needle in a Haystack (synthetic, ~48 tasks)
   arc             ARC-AGI-2 abstract reasoning (120 tasks)
   arc3            ARC-AGI-3 interactive games (API-based)
+  arc-compound    ARC-AGI-2 compound learning (all tasks in one session)
 
 Options:
   --benchmark <name>       Benchmark to run (required)
@@ -423,9 +424,118 @@ function getBenchmarkConfig(args: CliArgs): BenchmarkConfig {
 			};
 		}
 
+		case "arc-compound": {
+			// Data loaded lazily in loadTasks, shared with setupSandbox via closure
+			let loadedChallenges: Record<string, { train: Array<{ input: number[][]; output: number[][] }>; test: Array<{ input: number[][] }> }>;
+			let loadedTaskIds: string[];
+			// Expected answers keyed by taskId (single grid or array of grids)
+			let expectedMap: Record<string, unknown>;
+
+			// Submission state — hoisted so both setupSandbox and getResultMetadata can access
+			const submissionCounts = new Map<string, number>();
+			const correctTasks = new Set<string>();
+			const submissionLog: Array<{ taskId: string; attempt: number; correct: boolean; remaining: number; timestampMs: number }> = [];
+			const MAX_SUBMISSIONS = 2;
+
+			// Child app bodies — loaded in loadTasks, consumed by harness for delegation
+			let loadedChildApps: Record<string, string>;
+
+			// Load globalDocs from markdown file (following arc3 pattern)
+			const compoundDocsPath = join(
+				new URL(".", import.meta.url).pathname,
+				"arc-compound-global-docs.md",
+			);
+			const compoundGlobalDocs = readFileSync(compoundDocsPath, "utf-8");
+
+			const config: BenchmarkConfig = {
+				loadTasks: async () => {
+					const { metaTask, challenges } = await loadArcCompoundBundle(
+						args.maxTasks,
+						args.selectedProblems.length > 0 ? args.selectedProblems : undefined,
+					);
+					loadedChallenges = challenges;
+					loadedTaskIds = metaTask.metadata!.taskIds as string[];
+					// Parse expectedMap from the metaTask for use in submission scoring
+					expectedMap = JSON.parse(metaTask.expected as string);
+
+					// Load child app plugins for orchestrator delegation
+					const childAppNames = ["arc-compound-solver", "arc-compound-synthesizer"];
+					loadedChildApps = {};
+					for (const name of childAppNames) {
+						loadedChildApps[name] = await loadPlugins([name], "apps");
+					}
+					config.childApps = loadedChildApps;
+
+					return [metaTask];
+				},
+				scoringFn: arcCompoundScore,
+				globalDocs: compoundGlobalDocs,
+				setupSandbox: () => {
+					const tasks: Record<string, object> = {};
+					for (const id of loadedTaskIds) {
+						tasks[id] = {
+							train: loadedChallenges[id].train,
+							test: loadedChallenges[id].test,
+						};
+					}
+
+					const submitter = {
+						submit(taskId: string, answer: unknown): { correct: boolean; remaining: number } {
+							const used = submissionCounts.get(taskId) ?? 0;
+							if (used >= MAX_SUBMISSIONS) {
+								submissionLog.push({ taskId, attempt: used + 1, correct: false, remaining: 0, timestampMs: Date.now() });
+								return { correct: false, remaining: 0 };
+							}
+							submissionCounts.set(taskId, used + 1);
+							const remaining = MAX_SUBMISSIONS - used - 1;
+
+							const expected = expectedMap[taskId];
+							if (expected === undefined) {
+								submissionLog.push({ taskId, attempt: used + 1, correct: false, remaining, timestampMs: Date.now() });
+								return { correct: false, remaining };
+							}
+
+							const correct = gridsEqual(answer, expected);
+							if (correct) correctTasks.add(taskId);
+							submissionLog.push({ taskId, attempt: used + 1, correct, remaining, timestampMs: Date.now() });
+							return { correct, remaining };
+						},
+						remaining(taskId: string): number {
+							return MAX_SUBMISSIONS - (submissionCounts.get(taskId) ?? 0);
+						},
+						getResults(): Record<string, boolean> {
+							const results: Record<string, boolean> = {};
+							for (const id of loadedTaskIds) {
+								results[id] = correctTasks.has(id);
+							}
+							return results;
+						},
+					};
+
+					return {
+						__arcTasks: tasks,
+						__arcTaskIds: loadedTaskIds,
+						__arcLibrary: { primitives: {}, strategies: [], antiPatterns: [], taskLog: [] },
+						__arcCurrentTask: null,
+						__arcSubmit: submitter,
+					};
+				},
+				getResultMetadata: () => {
+					return {
+						totalTasks: loadedTaskIds.length,
+						tasksAttempted: submissionCounts.size,
+						totalCorrect: correctTasks.size,
+						totalSubmissions: submissionLog.length,
+						submissionLog,
+					};
+				},
+			};
+			return config;
+		}
+
 		default:
 			console.error(`Unknown benchmark: ${args.benchmark}`);
-			console.error("Available benchmarks: oolong, s-niah, arc, arc3");
+			console.error("Available benchmarks: oolong, s-niah, arc, arc3, arc-compound");
 			process.exit(1);
 	}
 }

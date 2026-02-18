@@ -1,0 +1,160 @@
+RLM Eval Harness
+================
+
+Benchmark:       arc-compound
+Model:           anthropic/claude-opus-4-6
+Concurrency:     5
+Max Iterations:  100
+Max Depth:       2
+Selected:        0934a4d8, 135a2760, 136b0064
+Trace Actions:   yes (recording action log per task)
+Trace Children:  yes (capturing child agent traces)
+Trace Snapshots: yes (capturing env snapshots per iteration)
+Rate Limit:      5 req/s (burst: 10)
+App:             arc-compound-orchestrator
+
+Resolving model...
+  Using: anthropic/claude-opus-4-6 (openrouter)
+  Rate limit: 5 req/s, burst: 10
+  Model aliases: fast, orchestrator, intelligent
+
+Loading plugins...
+  App: arc-compound-orchestrator
+  Plugin bodies: 10770 chars
+
+Loading tasks...
+  Loaded 1 tasks
+  Sample task: "You are running a compound ARC-AGI-2 learning session with 3 tasks. The orchestrator plugin describe..."
+  Context length: 0 chars
+  Expected: "{"0934a4d8":[[7,7,9],[7,2,9],[7,2,9],[7,7,9],[4,4,7],[4,4,7],[6,6,1],[6,6,6],[1,"
+
+Running evaluation...
+
+[anthropic/claude-opus-4-6 #1] 9063ms, in=19027c, out=2263c, finish=stop
+[anthropic/claude-opus-4-6 #2] 6881ms, in=22686c, out=1815c, finish=stop
+[anthropic/claude-opus-4-6 #3] 4222ms, in=11681c, out=730c, finish=stop
+[anthropic/claude-opus-4-6 #4] 7471ms, in=22376c, out=1088c, finish=stop
+[anthropic/claude-opus-4-6 #5] 14058ms, in=23846c, out=2526c, finish=stop
+[anthropic/claude-opus-4-6 #6] 8382ms, in=27266c, out=1402c, finish=stop
+[anthropic/claude-opus-4-6 #7] 9699ms, in=29137c, out=1769c, finish=stop
+[anthropic/claude-opus-4-6 #8] 10421ms, in=30959c, out=2163c, finish=stop
+[anthropic/claude-opus-4-6 #9] 10451ms, in=33624c, out=1852c, finish=stop
+[anthropic/claude-opus-4-6 #10] 11242ms, in=35764c, out=2400c, finish=stop
+[anthropic/claude-opus-4-6 #11] 14158ms, in=38467c, out=2302c, finish=stop
+[anthropic/claude-opus-4-6 #12] 11432ms, in=42365c, out=1427c, finish=stop
+[anthropic/claude-opus-4-6 #13] 21779ms, in=45733c, out=2926c, finish=stop
+[anthropic/claude-opus-4-6 #14] 10774ms, in=49313c, out=1713c, finish=stop
+[anthropic/claude-opus-4-6 #15] 11547ms, in=51298c, out=1655c, finish=stop
+[anthropic/claude-opus-4-6 #16] 13584ms, in=53286c, out=2088c, finish=stop
+[anthropic/claude-opus-4-6 #17] 14957ms, in=57220c, out=2947c, finish=stop
+[anthropic/claude-opus-4-6 #18] 15846ms, in=60376c, out=2749c, finish=stop
+[anthropic/claude-opus-4-6 #19] 29772ms, in=64246c, out=4334c, finish=stop
+[anthropic/claude-opus-4-6 #20] 28897ms, in=68992c, out=3544c, finish=stop
+[anthropic/claude-opus-4-6 #21] 5740ms, in=13189c, out=1048c, finish=stop
+[anthropic/claude-opus-4-6 #22] 16641ms, in=15593c, out=3588c, finish=stop
+[anthropic/claude-opus-4-6 #23] 11447ms, in=19428c, out=2623c, finish=stop
+[anthropic/claude-opus-4-6 #24] 16392ms, in=22704c, out=3785c, finish=stop
+[anthropic/claude-opus-4-6 #25] 14562ms, in=26919c, out=3316c, finish=stop
+[anthropic/claude-opus-4-6 #26] 4222ms, in=30747c, out=609c, finish=stop
+[anthropic/claude-opus-4-6 #27] 5747ms, in=24734c, out=1839c, finish=stop
+[anthropic/claude-opus-4-6 #28] 4359ms, in=11681c, out=853c, finish=stop
+[anthropic/claude-opus-4-6 #29] 17456ms, in=16867c, out=2853c, finish=stop
+[anthropic/claude-opus-4-6 #30] 15248ms, in=20562c, out=2216c, finish=stop
+[anthropic/claude-opus-4-6 #31] 8807ms, in=23111c, out=1166c, finish=stop
+[anthropic/claude-opus-4-6 #32] 12132ms, in=25523c, out=1818c, finish=stop
+[anthropic/claude-opus-4-6 #33] 10390ms, in=27946c, out=2281c, finish=stop
+[anthropic/claude-opus-4-6 #34] 26627ms, in=30796c, out=3549c, finish=stop
+[anthropic/claude-opus-4-6 #35] 24553ms, in=34747c, out=5176c, finish=stop
+[anthropic/claude-opus-4-6 #36] 21767ms, in=40302c, out=3644c, finish=stop
+[anthropic/claude-opus-4-6 #37] 29878ms, in=44315c, out=3653c, finish=stop
+[anthropic/claude-opus-4-6 #38] 28458ms, in=48192c, out=3221c, finish=stop
+[anthropic/claude-opus-4-6 #39] 25621ms, in=52150c, out=5427c, finish=stop
+[anthropic/claude-opus-4-6 #40] 15957ms, in=57812c, out=2283c, finish=stop
+[anthropic/claude-opus-4-6 #41] 29242ms, in=60511c, out=6162c, finish=stop
+[anthropic/claude-opus-4-6 #42] 5705ms, in=66764c, out=653c, finish=stop
+[anthropic/claude-opus-4-6 #43] 21670ms, in=69200c, out=2824c, finish=stop
+[anthropic/claude-opus-4-6 #44] 30288ms, in=73908c, out=5366c, finish=stop
+[anthropic/claude-opus-4-6 #45] 26082ms, in=79551c, out=4111c, finish=stop
+[anthropic/claude-opus-4-6 #46] 5138ms, in=13189c, out=1077c, finish=stop
+[anthropic/claude-opus-4-6 #47] 9800ms, in=17308c, out=1817c, finish=stop
+[anthropic/claude-opus-4-6 #48] 11539ms, in=20138c, out=2208c, finish=stop
+[anthropic/claude-opus-4-6 #49] 8537ms, in=22903c, out=1607c, finish=stop
+[anthropic/claude-opus-4-6 #50] 18074ms, in=26723c, out=3057c, finish=stop
+[anthropic/claude-opus-4-6 #51] 5055ms, in=30046c, out=768c, finish=stop
+[anthropic/claude-opus-4-6 #52] 5727ms, in=26804c, out=1852c, finish=stop
+[anthropic/claude-opus-4-6 #53] 4662ms, in=11681c, out=730c, finish=stop
+[anthropic/claude-opus-4-6 #54] 13773ms, in=15006c, out=2769c, finish=stop
+[anthropic/claude-opus-4-6 #55] 5471ms, in=18885c, out=706c, finish=stop
+[anthropic/claude-opus-4-6 #56] 16629ms, in=20857c, out=2914c, finish=stop
+[anthropic/claude-opus-4-6 #57] 18398ms, in=24822c, out=3174c, finish=stop
+[anthropic/claude-opus-4-6 #58] 14629ms, in=29165c, out=2321c, finish=stop
+[anthropic/claude-opus-4-6 #59] 27340ms, in=32573c, out=3477c, finish=stop
+[anthropic/claude-opus-4-6 #60] 24509ms, in=36660c, out=3842c, finish=stop
+[anthropic/claude-opus-4-6 #61] 29262ms, in=41160c, out=3433c, finish=stop
+[anthropic/claude-opus-4-6 #62] 22490ms, in=44882c, out=3966c, finish=stop
+[anthropic/claude-opus-4-6 #63] 32641ms, in=49228c, out=4772c, finish=stop
+[anthropic/claude-opus-4-6 #64] 32373ms, in=54540c, out=3835c, finish=stop
+[anthropic/claude-opus-4-6 #65] 32772ms, in=58879c, out=5427c, finish=stop
+[anthropic/claude-opus-4-6 #66] 12612ms, in=64742c, out=1624c, finish=stop
+[anthropic/claude-opus-4-6 #67] 7223ms, in=13189c, out=1247c, finish=stop
+[anthropic/claude-opus-4-6 #68] 10464ms, in=19131c, out=1813c, finish=stop
+[anthropic/claude-opus-4-6 #69] 9771ms, in=21331c, out=1651c, finish=stop
+[anthropic/claude-opus-4-6 #70] 8910ms, in=24104c, out=1464c, finish=stop
+[anthropic/claude-opus-4-6 #71] 7045ms, in=26337c, out=957c, finish=stop
+[anthropic/claude-opus-4-6 #72] 7758ms, in=28887c, out=1221c, finish=stop
+[anthropic/claude-opus-4-6 #73] 7900ms, in=30415c, out=1362c, finish=stop
+[anthropic/claude-opus-4-6 #74] 4372ms, in=32324c, out=668c, finish=stop
+[anthropic/claude-opus-4-6 #75] 13698ms, in=37019c, out=2583c, finish=stop
+[anthropic/claude-opus-4-6 #76] 91569ms, in=12510c, out=20987c, finish=length
+[anthropic/claude-opus-4-6 #77] 92226ms, in=42876c, out=19013c, finish=stop
+[anthropic/claude-opus-4-6 #78] 8618ms, in=39793c, out=1465c, finish=stop
+[anthropic/claude-opus-4-6 #79] 12403ms, in=43449c, out=2767c, finish=stop
+[anthropic/claude-opus-4-6 #80] 83813ms, in=13006c, out=20752c, finish=length
+[anthropic/claude-opus-4-6 #81] 105122ms, in=41213c, out=20219c, finish=length
+[anthropic/claude-opus-4-6 #82] 100834ms, in=63877c, out=18507c, finish=length
+[anthropic/claude-opus-4-6 #83] 78848ms, in=84773c, out=13768c, finish=stop
+[anthropic/claude-opus-4-6 #84] 45070ms, in=99289c, out=10191c, finish=stop
+[anthropic/claude-opus-4-6 #85] 41275ms, in=109978c, out=6863c, finish=stop
+[anthropic/claude-opus-4-6 #86] 36283ms, in=117219c, out=5942c, finish=stop
+[anthropic/claude-opus-4-6 #87] 36851ms, in=124041c, out=5089c, finish=stop
+[anthropic/claude-opus-4-6 #88] 23528ms, in=129466c, out=5103c, finish=stop
+[anthropic/claude-opus-4-6 #89] 45486ms, in=136392c, out=7881c, finish=stop
+[anthropic/claude-opus-4-6 #90] 5697ms, in=46410c, out=702c, finish=stop
+  [1/1] (100%) arc-compound: score=0.33, 11 iters, 32m 10s    
+
+Completed in 32m 10s
+
+============================================================
+  EVALUATION RESULTS
+============================================================
+
+  Benchmark:     arc-compound
+  Model:         anthropic/claude-opus-4-6
+  Config:        maxIter=100, maxDepth=2, concurrency=5
+  Timestamp:     2026-02-16T21:03:13.850Z
+
+  --- Scores ---
+  Mean:          33.3%
+  Median:        33.3%
+  Std Dev:       0.0%
+  P25:           33.3%
+  P75:           33.3%
+
+  --- Efficiency ---
+  Mean Iters:    11.0
+  Median Iters:  11.0
+  Mean Time:     32m 10s
+  Total Time:    32m 10s
+
+  --- Cost Estimate ---
+  Input Chars:   3,722,134 (~930,534 tokens)
+  Output Chars:  345,348 (~86,337 tokens)
+  Est. Cost:     $4.09 (at Sonnet 4.5 pricing)
+
+  --- Tasks ---
+  Completed:     1
+  Failed:        0
+  Total:         1
+
+============================================================
+Results saved to: /Users/sl/code/trinity/node-rlm/eval/results/

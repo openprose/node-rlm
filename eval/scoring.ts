@@ -267,7 +267,7 @@ function parseArcGrid(text: string): unknown | null {
 /**
  * Deep equality check for grids (2D or 3D arrays of numbers).
  */
-function gridsEqual(a: unknown, b: unknown): boolean {
+export function gridsEqual(a: unknown, b: unknown): boolean {
 	if (Array.isArray(a) && Array.isArray(b)) {
 		if (a.length !== b.length) return false;
 		return a.every((item, i) => gridsEqual(item, b[i]));
@@ -293,6 +293,52 @@ export function arc3Score(predicted: string, _expected: string | string[]): numb
 			return Math.min(1, Math.max(0, data.score / 100));
 		}
 		return 0;
+	} catch {
+		return 0;
+	}
+}
+
+/**
+ * ARC-AGI-2 compound scoring. Parses the submission results returned by
+ * __arcSubmit.getResults() -- a map of { taskId: boolean } indicating
+ * which tasks were solved correctly.
+ *
+ * Falls back to grid comparison if the predicted value contains grids
+ * instead of booleans (for backwards compatibility).
+ *
+ * Used for: ARC-AGI-2 compound learning.
+ */
+export function arcCompoundScore(predicted: string, expected: string | string[]): number {
+	const expectedStr = Array.isArray(expected) ? expected[0] : expected;
+
+	try {
+		const predMap = JSON.parse(predicted);
+		const expMap = JSON.parse(expectedStr);
+
+		if (typeof predMap !== "object" || predMap === null) return 0;
+		if (typeof expMap !== "object" || expMap === null) return 0;
+
+		const taskIds = Object.keys(expMap);
+		if (taskIds.length === 0) return 0;
+
+		let totalScore = 0;
+		for (const taskId of taskIds) {
+			const predValue = predMap[taskId];
+
+			if (predValue === undefined || predValue === null) {
+				continue;
+			}
+
+			// Submission results format: { taskId: boolean }
+			if (typeof predValue === "boolean") {
+				totalScore += predValue ? 1 : 0;
+			} else {
+				// Fallback: grid comparison (legacy format)
+				totalScore += gridsEqual(predValue, expMap[taskId]) ? 1 : 0;
+			}
+		}
+
+		return totalScore / taskIds.length;
 	} catch {
 		return 0;
 	}
