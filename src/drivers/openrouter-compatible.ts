@@ -9,6 +9,7 @@
  */
 
 import type { CallLLM } from "../rlm.js";
+import { fromAnthropicMessages } from "./anthropic-messages.js";
 
 interface ChatMessage {
 	role: string;
@@ -332,6 +333,17 @@ export function fromProviderModel(
 				`You must pass both options.baseUrl and options.apiKey.`,
 			);
 		}
+	}
+
+	// Route anthropic/* models on OpenRouter to the Anthropic Messages driver
+	// for tool-call-based REPL execution (enforces one code block per turn).
+	if (provider === "openrouter" && model.startsWith("anthropic/")) {
+		return fromAnthropicMessages({
+			baseUrl,
+			apiKey,
+			model,
+			timeoutMs: options?.timeoutMs,
+		});
 	}
 
 	return fromOpenRouterCompatible({

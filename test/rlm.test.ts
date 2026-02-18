@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { type CallLLM, rlm } from "../src/rlm.js";
+import { type CallLLM, type CallLLMResponse, rlm } from "../src/rlm.js";
 
 function mockCallLLM(responses: string[]): CallLLM {
+	let callIndex = 0;
+	return async (_messages, _systemPrompt) => {
+		if (callIndex >= responses.length) {
+			throw new Error(`Unexpected call #${callIndex + 1}, only ${responses.length} responses defined`);
+		}
+		return responses[callIndex++];
+	};
+}
+
+function mockToolCallLLM(responses: CallLLMResponse[]): CallLLM {
 	let callIndex = 0;
 	return async (_messages, _systemPrompt) => {
 		if (callIndex >= responses.length) {
@@ -868,6 +878,165 @@ describe("rlm", () => {
 			expect(snap.myApi).toBeUndefined();
 			expect(snap.console).toBeUndefined();
 			expect(snap.rlm).toBeUndefined();
+		});
+	});
+
+	describe("tool-call (CallLLMResponse) path", () => {
+		it("simple return: code from tool call executes correctly", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Let me return hello.", code: 'return "hello"', toolUseId: "t1" },
+				{ reasoning: "Verified.", code: 'return "hello"', toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("hello");
+			expect(result.iterations).toBe(2);
+		});
+
+		it("multi-iteration: tool call code across turns", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Thinking...", code: 'console.log("step 1")', toolUseId: "t1" },
+				{ reasoning: "Done.", code: 'return "done"', toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("done");
+			expect(result.iterations).toBe(2);
+		});
+
+		it("null code: no-code tool response triggers warning", async () => {
+			let secondCallMessages: Array<{ role: string; content: string }> | undefined;
+			let callIndex = 0;
+			const callLLM: CallLLM = async (messages, _systemPrompt) => {
+				callIndex++;
+				if (callIndex === 1) {
+					return { reasoning: "Let me think about this.", code: null, toolUseId: "t1" };
+				}
+				secondCallMessages = [...messages];
+				return { reasoning: "Now returning.", code: 'return "done"', toolUseId: "t2" };
+			};
+
+			await rlm("test query", undefined, { callLLM });
+
+			expect(secondCallMessages).toBeDefined();
+			const lastMsg = secondCallMessages![secondCallMessages!.length - 1];
+			expect(lastMsg.content).toContain("[WARNING] No code was executed");
+		});
+
+		it("trace reasoning: tool-call reasoning stored in trace", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "I will compute the answer.", code: 'console.log("computing")', toolUseId: "t1" },
+				{ reasoning: "The answer is 42.", code: 'return 42', toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.trace).toHaveLength(2);
+			expect(result.trace[0].reasoning).toBe("I will compute the answer.");
+			expect(result.trace[0].code).toEqual(['console.log("computing")']);
+			expect(result.trace[0].output).toBe("computing");
+			expect(result.trace[1].reasoning).toBe("The answer is 42.");
+		});
+
+		it("error recovery: tool-call code throws, next turn recovers", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Try this.", code: 'throw new Error("oops")', toolUseId: "t1" },
+				{ reasoning: "Fix it.", code: 'return "recovered"', toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("recovered");
+			expect(result.trace[0].error).toContain("oops");
+		});
+
+		it("variable persistence across tool-call iterations", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Set x.", code: "x = 42", toolUseId: "t1" },
+				{ reasoning: "Read x.", code: "return x", toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("42");
+		});
+
+		it("context accessible in tool-call code", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Get context.", code: "return context", toolUseId: "t1" },
+				{ reasoning: "Verified.", code: "return context", toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", "my context", { callLLM });
+			expect(result.answer).toBe("my context");
+		});
+
+		it("return() detection works with tool-call responses", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "First pass.", code: 'return "first"', toolUseId: "t1" },
+				// Early return intercepted; second call should also return
+				{ reasoning: "Verified.", code: 'return "first"', toolUseId: "t2" },
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("first");
+			expect(result.iterations).toBe(2);
+		});
+
+		it("delegation works with tool-call responses", async () => {
+			const callLLM: CallLLM = async (messages, _systemPrompt) => {
+				const userMsg = messages[0]?.content || "";
+				if (userMsg === "child query") {
+					return { reasoning: "Child responding.", code: 'return "child answer"', toolUseId: "tc" };
+				}
+				return {
+					reasoning: "Delegating.",
+					code: 'result = await rlm("child query")\nreturn result',
+					toolUseId: "tp",
+				};
+			};
+
+			const result = await rlm("parent query", undefined, { callLLM });
+			expect(result.answer).toBe("child answer");
+		});
+
+		it("conversation history uses __TOOL_CALL__ / __TOOL_RESULT__ markers", async () => {
+			let secondCallMessages: Array<{ role: string; content: string }> | undefined;
+			let callIndex = 0;
+			const callLLM: CallLLM = async (messages, _systemPrompt) => {
+				callIndex++;
+				if (callIndex === 1) {
+					return { reasoning: "Step one.", code: 'console.log("hello")', toolUseId: "tool-123" };
+				}
+				secondCallMessages = [...messages];
+				return { reasoning: "Done.", code: 'return "done"', toolUseId: "tool-456" };
+			};
+
+			await rlm("test query", undefined, { callLLM });
+
+			expect(secondCallMessages).toBeDefined();
+			// Check assistant message has __TOOL_CALL__ marker
+			const assistantMsg = secondCallMessages!.find(m => m.role === "assistant" && m.content.startsWith("__TOOL_CALL__"));
+			expect(assistantMsg).toBeDefined();
+			expect(assistantMsg!.content).toContain("tool-123");
+			expect(assistantMsg!.content).toContain("Step one.");
+			expect(assistantMsg!.content).toContain("__CODE__");
+			expect(assistantMsg!.content).toContain('console.log("hello")');
+
+			// Check user message has __TOOL_RESULT__ marker
+			const toolResultMsg = secondCallMessages!.find(m => m.role === "user" && m.content.startsWith("__TOOL_RESULT__"));
+			expect(toolResultMsg).toBeDefined();
+			expect(toolResultMsg!.content).toContain("tool-123");
+			expect(toolResultMsg!.content).toContain("hello");
+		});
+
+		it("mixed: old string path still works alongside new path", async () => {
+			// Ensure the old code path still functions correctly
+			const callLLM = mockCallLLM([
+				'```repl\nconsole.log("old path")\n```',
+				'```repl\nreturn "old path works"\n```',
+			]);
+			const result = await rlm("test query", undefined, { callLLM });
+			expect(result.answer).toBe("old path works");
+		});
+
+		it("max iterations throws with tool-call responses", async () => {
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "Step 1.", code: 'console.log("loop 1")', toolUseId: "t1" },
+				{ reasoning: "Step 2.", code: 'console.log("loop 2")', toolUseId: "t2" },
+				{ reasoning: "Step 3.", code: 'console.log("loop 3")', toolUseId: "t3" },
+			]);
+			await expect(rlm("test query", undefined, { callLLM, maxIterations: 3 })).rejects.toThrow("max iterations");
 		});
 	});
 });

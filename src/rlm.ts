@@ -1,7 +1,14 @@
 import { JsEnvironment } from "./environment.js";
 import { buildModelTable, buildSystemPrompt } from "./system-prompt.js";
 
-export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string>;
+export interface CallLLMResponse {
+	reasoning: string;
+	code: string | null;
+	/** Tool use ID from the API response, used to match tool results in conversation history. */
+	toolUseId?: string;
+}
+
+export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string | CallLLMResponse>;
 
 export interface ModelEntry {
 	callLLM: CallLLM;
@@ -333,9 +340,9 @@ export async function rlm(query: string, context: string | undefined, options: R
 				childTraceSlot.current = [];
 			}
 
-			let response: string;
+			let rawResponse: string | CallLLMResponse;
 			try {
-				response = await callLLM(messages, effectiveSystemPrompt);
+				rawResponse = await callLLM(messages, effectiveSystemPrompt);
 			} catch (err) {
 				throw new RlmError(
 					err instanceof Error ? err.message : String(err),
@@ -344,21 +351,35 @@ export async function rlm(query: string, context: string | undefined, options: R
 				);
 			}
 
-			let codeBlocks = extractCodeBlocks(response);
+			// Normalize: tool-call path vs text-block path
+			const isToolCall = typeof rawResponse !== "string";
+			let reasoning: string;
+			let codeBlocks: string[];
+			let toolUseId: string | null = null;
 
-			// Auto-fix malformed fence: "javascript\n" without opening ```
-			if (codeBlocks.length === 0 && /(?:^|\n)\s*javascript\s*\n/.test(response)) {
-				const fixed = response.replace(/(?:^|\n)(\s*)javascript(\s*\n)/g, "\n$1```javascript$2");
-				codeBlocks = extractCodeBlocks(fixed);
-				if (codeBlocks.length > 0) {
-					// Use the fixed version for the rest of this iteration
-					response = fixed;
+			if (isToolCall) {
+				// Tool-call path: code comes directly from the response
+				reasoning = rawResponse.reasoning;
+				codeBlocks = rawResponse.code !== null ? [rawResponse.code] : [];
+				toolUseId = rawResponse.toolUseId ?? null;
+			} else {
+				// Text-block path: extract code from markdown fences
+				reasoning = rawResponse;
+				codeBlocks = extractCodeBlocks(rawResponse);
+
+				// Auto-fix malformed fence: "javascript\n" without opening ```
+				if (codeBlocks.length === 0 && /(?:^|\n)\s*javascript\s*\n/.test(rawResponse)) {
+					const fixed = rawResponse.replace(/(?:^|\n)(\s*)javascript(\s*\n)/g, "\n$1```javascript$2");
+					codeBlocks = extractCodeBlocks(fixed);
+					if (codeBlocks.length > 0) {
+						reasoning = fixed;
+					}
 				}
 			}
 
-			// Enforce max blocks per iteration (discard extra blocks with a warning)
+			// Enforce max blocks per iteration (text-block path only; tool-call always has 0 or 1)
 			let blocksDiscardedWarning: string | undefined;
-			if (opts.maxBlocksPerIteration && codeBlocks.length > opts.maxBlocksPerIteration) {
+			if (!isToolCall && opts.maxBlocksPerIteration && codeBlocks.length > opts.maxBlocksPerIteration) {
 				const discarded = codeBlocks.length - opts.maxBlocksPerIteration;
 				codeBlocks = codeBlocks.slice(0, opts.maxBlocksPerIteration);
 				blocksDiscardedWarning =
@@ -424,7 +445,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 						break;
 					}
 					const answer = typeof returnValue === "object" ? JSON.stringify(returnValue) : String(returnValue);
-					const entry: TraceEntry = { reasoning: response, code: codeBlocks, output: combinedOutput, error: combinedError };
+					const entry: TraceEntry = { reasoning, code: codeBlocks, output: combinedOutput, error: combinedError };
 					if (opts.traceChildren && childTraceSlot.current && childTraceSlot.current.length > 0) {
 						entry.children = childTraceSlot.current;
 					}
@@ -441,7 +462,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 				combinedOutput += (combinedOutput ? "\n" : "") + blocksDiscardedWarning;
 			}
 
-			const entry: TraceEntry = { reasoning: response, code: codeBlocks, output: combinedOutput, error: combinedError };
+			const entry: TraceEntry = { reasoning, code: codeBlocks, output: combinedOutput, error: combinedError };
 			if (opts.traceChildren && childTraceSlot.current && childTraceSlot.current.length > 0) {
 				entry.children = childTraceSlot.current;
 			}
@@ -455,14 +476,41 @@ export async function rlm(query: string, context: string | undefined, options: R
 				? buildIterationContext(iteration + 1) + "\n"
 				: "";
 
-			if (codeBlocks.length > 0) {
+			if (isToolCall) {
+				// Tool-call path: use __TOOL_CALL__ / __TOOL_RESULT__ markers
+				// so the driver can reconstruct the proper API message format
 				let outputMsg = combinedOutput || "(no output)";
 				if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
-				messages.push({ role: "assistant", content: response });
+
+				if (codeBlocks.length > 0 && toolUseId) {
+					// Assistant message with tool call
+					const code = codeBlocks[0];
+					messages.push({
+						role: "assistant",
+						content: `__TOOL_CALL__\n${toolUseId}\n${reasoning}\n__CODE__\n${code}`,
+					});
+					// Tool result
+					messages.push({
+						role: "user",
+						content: `__TOOL_RESULT__\n${toolUseId}\n${nextIterContext}${outputMsg}`,
+					});
+				} else {
+					// No code in tool-call response (model sent text-only)
+					messages.push({ role: "assistant", content: reasoning || "" });
+					messages.push({
+						role: "user",
+						content: nextIterContext +
+							"[WARNING] No code was executed. Use the execute_code tool to run JavaScript and make progress.",
+					});
+				}
+			} else if (codeBlocks.length > 0) {
+				let outputMsg = combinedOutput || "(no output)";
+				if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
+				messages.push({ role: "assistant", content: reasoning });
 				messages.push({ role: "user", content: nextIterContext + outputMsg });
-			} else if (!response.trim()) {
+			} else if (!reasoning.trim()) {
 				// Empty response (e.g., MALFORMED_FUNCTION_CALL from Gemini)
-				messages.push({ role: "assistant", content: response });
+				messages.push({ role: "assistant", content: reasoning });
 				messages.push({
 					role: "user",
 					content: nextIterContext +
@@ -472,10 +520,10 @@ export async function rlm(query: string, context: string | undefined, options: R
 				});
 			} else {
 				// Text-only response (prose without code blocks)
-				messages.push({ role: "assistant", content: response });
+				messages.push({ role: "assistant", content: reasoning });
 
 				// Detect malformed fence: "javascript\n" without opening ```
-				const hasMalformedFence = /(?:^|\n)\s*javascript\s*\n/.test(response);
+				const hasMalformedFence = /(?:^|\n)\s*javascript\s*\n/.test(reasoning);
 				const nudge = hasMalformedFence
 					? "[ERROR] Your code block is missing the opening fence. Write ```javascript " +
 						"(triple backticks followed by 'javascript'), not just 'javascript' on a line by itself. " +

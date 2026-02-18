@@ -14,6 +14,10 @@
 			"types": "./dist/drivers/openrouter-compatible.d.ts",
 			"default": "./dist/drivers/openrouter-compatible.js"
 		},
+		"./drivers/anthropic-messages": {
+			"types": "./dist/drivers/anthropic-messages.d.ts",
+			"default": "./dist/drivers/anthropic-messages.js"
+		},
 		"./plugins": {
 			"types": "./dist/plugins.d.ts",
 			"default": "./dist/plugins.js"
