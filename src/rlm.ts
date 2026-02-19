@@ -8,7 +8,7 @@ export interface CallLLMResponse {
 	toolUseId?: string;
 }
 
-export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<string | CallLLMResponse>;
+export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<CallLLMResponse>;
 
 export interface ModelEntry {
 	callLLM: CallLLM;
@@ -24,13 +24,6 @@ export interface RlmOptions {
 	pluginBodies?: string;
 	/** Named model aliases available for child delegation. */
 	models?: Record<string, ModelEntry>;
-	/**
-	 * Maximum code blocks to execute per LLM response.
-	 * When set to 1, only the first code block is executed and extra blocks
-	 * are discarded with a warning appended to the output.
-	 * Default: undefined (no limit).
-	 */
-	maxBlocksPerIteration?: number;
 	/** Extra globals to inject into the REPL sandbox. */
 	sandboxGlobals?: Record<string, unknown>;
 	/**
@@ -125,15 +118,6 @@ const SNAPSHOT_EXCLUDE_KEYS = new Set([
 	'TextEncoder', 'TextDecoder',
 ]);
 
-function extractCodeBlocks(text: string): string[] {
-	const blocks: string[] = [];
-	const regex = /```(?:javascript|js|repl)\n([\s\S]*?)```/g;
-	for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
-		blocks.push(match[1].trimEnd());
-	}
-	return blocks;
-}
-
 export async function rlm(query: string, context: string | undefined, options: RlmOptions): Promise<RlmResult> {
 	const opts = {
 		callLLM: options.callLLM,
@@ -141,7 +125,6 @@ export async function rlm(query: string, context: string | undefined, options: R
 		maxDepth: options.maxDepth ?? 3,
 		pluginBodies: options.pluginBodies,
 		models: options.models,
-		maxBlocksPerIteration: options.maxBlocksPerIteration,
 		sandboxGlobals: options.sandboxGlobals,
 		globalDocs: options.globalDocs,
 		childApps: options.childApps,
@@ -340,9 +323,9 @@ export async function rlm(query: string, context: string | undefined, options: R
 				childTraceSlot.current = [];
 			}
 
-			let rawResponse: string | CallLLMResponse;
+			let response: CallLLMResponse;
 			try {
-				rawResponse = await callLLM(messages, effectiveSystemPrompt);
+				response = await callLLM(messages, effectiveSystemPrompt);
 			} catch (err) {
 				throw new RlmError(
 					err instanceof Error ? err.message : String(err),
@@ -351,42 +334,9 @@ export async function rlm(query: string, context: string | undefined, options: R
 				);
 			}
 
-			// Normalize: tool-call path vs text-block path
-			const isToolCall = typeof rawResponse !== "string";
-			let reasoning: string;
-			let codeBlocks: string[];
-			let toolUseId: string | null = null;
-
-			if (isToolCall) {
-				// Tool-call path: code comes directly from the response
-				reasoning = rawResponse.reasoning;
-				codeBlocks = rawResponse.code !== null ? [rawResponse.code] : [];
-				toolUseId = rawResponse.toolUseId ?? null;
-			} else {
-				// Text-block path: extract code from markdown fences
-				reasoning = rawResponse;
-				codeBlocks = extractCodeBlocks(rawResponse);
-
-				// Auto-fix malformed fence: "javascript\n" without opening ```
-				if (codeBlocks.length === 0 && /(?:^|\n)\s*javascript\s*\n/.test(rawResponse)) {
-					const fixed = rawResponse.replace(/(?:^|\n)(\s*)javascript(\s*\n)/g, "\n$1```javascript$2");
-					codeBlocks = extractCodeBlocks(fixed);
-					if (codeBlocks.length > 0) {
-						reasoning = fixed;
-					}
-				}
-			}
-
-			// Enforce max blocks per iteration (text-block path only; tool-call always has 0 or 1)
-			let blocksDiscardedWarning: string | undefined;
-			if (!isToolCall && opts.maxBlocksPerIteration && codeBlocks.length > opts.maxBlocksPerIteration) {
-				const discarded = codeBlocks.length - opts.maxBlocksPerIteration;
-				codeBlocks = codeBlocks.slice(0, opts.maxBlocksPerIteration);
-				blocksDiscardedWarning =
-					`[WARNING] ${discarded} extra code block(s) were discarded. ` +
-					`Only the first block was executed. Write ONE code block per response ` +
-					`and wait for real output before writing the next step.`;
-			}
+			const reasoning = response.reasoning;
+			const codeBlocks = response.code !== null ? [response.code] : [];
+			const toolUseId = response.toolUseId ?? null;
 
 			let combinedOutput = "";
 			let combinedError: string | null = null;
@@ -457,11 +407,6 @@ export async function rlm(query: string, context: string | undefined, options: R
 				}
 			}
 
-			// Append block-discard warning so the model knows extra blocks were dropped
-			if (blocksDiscardedWarning) {
-				combinedOutput += (combinedOutput ? "\n" : "") + blocksDiscardedWarning;
-			}
-
 			const entry: TraceEntry = { reasoning, code: codeBlocks, output: combinedOutput, error: combinedError };
 			if (opts.traceChildren && childTraceSlot.current && childTraceSlot.current.length > 0) {
 				entry.children = childTraceSlot.current;
@@ -476,61 +421,31 @@ export async function rlm(query: string, context: string | undefined, options: R
 				? buildIterationContext(iteration + 1) + "\n"
 				: "";
 
-			if (isToolCall) {
-				// Tool-call path: use __TOOL_CALL__ / __TOOL_RESULT__ markers
-				// so the driver can reconstruct the proper API message format
-				let outputMsg = combinedOutput || "(no output)";
-				if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
+			// Use __TOOL_CALL__ / __TOOL_RESULT__ markers so the driver can
+			// reconstruct the proper API message format
+			let outputMsg = combinedOutput || "(no output)";
+			if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
 
-				if (codeBlocks.length > 0 && toolUseId) {
-					// Assistant message with tool call
-					const code = codeBlocks[0];
-					messages.push({
-						role: "assistant",
-						content: `__TOOL_CALL__\n${toolUseId}\n${reasoning}\n__CODE__\n${code}`,
-					});
-					// Tool result
-					messages.push({
-						role: "user",
-						content: `__TOOL_RESULT__\n${toolUseId}\n${nextIterContext}${outputMsg}`,
-					});
-				} else {
-					// No code in tool-call response (model sent text-only)
-					messages.push({ role: "assistant", content: reasoning || "" });
-					messages.push({
-						role: "user",
-						content: nextIterContext +
-							"[WARNING] No code was executed. Use the execute_code tool to run JavaScript and make progress.",
-					});
-				}
-			} else if (codeBlocks.length > 0) {
-				let outputMsg = combinedOutput || "(no output)";
-				if (combinedError) outputMsg += `\nERROR: ${combinedError}`;
-				messages.push({ role: "assistant", content: reasoning });
-				messages.push({ role: "user", content: nextIterContext + outputMsg });
-			} else if (!reasoning.trim()) {
-				// Empty response (e.g., MALFORMED_FUNCTION_CALL from Gemini)
-				messages.push({ role: "assistant", content: reasoning });
+			if (codeBlocks.length > 0 && toolUseId) {
+				// Assistant message with tool call
+				const code = codeBlocks[0];
+				messages.push({
+					role: "assistant",
+					content: `__TOOL_CALL__\n${toolUseId}\n${reasoning}\n__CODE__\n${code}`,
+				});
+				// Tool result
+				messages.push({
+					role: "user",
+					content: `__TOOL_RESULT__\n${toolUseId}\n${nextIterContext}${outputMsg}`,
+				});
+			} else {
+				// No code in response (model sent text-only)
+				messages.push({ role: "assistant", content: reasoning || "" });
 				messages.push({
 					role: "user",
 					content: nextIterContext +
-						"[ERROR] Your response was empty. You must respond with a ```javascript code block " +
-						"containing code to execute. Write code to explore the data, compute a result, " +
-						"and eventually return(answer).",
+						"[WARNING] No code was executed. Use the execute_code tool to run JavaScript and make progress.",
 				});
-			} else {
-				// Text-only response (prose without code blocks)
-				messages.push({ role: "assistant", content: reasoning });
-
-				// Detect malformed fence: "javascript\n" without opening ```
-				const hasMalformedFence = /(?:^|\n)\s*javascript\s*\n/.test(reasoning);
-				const nudge = hasMalformedFence
-					? "[ERROR] Your code block is missing the opening fence. Write ```javascript " +
-						"(triple backticks followed by 'javascript'), not just 'javascript' on a line by itself. " +
-						"Fix the opening fence and retry."
-					: "[WARNING] No code block found. Your response must include a ```javascript fenced " +
-						"code block to make progress. Plain text alone does nothing — write code to execute.";
-				messages.push({ role: "user", content: nextIterContext + nudge });
 			}
 		}
 

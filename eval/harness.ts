@@ -30,8 +30,6 @@ export interface HarnessConfig {
 	pluginBodies?: string;
 	/** Named model aliases available for child delegation. */
 	models?: Record<string, ModelEntry>;
-	/** Max code blocks to execute per LLM response (1 = enforce single-block). */
-	maxBlocksPerIteration?: number;
 	/** Documentation for sandbox globals, included in every agent's system prompt at all depths. */
 	globalDocs?: string;
 	/** Raw --filter string for resumability tracking. */
@@ -115,7 +113,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.maxBlocksPerIteration, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs, config.childApps, config.traceChildren, config.traceSnapshots);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs, config.childApps, config.traceChildren, config.traceSnapshots);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -202,7 +200,6 @@ async function runSingleTask(
 	maxDepth: number,
 	pluginBodies?: string,
 	models?: Record<string, ModelEntry>,
-	maxBlocksPerIteration?: number,
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>,
 	cleanupTask?: (task: EvalTask) => Promise<void>,
 	getResultMetadata?: (task: EvalTask) => Record<string, unknown> | undefined,
@@ -224,7 +221,7 @@ async function runSingleTask(
 		}
 
 		const response = await callLLM(messages, systemPrompt);
-		totalOutputChars += response.length;
+		totalOutputChars += (response.reasoning?.length ?? 0) + (response.code?.length ?? 0);
 		return response;
 	};
 
@@ -237,7 +234,6 @@ async function runSingleTask(
 			maxDepth,
 			pluginBodies,
 			...(models && { models }),
-			...(maxBlocksPerIteration && { maxBlocksPerIteration }),
 			...(sandboxGlobals && { sandboxGlobals }),
 			...(globalDocs && { globalDocs }),
 			...(childApps && { childApps }),

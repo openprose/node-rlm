@@ -62,10 +62,10 @@ Body.`;
 
 describe("loadPlugins", () => {
 	it("loads drivers by name from plugins/drivers/, strips frontmatter, concatenates bodies", async () => {
-		const result = await loadPlugins(["no-tool-calls", "await-discipline"], "drivers");
-		expect(result).toContain("## No Tool Calls");
+		const result = await loadPlugins(["await-discipline", "return-format-discipline"], "drivers");
 		expect(result).toContain("## Await Discipline");
-		expect(result).not.toContain("name: no-tool-calls");
+		expect(result).toContain("## Return Format");
+		expect(result).not.toContain("name: await-discipline");
 		expect(result).not.toContain("kind: driver");
 		expect(result).toContain("\n\n---\n\n");
 	});
@@ -82,8 +82,6 @@ describe("loadProfile", () => {
 	it("loads a profile and returns correct driver names and model globs", async () => {
 		const profile = await loadProfile("gemini-3-flash");
 		expect(profile.drivers).toEqual([
-			"no-tool-calls",
-			"one-block-per-iteration",
 			"await-discipline",
 			"return-format-discipline",
 			"verify-before-return",
@@ -100,8 +98,8 @@ describe("detectProfile", () => {
 		const result = await detectProfile("google/gemini-3-flash-preview");
 		expect(result).not.toBeNull();
 		expect(result!.name).toBe("gemini-3-flash");
-		expect(result!.drivers).toContain("no-tool-calls");
-		expect(result!.drivers).toContain("one-block-per-iteration");
+		expect(result!.drivers).toContain("await-discipline");
+		expect(result!.drivers).toContain("verify-before-return");
 	});
 
 	it("matches model with provider prefix (openrouter/google/...)", async () => {
@@ -122,10 +120,10 @@ describe("loadStack", () => {
 			profile: "gemini-3-flash",
 			app: "structured-data-aggregation",
 		});
-		expect(result).toContain("## No Tool Calls");
 		expect(result).toContain("## Await Discipline");
+		expect(result).toContain("## Verify Before Return");
 		expect(result).toContain("## Aggregation Protocol");
-		const driverPos = result.indexOf("## No Tool Calls");
+		const driverPos = result.indexOf("## Await Discipline");
 		const appPos = result.indexOf("## Aggregation Protocol");
 		expect(driverPos).toBeLessThan(appPos);
 	});
@@ -134,8 +132,6 @@ describe("loadStack", () => {
 		const result = await loadStack({
 			model: "openrouter/google/gemini-3-flash-preview",
 		});
-		expect(result).toContain("## No Tool Calls");
-		expect(result).toContain("## One Block Per Iteration");
 		expect(result).toContain("## Await Discipline");
 		expect(result).toContain("## Return Format");
 		expect(result).toContain("## Verify Before Return");
@@ -156,7 +152,7 @@ describe("loadStack", () => {
 			app: "structured-data-aggregation",
 		});
 		expect(result).toContain("## Aggregation Protocol");
-		expect(result).not.toContain("## No Tool Calls");
+		expect(result).not.toContain("## Await Discipline");
 	});
 
 	it("with no profile/model/drivers/app, returns empty string", async () => {

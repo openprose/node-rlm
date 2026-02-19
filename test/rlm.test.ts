@@ -1,16 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type CallLLM, type CallLLMResponse, rlm } from "../src/rlm.js";
 
-function mockCallLLM(responses: string[]): CallLLM {
-	let callIndex = 0;
-	return async (_messages, _systemPrompt) => {
-		if (callIndex >= responses.length) {
-			throw new Error(`Unexpected call #${callIndex + 1}, only ${responses.length} responses defined`);
-		}
-		return responses[callIndex++];
-	};
-}
-
 function mockToolCallLLM(responses: CallLLMResponse[]): CallLLM {
 	let callIndex = 0;
 	return async (_messages, _systemPrompt) => {
@@ -21,84 +11,72 @@ function mockToolCallLLM(responses: CallLLMResponse[]): CallLLM {
 	};
 }
 
+/** Shorthand: create a CallLLMResponse with minimal boilerplate. */
+function tc(code: string, toolUseId = "t"): CallLLMResponse {
+	return { reasoning: "", code, toolUseId };
+}
+
 describe("rlm", () => {
 	it("simple return: verified on second iteration", async () => {
-		const callLLM = mockCallLLM(['```repl\nreturn "hello"\n```', '```repl\nreturn "hello"\n```']);
+		const callLLM = mockToolCallLLM([tc('return "hello"', "t1"), tc('return "hello"', "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("hello");
 		expect(result.iterations).toBe(2);
 	});
 
 	it("multi-iteration: LLM needs two turns to produce answer", async () => {
-		const callLLM = mockCallLLM(['```repl\nconsole.log("thinking...")\n```', '```repl\nreturn "done"\n```']);
+		const callLLM = mockToolCallLLM([tc('console.log("thinking...")', "t1"), tc('return "done"', "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("done");
 		expect(result.iterations).toBe(2);
 	});
 
-	it("no-code turn followed by code block", async () => {
-		const callLLM = mockCallLLM(["Let me think about this...", '```repl\nreturn "answer"\n```']);
+	it("no-code turn followed by code", async () => {
+		const callLLM = mockToolCallLLM([
+			{ reasoning: "Let me think about this...", code: null, toolUseId: "t1" },
+			tc('return "answer"', "t2"),
+		]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("answer");
 		expect(result.iterations).toBe(2);
 	});
 
 	it("error recovery: first code throws, second succeeds", async () => {
-		const callLLM = mockCallLLM(['```repl\nthrow new Error("oops")\n```', '```repl\nreturn "recovered"\n```']);
+		const callLLM = mockToolCallLLM([tc('throw new Error("oops")', "t1"), tc('return "recovered"', "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("recovered");
 		expect(result.iterations).toBe(2);
 	});
 
 	it("max iterations throws when return is never called", async () => {
-		const callLLM = mockCallLLM([
-			'```repl\nconsole.log("loop 1")\n```',
-			'```repl\nconsole.log("loop 2")\n```',
-			'```repl\nconsole.log("loop 3")\n```',
+		const callLLM = mockToolCallLLM([
+			tc('console.log("loop 1")', "t1"),
+			tc('console.log("loop 2")', "t2"),
+			tc('console.log("loop 3")', "t3"),
 		]);
 		await expect(rlm("test query", undefined, { callLLM, maxIterations: 3 })).rejects.toThrow("max iterations");
 	});
 
 	it("context injection: context string is accessible as variable", async () => {
-		const callLLM = mockCallLLM(["```repl\nreturn context\n```", "```repl\nreturn context\n```"]);
+		const callLLM = mockToolCallLLM([tc("return context", "t1"), tc("return context", "t2")]);
 		const result = await rlm("test query", "my context data", { callLLM });
 		expect(result.answer).toBe("my context data");
 	});
 
 	it("return stringifies non-string values", async () => {
-		const callLLM = mockCallLLM(["```repl\nreturn 42\n```", "```repl\nreturn 42\n```"]);
+		const callLLM = mockToolCallLLM([tc("return 42", "t1"), tc("return 42", "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("42");
 	});
 
-	it("multiple code blocks in one response: both executed", async () => {
-		const callLLM = mockCallLLM([
-			"```repl\nx = 10\n```\n\nSome text\n\n```repl\nconsole.log(x)\nreturn x\n```",
-			"```repl\nreturn x\n```",
-		]);
-		const result = await rlm("test query", undefined, { callLLM });
-		expect(result.answer).toBe("10");
-		expect(result.iterations).toBe(2);
-	});
-
-	it("return in second block of a response works", async () => {
-		const callLLM = mockCallLLM([
-			'```repl\nconsole.log("first block")\n```\n\n```repl\nreturn "from second"\n```',
-			'```repl\nreturn "from second"\n```',
-		]);
-		const result = await rlm("test query", undefined, { callLLM });
-		expect(result.answer).toBe("from second");
-		expect(result.iterations).toBe(2);
-	});
-
 	it("trace structure: entries have reasoning, code, output, error", async () => {
-		const callLLM = mockCallLLM([
-			'Let me compute.\n```repl\nconsole.log("step 1")\n```',
-			'```repl\nreturn "final"\n```',
+		const callLLM = mockToolCallLLM([
+			{ reasoning: "Let me compute.", code: 'console.log("step 1")', toolUseId: "t1" },
+			{ reasoning: "Done.", code: 'return "final"', toolUseId: "t2" },
 		]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.trace).toHaveLength(2);
-		expect(result.trace[0].reasoning).toContain("Let me compute");
+		expect(result.trace[0].reasoning).toBe("Let me compute.");
 		expect(result.trace[0].code).toHaveLength(1);
 		expect(result.trace[0].code[0]).toContain("console.log");
 		expect(result.trace[0].output).toBe("step 1");
@@ -108,7 +86,7 @@ describe("rlm", () => {
 	});
 
 	it("variable persistence across iterations via bare assignment", async () => {
-		const callLLM = mockCallLLM(["```repl\nx = 42\n```", "```repl\nreturn x\n```"]);
+		const callLLM = mockToolCallLLM([tc("x = 42", "t1"), tc("return x", "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("42");
 		expect(result.iterations).toBe(2);
@@ -118,9 +96,9 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child query") {
-				return '```repl\nreturn "child answer"\n```';
+				return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 			}
-			return '```repl\nresult = await rlm("child query")\nreturn result\n```';
+			return { reasoning: "", code: 'result = await rlm("child query")\nreturn result', toolUseId: "tp" };
 		};
 
 		const result = await rlm("parent query", undefined, { callLLM });
@@ -134,12 +112,12 @@ describe("rlm", () => {
 			const userMsg = messages[0]?.content || "";
 
 			if (userMsg === "parent query") {
-				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("sub query")\nreturn r', toolUseId: "tp" };
 			}
 			if (userMsg === "sub query") {
-				return '```repl\nreturn "child answer"\n```';
+				return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 			}
-			return '```repl\nreturn "unexpected"\n```';
+			return { reasoning: "", code: 'return "unexpected"', toolUseId: "tx" };
 		};
 
 		const result = await rlm("parent query", undefined, { callLLM, maxDepth: 1 });
@@ -156,19 +134,15 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "parent query") {
-				// Parent delegates to child
-				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("sub query")\nreturn r', toolUseId: "tp" };
 			}
 			if (userMsg === "sub query") {
-				// Child at maxDepth tries to delegate — should fail
-				return '```repl\nconst r = await rlm("grandchild")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("grandchild")\nreturn r', toolUseId: "tc" };
 			}
-			return '```repl\nreturn "unexpected"\n```';
+			return { reasoning: "", code: 'return "unexpected"', toolUseId: "tx" };
 		};
 
 		// maxDepth=1: root(0) can delegate, child(1) cannot
-		// The child's rlm() call will error, and the error output
-		// will be fed back to the child. The child will hit max iterations.
 		await expect(rlm("parent query", undefined, {
 			callLLM,
 			maxDepth: 1,
@@ -177,70 +151,29 @@ describe("rlm", () => {
 	});
 
 	it("trace captures error information from failed code blocks", async () => {
-		const callLLM = mockCallLLM(['```repl\nthrow new Error("test error")\n```', '```repl\nreturn "ok"\n```']);
+		const callLLM = mockToolCallLLM([tc('throw new Error("test error")', "t1"), tc('return "ok"', "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 
 		expect(result.trace[0].error).toContain("test error");
 	});
 
-	it("no-code response feeds back warning message", async () => {
-		let secondCallMessages: Array<{ role: string; content: string }> | undefined;
-		let callIndex = 0;
-		const callLLM: CallLLM = async (messages, _systemPrompt) => {
-			callIndex++;
-			if (callIndex === 1) {
-				return "I need to think about this first.";
-			}
-			secondCallMessages = [...messages];
-			return '```repl\nreturn "done"\n```';
-		};
-
-		await rlm("test query", undefined, { callLLM });
-
-		expect(secondCallMessages).toBeDefined();
-		const lastMsg = secondCallMessages![secondCallMessages!.length - 1];
-		expect(lastMsg.content).toContain("[WARNING] No code block found");
-		expect(lastMsg.role).toBe("user");
-	});
-
-	it("malformed fence auto-fix", async () => {
-		let secondCallMessages: Array<{ role: string; content: string }> | undefined;
-		let callIndex = 0;
-		const callLLM: CallLLM = async (messages, _systemPrompt) => {
-			callIndex++;
-			if (callIndex === 1) {
-				return 'javascript\nconst x = 42;\nconsole.log(x);\n```';
-			}
-			secondCallMessages = [...messages];
-			return '```repl\nreturn "done"\n```';
-		};
-
-		await rlm("test query", undefined, { callLLM });
-
-		expect(secondCallMessages).toBeDefined();
-		const lastMsg = secondCallMessages![secondCallMessages!.length - 1];
-		expect(lastMsg.content).toContain("42");
-		expect(lastMsg.role).toBe("user");
-		expect(lastMsg.content).not.toContain("[ERROR] Your code block is missing");
-	});
-
 	it("variable persistence across iterations via let/const", async () => {
-		const callLLM = mockCallLLM(["```repl\nlet x = 42\n```", "```repl\nreturn x\n```"]);
+		const callLLM = mockToolCallLLM([tc("let x = 42", "t1"), tc("return x", "t2")]);
 		const result = await rlm("test query", undefined, { callLLM });
 		expect(result.answer).toBe("42");
 		expect(result.iterations).toBe(2);
 	});
 
-	it("output from code blocks is fed back to LLM as user message", async () => {
+	it("output from code blocks is fed back to LLM as tool result", async () => {
 		let secondCallMessages: Array<{ role: string; content: string }> | undefined;
 		let callIndex = 0;
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			callIndex++;
 			if (callIndex === 1) {
-				return '```repl\nconsole.log("hello world")\n```';
+				return { reasoning: "", code: 'console.log("hello world")', toolUseId: "t1" };
 			}
 			secondCallMessages = [...messages];
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t2" };
 		};
 
 		await rlm("test query", undefined, { callLLM });
@@ -253,7 +186,7 @@ describe("rlm", () => {
 
 	it("__rlm: root invocation has depth 0 and correct lineage", async () => {
 		const callLLM: CallLLM = async (_messages, _systemPrompt) => {
-			return '```repl\nconsole.log(JSON.stringify(__rlm))\nreturn "done"\n```';
+			return { reasoning: "", code: 'console.log(JSON.stringify(__rlm))\nreturn "done"', toolUseId: "t" };
 		};
 
 		const result = await rlm("my query", undefined, {
@@ -276,9 +209,9 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nconsole.log(JSON.stringify(__rlm))\nreturn "child done"\n```';
+				return { reasoning: "", code: 'console.log(JSON.stringify(__rlm))\nreturn "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 		};
 
 		const result = await rlm("parent task", undefined, { callLLM, maxDepth: 3 });
@@ -292,9 +225,9 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (_messages, _systemPrompt) => {
 			callIndex++;
 			if (callIndex <= 2) {
-				return '```repl\nconsole.log("iter=" + __rlm.iteration)\n```';
+				return { reasoning: "", code: 'console.log("iter=" + __rlm.iteration)', toolUseId: `t${callIndex}` };
 			}
-			return '```repl\nconsole.log("iter=" + __rlm.iteration)\nreturn "done"\n```';
+			return { reasoning: "", code: 'console.log("iter=" + __rlm.iteration)\nreturn "done"', toolUseId: `t${callIndex}` };
 		};
 
 		const result = await rlm("test", undefined, { callLLM });
@@ -304,9 +237,9 @@ describe("rlm", () => {
 	});
 
 	it("__rlm: object is frozen (mutation has no effect)", async () => {
-		const callLLM = mockCallLLM([
-			'```repl\n__rlm.depth = 99\nconsole.log("depth=" + __rlm.depth)\n```',
-			'```repl\nreturn "done"\n```',
+		const callLLM = mockToolCallLLM([
+			{ reasoning: "", code: '__rlm.depth = 99\nconsole.log("depth=" + __rlm.depth)', toolUseId: "t1" },
+			tc('return "done"', "t2"),
 		]);
 		const result = await rlm("test", undefined, { callLLM });
 		const allOutput = result.trace.map((t) => t.output).join("\n");
@@ -315,9 +248,9 @@ describe("rlm", () => {
 	});
 
 	it("__rlm: lineage array is frozen", async () => {
-		const callLLM = mockCallLLM([
-			'```repl\ntry { __rlm.lineage.push("hacked") } catch(e) { console.log("lineage frozen: " + e.message) }\nreturn "done"\n```',
-			'```repl\nreturn "done"\n```',
+		const callLLM = mockToolCallLLM([
+			{ reasoning: "", code: 'try { __rlm.lineage.push("hacked") } catch(e) { console.log("lineage frozen: " + e.message) }\nreturn "done"', toolUseId: "t1" },
+			tc('return "done"', "t2"),
 		]);
 		const result = await rlm("test", undefined, { callLLM });
 		const allOutput = result.trace.map((t) => t.output).join("\n");
@@ -328,14 +261,13 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child query") {
-				// Child uses its own context
-				return '```repl\nconsole.log("child sees: " + context)\nreturn context\n```';
+				return { reasoning: "", code: 'console.log("child sees: " + context)\nreturn context', toolUseId: "tc" };
 			}
 			// Parent: first call spawns child with different context, second verifies parent context
 			if (messages.length <= 1) {
-				return '```repl\nconst childResult = await rlm("child query", "child context")\nconsole.log("parent still sees: " + context)\n```';
+				return { reasoning: "", code: 'const childResult = await rlm("child query", "child context")\nconsole.log("parent still sees: " + context)', toolUseId: "tp1" };
 			}
-			return "```repl\nreturn context\n```";
+			return { reasoning: "", code: "return context", toolUseId: "tp2" };
 		};
 
 		const result = await rlm("parent query", "parent context", { callLLM, maxDepth: 3 });
@@ -346,16 +278,16 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "fire and forget") {
-				return '```repl\nreturn "child"\n```';
+				return { reasoning: "", code: 'return "child"', toolUseId: "tc" };
 			}
 			if (messages.length <= 1) {
-				return '```repl\nrlm("fire and forget")\nconsole.log("continued")\n```';
+				return { reasoning: "", code: 'rlm("fire and forget")\nconsole.log("continued")', toolUseId: "tp1" };
 			}
 			const lastMsg = messages[messages.length - 1]?.content || "";
 			if (lastMsg.includes("ERROR")) {
-				return '```repl\nreturn "saw warning"\n```';
+				return { reasoning: "", code: 'return "saw warning"', toolUseId: "tp2" };
 			}
-			return '```repl\nreturn "no warning"\n```';
+			return { reasoning: "", code: 'return "no warning"', toolUseId: "tp3" };
 		};
 
 		const result = await rlm("test", undefined, { callLLM, maxDepth: 3 });
@@ -366,12 +298,12 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "task A") {
-				return '```repl\nreturn "result A"\n```';
+				return { reasoning: "", code: 'return "result A"', toolUseId: "ta" };
 			}
 			if (userMsg === "task B") {
-				return '```repl\nreturn "result B"\n```';
+				return { reasoning: "", code: 'return "result B"', toolUseId: "tb" };
 			}
-			return '```repl\nconst [a, b] = await Promise.all([rlm("task A"), rlm("task B")])\nreturn a + " + " + b\n```';
+			return { reasoning: "", code: 'const [a, b] = await Promise.all([rlm("task A"), rlm("task B")])\nreturn a + " + " + b', toolUseId: "tp" };
 		};
 
 		const result = await rlm("parent", undefined, { callLLM, maxDepth: 3 });
@@ -382,7 +314,7 @@ describe("rlm", () => {
 		let capturedSystemPrompt = "";
 		const callLLM: CallLLM = async (_messages, systemPrompt) => {
 			capturedSystemPrompt = systemPrompt;
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t" };
 		};
 
 		await rlm("test", undefined, {
@@ -398,7 +330,7 @@ describe("rlm", () => {
 		let capturedSystemPrompt = "";
 		const callLLM: CallLLM = async (_messages, systemPrompt) => {
 			capturedSystemPrompt = systemPrompt;
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t" };
 		};
 
 		await rlm("test", undefined, { callLLM });
@@ -412,10 +344,10 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
 			// Parent spawns a child
-			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -436,12 +368,12 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "parent task") {
-				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("sub query")\nreturn r', toolUseId: "tp" };
 			}
 			if (userMsg === "sub query") {
-				return '```repl\nreturn "child answer"\n```';
+				return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 			}
-			return '```repl\nreturn "unexpected"\n```';
+			return { reasoning: "", code: 'return "unexpected"', toolUseId: "tx" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -461,14 +393,14 @@ describe("rlm", () => {
 		const defaultCallLLM: CallLLM = async (messages, _systemPrompt) => {
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "hello") {
-				return '```repl\nreturn "FAST_MODEL response"\n```';
+				return { reasoning: "", code: 'return "FAST_MODEL response"', toolUseId: "td" };
 			}
-			return '```repl\nresult = await rlm("hello", undefined, { model: "fast" })\nreturn result\n```';
+			return { reasoning: "", code: 'result = await rlm("hello", undefined, { model: "fast" })\nreturn result', toolUseId: "tp" };
 		};
 
 		const fastCallLLM: CallLLM = async (_messages, _systemPrompt) => {
 			fastModelCalled = true;
-			return '```repl\nreturn "FAST_MODEL response"\n```';
+			return { reasoning: "", code: 'return "FAST_MODEL response"', toolUseId: "tf" };
 		};
 
 		const result = await rlm("parent query", undefined, {
@@ -488,10 +420,10 @@ describe("rlm", () => {
 		const defaultCallLLM: CallLLM = async (messages, _systemPrompt) => {
 			callIndex++;
 			if (callIndex === 1) {
-				return '```repl\nresult = await rlm("hello", undefined, { model: "nonexistent" })\nreturn result\n```';
+				return { reasoning: "", code: 'result = await rlm("hello", undefined, { model: "nonexistent" })\nreturn result', toolUseId: "t1" };
 			}
 			// After the error, return so the test doesn't hit max iterations
-			return '```repl\nreturn "saw error"\n```';
+			return { reasoning: "", code: 'return "saw error"', toolUseId: "t2" };
 		};
 
 		const result = await rlm("test", undefined, {
@@ -508,9 +440,9 @@ describe("rlm", () => {
 
 	it("sandboxGlobals: custom globals are accessible from agent code", async () => {
 		const mockObj = { greet: (name: string) => "hello " + name };
-		const callLLM = mockCallLLM([
-			'```repl\nreturn myApi.greet("world")\n```',
-			'```repl\nreturn myApi.greet("world")\n```',
+		const callLLM = mockToolCallLLM([
+			tc('return myApi.greet("world")', "t1"),
+			tc('return myApi.greet("world")', "t2"),
 		]);
 		const result = await rlm("test query", undefined, {
 			callLLM,
@@ -523,7 +455,7 @@ describe("rlm", () => {
 		let capturedSystemPrompt = "";
 		const callLLM: CallLLM = async (_messages, systemPrompt) => {
 			capturedSystemPrompt = systemPrompt;
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t" };
 		};
 
 		await rlm("test", undefined, {
@@ -541,9 +473,9 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -564,9 +496,9 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task", undefined, { systemPrompt: "You are a helper." })\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task", undefined, { systemPrompt: "You are a helper." })\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -587,12 +519,12 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "parent task") {
-				return '```repl\nconst r = await rlm("sub query")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("sub query")\nreturn r', toolUseId: "tp" };
 			}
 			if (userMsg === "sub query") {
-				return '```repl\nreturn "child answer"\n```';
+				return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 			}
-			return '```repl\nreturn "unexpected"\n```';
+			return { reasoning: "", code: 'return "unexpected"', toolUseId: "tx" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -615,11 +547,11 @@ describe("rlm", () => {
 			if (userMsg === "greet world") {
 				// Child agent -- verify globalDocs is in prompt and use the global
 				if (!systemPrompt.includes("myApi.greet")) {
-					return '```repl\nreturn "FAIL: no globalDocs"\n```';
+					return { reasoning: "", code: 'return "FAIL: no globalDocs"', toolUseId: "tc" };
 				}
-				return '```repl\nreturn myApi.greet("world")\n```';
+				return { reasoning: "", code: 'return myApi.greet("world")', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("greet world")\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("greet world")\nreturn r', toolUseId: "tp" };
 		};
 
 		const result = await rlm("parent task", undefined, {
@@ -636,7 +568,7 @@ describe("rlm", () => {
 		let capturedSystemPrompt = "";
 		const callLLM: CallLLM = async (_messages, systemPrompt) => {
 			capturedSystemPrompt = systemPrompt;
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t" };
 		};
 
 		await rlm("test", undefined, { callLLM });
@@ -650,9 +582,9 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task", undefined, { app: "test-app" })\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task", undefined, { app: "test-app" })\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -673,9 +605,9 @@ describe("rlm", () => {
 		const callLLM: CallLLM = async (messages, _systemPrompt) => {
 			callIndex++;
 			if (callIndex === 1) {
-				return '```repl\nconst r = await rlm("child task", undefined, { app: "nonexistent" })\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("child task", undefined, { app: "nonexistent" })\nreturn r', toolUseId: "t1" };
 			}
-			return '```repl\nreturn "saw error"\n```';
+			return { reasoning: "", code: 'return "saw error"', toolUseId: "t2" };
 		};
 
 		const result = await rlm("test", undefined, {
@@ -696,9 +628,9 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task", undefined, { app: "test-app", systemPrompt: "Extra instructions." })\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task", undefined, { app: "test-app", systemPrompt: "Extra instructions." })\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -717,7 +649,7 @@ describe("rlm", () => {
 		let capturedSystemPrompt = "";
 		const callLLM: CallLLM = async (_messages, systemPrompt) => {
 			capturedSystemPrompt = systemPrompt;
-			return '```repl\nreturn "done"\n```';
+			return { reasoning: "", code: 'return "done"', toolUseId: "t" };
 		};
 
 		await rlm("test", undefined, {
@@ -735,9 +667,9 @@ describe("rlm", () => {
 			systemPrompts.push(systemPrompt);
 			const userMsg = messages[0]?.content || "";
 			if (userMsg === "child task") {
-				return '```repl\nreturn "child done"\n```';
+				return { reasoning: "", code: 'return "child done"', toolUseId: "tc" };
 			}
-			return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+			return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 		};
 
 		await rlm("parent task", undefined, {
@@ -761,9 +693,9 @@ describe("rlm", () => {
 			const callLLM: CallLLM = async (messages, _systemPrompt) => {
 				const userMsg = messages[0]?.content || "";
 				if (userMsg === "child task") {
-					return '```repl\nreturn "child answer"\n```';
+					return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 				}
-				return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 			};
 
 			const result = await rlm("parent task", undefined, {
@@ -785,9 +717,9 @@ describe("rlm", () => {
 			const callLLM: CallLLM = async (messages, _systemPrompt) => {
 				const userMsg = messages[0]?.content || "";
 				if (userMsg === "child task") {
-					return '```repl\nreturn "child answer"\n```';
+					return { reasoning: "", code: 'return "child answer"', toolUseId: "tc" };
 				}
-				return '```repl\nconst r = await rlm("child task")\nreturn r\n```';
+				return { reasoning: "", code: 'const r = await rlm("child task")\nreturn r', toolUseId: "tp" };
 			};
 
 			const result = await rlm("parent task", undefined, {
@@ -807,12 +739,12 @@ describe("rlm", () => {
 			const callLLM: CallLLM = async (messages, _systemPrompt) => {
 				const userMsg = messages[0]?.content || "";
 				if (userMsg === "doomed child") {
-					return '```repl\nconsole.log("working...")\n```';
+					return { reasoning: "", code: 'console.log("working...")', toolUseId: "tc" };
 				}
 				if (messages.length <= 1) {
-					return '```repl\ntry { await rlm("doomed child") } catch(e) { console.log("caught: " + e.message) }\n```';
+					return { reasoning: "", code: 'try { await rlm("doomed child") } catch(e) { console.log("caught: " + e.message) }', toolUseId: "tp1" };
 				}
-				return '```repl\nreturn "parent done"\n```';
+				return { reasoning: "", code: 'return "parent done"', toolUseId: "tp2" };
 			};
 
 			const result = await rlm("parent task", undefined, {
@@ -831,9 +763,9 @@ describe("rlm", () => {
 
 	describe("traceSnapshots", () => {
 		it("envSnapshot captured when traceSnapshots is true", async () => {
-			const callLLM = mockCallLLM([
-				'```repl\nx = 42\n```',
-				'```repl\nx = 99\nreturn x\n```',
+			const callLLM = mockToolCallLLM([
+				tc("x = 42", "t1"),
+				{ reasoning: "", code: "x = 99\nreturn x", toolUseId: "t2" },
 			]);
 
 			const result = await rlm("test", undefined, {
@@ -848,10 +780,7 @@ describe("rlm", () => {
 		});
 
 		it("envSnapshot absent when traceSnapshots is false (default)", async () => {
-			const callLLM = mockCallLLM([
-				'```repl\nx = 42\n```',
-				'```repl\nreturn x\n```',
-			]);
+			const callLLM = mockToolCallLLM([tc("x = 42", "t1"), tc("return x", "t2")]);
 
 			const result = await rlm("test", undefined, { callLLM });
 
@@ -862,9 +791,9 @@ describe("rlm", () => {
 
 		it("envSnapshot excludes sandboxGlobals keys", async () => {
 			const mockApi = { greet: () => "hi" };
-			const callLLM = mockCallLLM([
-				'```repl\nmyVar = "hello"\nreturn myVar\n```',
-				'```repl\nreturn myVar\n```',
+			const callLLM = mockToolCallLLM([
+				{ reasoning: "", code: 'myVar = "hello"\nreturn myVar', toolUseId: "t1" },
+				tc("return myVar", "t2"),
 			]);
 
 			const result = await rlm("test", undefined, {
@@ -881,27 +810,7 @@ describe("rlm", () => {
 		});
 	});
 
-	describe("tool-call (CallLLMResponse) path", () => {
-		it("simple return: code from tool call executes correctly", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "Let me return hello.", code: 'return "hello"', toolUseId: "t1" },
-				{ reasoning: "Verified.", code: 'return "hello"', toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("hello");
-			expect(result.iterations).toBe(2);
-		});
-
-		it("multi-iteration: tool call code across turns", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "Thinking...", code: 'console.log("step 1")', toolUseId: "t1" },
-				{ reasoning: "Done.", code: 'return "done"', toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("done");
-			expect(result.iterations).toBe(2);
-		});
-
+	describe("tool-call specifics", () => {
 		it("null code: no-code tool response triggers warning", async () => {
 			let secondCallMessages: Array<{ role: string; content: string }> | undefined;
 			let callIndex = 0;
@@ -919,75 +828,6 @@ describe("rlm", () => {
 			expect(secondCallMessages).toBeDefined();
 			const lastMsg = secondCallMessages![secondCallMessages!.length - 1];
 			expect(lastMsg.content).toContain("[WARNING] No code was executed");
-		});
-
-		it("trace reasoning: tool-call reasoning stored in trace", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "I will compute the answer.", code: 'console.log("computing")', toolUseId: "t1" },
-				{ reasoning: "The answer is 42.", code: 'return 42', toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.trace).toHaveLength(2);
-			expect(result.trace[0].reasoning).toBe("I will compute the answer.");
-			expect(result.trace[0].code).toEqual(['console.log("computing")']);
-			expect(result.trace[0].output).toBe("computing");
-			expect(result.trace[1].reasoning).toBe("The answer is 42.");
-		});
-
-		it("error recovery: tool-call code throws, next turn recovers", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "Try this.", code: 'throw new Error("oops")', toolUseId: "t1" },
-				{ reasoning: "Fix it.", code: 'return "recovered"', toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("recovered");
-			expect(result.trace[0].error).toContain("oops");
-		});
-
-		it("variable persistence across tool-call iterations", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "Set x.", code: "x = 42", toolUseId: "t1" },
-				{ reasoning: "Read x.", code: "return x", toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("42");
-		});
-
-		it("context accessible in tool-call code", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "Get context.", code: "return context", toolUseId: "t1" },
-				{ reasoning: "Verified.", code: "return context", toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", "my context", { callLLM });
-			expect(result.answer).toBe("my context");
-		});
-
-		it("return() detection works with tool-call responses", async () => {
-			const callLLM = mockToolCallLLM([
-				{ reasoning: "First pass.", code: 'return "first"', toolUseId: "t1" },
-				// Early return intercepted; second call should also return
-				{ reasoning: "Verified.", code: 'return "first"', toolUseId: "t2" },
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("first");
-			expect(result.iterations).toBe(2);
-		});
-
-		it("delegation works with tool-call responses", async () => {
-			const callLLM: CallLLM = async (messages, _systemPrompt) => {
-				const userMsg = messages[0]?.content || "";
-				if (userMsg === "child query") {
-					return { reasoning: "Child responding.", code: 'return "child answer"', toolUseId: "tc" };
-				}
-				return {
-					reasoning: "Delegating.",
-					code: 'result = await rlm("child query")\nreturn result',
-					toolUseId: "tp",
-				};
-			};
-
-			const result = await rlm("parent query", undefined, { callLLM });
-			expect(result.answer).toBe("child answer");
 		});
 
 		it("conversation history uses __TOOL_CALL__ / __TOOL_RESULT__ markers", async () => {
@@ -1018,16 +858,6 @@ describe("rlm", () => {
 			expect(toolResultMsg).toBeDefined();
 			expect(toolResultMsg!.content).toContain("tool-123");
 			expect(toolResultMsg!.content).toContain("hello");
-		});
-
-		it("mixed: old string path still works alongside new path", async () => {
-			// Ensure the old code path still functions correctly
-			const callLLM = mockCallLLM([
-				'```repl\nconsole.log("old path")\n```',
-				'```repl\nreturn "old path works"\n```',
-			]);
-			const result = await rlm("test query", undefined, { callLLM });
-			expect(result.answer).toBe("old path works");
 		});
 
 		it("max iterations throws with tool-call responses", async () => {

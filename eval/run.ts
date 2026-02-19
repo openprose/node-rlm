@@ -85,7 +85,6 @@ interface CliArgs {
 	selectedProblems: string[];
 	modelAliases: string[];
 	childApps: string[];
-	maxBlocksPerIteration: number | null;
 	attempts: number;
 	game: string | null;
 	program: string | null;
@@ -220,7 +219,6 @@ function parseArgs(argv: string[]): CliArgs {
 			: [],
 		modelAliases,
 		childApps,
-		maxBlocksPerIteration: args["max-blocks-per-iteration"] ? parseInt(args["max-blocks-per-iteration"], 10) : null,
 		attempts: parseInt(args.attempts ?? "1", 10),
 		game: args.game ?? null,
 		program: args.program ?? null,
@@ -260,7 +258,7 @@ function modelOverrides(model: string): { maxTokens?: number; timeoutMs?: number
 	return {};
 }
 
-function resolveCallLLM(spec: string, maxBlocksPerIteration?: number | null): { callLLM: CallLLM; displayName: string } {
+function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string } {
 	const parts = spec.split("/");
 	if (parts.length < 2) {
 		console.error(`Invalid model format: ${spec}. Expected provider/model-id`);
@@ -274,10 +272,7 @@ function resolveCallLLM(spec: string, maxBlocksPerIteration?: number | null): { 
 		process.exit(1);
 	}
 
-	const overrides: { maxTokens?: number; timeoutMs?: number; stopAfterFirstBlock?: boolean } = modelOverrides(spec);
-	if (maxBlocksPerIteration === 1) {
-		overrides.stopAfterFirstBlock = true;
-	}
+	const overrides: { maxTokens?: number; timeoutMs?: number } = modelOverrides(spec);
 
 	// If model spec starts with "openrouter/", strip the prefix —
 	// OpenRouter expects just "provider/model" (e.g. "google/gemini-3-flash-preview").
@@ -664,7 +659,7 @@ async function main(): Promise<void> {
 
 	// Resolve model and create callLLM
 	console.log("Resolving model...");
-	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model, args.maxBlocksPerIteration);
+	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model);
 	const callLLM = args.rateLimit > 0
 		? withRateLimit(rawCallLLM, { requestsPerSecond: args.rateLimit, burst: args.rateBurst })
 		: rawCallLLM;
@@ -789,7 +784,6 @@ async function main(): Promise<void> {
 		concurrency: args.concurrency,
 		pluginBodies,
 		models,
-		...(args.maxBlocksPerIteration && { maxBlocksPerIteration: args.maxBlocksPerIteration }),
 		...(args.attempts > 1 && { attempts: args.attempts }),
 		...(benchmarkConfig.setupSandbox && { setupSandbox: benchmarkConfig.setupSandbox }),
 		...(benchmarkConfig.cleanupTask && { cleanupTask: benchmarkConfig.cleanupTask }),

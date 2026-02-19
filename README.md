@@ -160,7 +160,7 @@ The sandbox is shared across depths. Children inherit the parent's `maxIteration
 
 Plugins are markdown files that get concatenated into the root agent's system prompt via `pluginBodies`.
 
-- `plugins/drivers/` -- Model-specific reliability patches (e.g., suppress hallucinated tool calls, enforce one code block per turn). Stack multiple per run.
+- `plugins/drivers/` -- Model-specific reliability patches (e.g., enforce await discipline, verify-before-return). Stack multiple per run.
 - `plugins/apps/` -- Task architectures (e.g., structured data aggregation, recursive delegation). Typically one per run.
 - `plugins/profiles/` -- Profiles use YAML frontmatter to map model name patterns to a list of drivers. The plugin loader picks the right profile automatically.
 

@@ -2,7 +2,7 @@
 name: arc2-orchestrator
 kind: program-node
 role: orchestrator
-version: 1.1.0
+version: 1.2.0
 description: ARC-AGI-2 compound learning orchestrator — sequential task solving with inline knowledge curation, sanity-checked submissions, and diagnostic retries
 delegates: [task-solver]
 state:
@@ -41,6 +41,15 @@ ensures:
   - try-catch around every rlm() call — child timeouts must not crash the session
   - Retry prompt includes WHAT the previous approach tried and WHY it failed
   - Retry prompt instructs: "Try a DIFFERENT approach. Compose library primitives."
+  - ANTI-PATTERNS FROM GROUND TRUTH: Record anti-patterns based on submission
+    correctness (result.correct === false), not solver self-report (logEntry.solved).
+  - STRATEGIES FROM GROUND TRUTH: Only promote strategies when the submission is
+    actually correct. Do not record wrong approaches as successful strategies.
+  - AFTER RETURN: Once you have called return(), your job is done. If the harness
+    asks you to verify, re-confirm the return value. Do NOT start solving tasks
+    directly. Your role is orchestration, not solving.
+  - SURPLUS BUDGET: If you finish all passes with iterations remaining, return
+    immediately. Do not use surplus iterations to solve tasks yourself.
   - Return __arcSubmit.getResults() when all tasks (both passes) are done
 ```
 
@@ -75,9 +84,10 @@ globalThis.__arcSession = {
 
 ## Main Loop (One Task Per Iteration)
 
-After setup, each iteration processes one task. Combine all operations in a single code block: delegate, read result, validate, submit, curate, advance.
+**Each iteration processes exactly ONE task.** Do NOT batch multiple tasks. After delegating, validating, submitting, and curating for one task, STOP and let the next iteration handle the next task.
 
 ```javascript
+// EACH ITERATION: Process one task
 const session = globalThis.__arcSession;
 const taskIds = globalThis.__arcTaskIds;
 const library = globalThis.__arcLibrary;
@@ -90,14 +100,20 @@ if (session.currentIndex < taskIds.length) {
   console.log(`\n=== Task ${session.currentIndex + 1}/${taskIds.length} [${taskId}] (pass ${session.pass}) ===`);
   console.log(`Library: ${Object.keys(library.primitives).length} primitives, ${library.strategies.length} strategies`);
 
+  // --- BUILD DELEGATION QUERY ---
+  const sameSize = task.train.every(p =>
+    p.input.length === p.output.length && p.input[0].length === p.output[0].length);
+  const matchingStrategies = library.strategies.filter(s =>
+    s.structuralHints?.sameSize === sameSize);
+  const hint = matchingStrategies.length > 0
+    ? `\nPreviously successful approach for similar structure: "${matchingStrategies[0].approach}"`
+    : '';
+  const query = `Solve the current ARC task. Read task data and library from globalThis.${hint}`;
+
   // --- DELEGATE TO SOLVER ---
   let solverResult;
   try {
-    solverResult = await rlm(
-      "Solve the current ARC task. Read task data and library from globalThis.",
-      undefined,
-      { app: "arc2-solver", maxIterations: 18 }
-    );
+    solverResult = await rlm(query, undefined, { app: "arc2-solver", maxIterations: 18 });
   } catch (e) {
     console.log(`Solver error: ${e.message}`);
     library.taskLog.push({
@@ -107,8 +123,8 @@ if (session.currentIndex < taskIds.length) {
     });
   }
 
-  // --- READ SOLVER RESULT ---
-  const logEntry = library.taskLog[library.taskLog.length - 1];
+  // --- READ SOLVER RESULT (use last entry for this task) ---
+  const logEntry = library.taskLog.filter(e => e.id === taskId).pop();
   const solved = logEntry?.solved ?? false;
   const confidence = logEntry?.confidence ?? 0;
   const answer = logEntry?.answer;
@@ -123,14 +139,9 @@ if (session.currentIndex < taskIds.length) {
 
     // (a) Dimension consistency
     const trainDimPatterns = trainOutputs.map(o => `${o.length}x${o[0].length}`);
-    const testInput = task.test[0].input;
     const answerDims = `${answer.length}x${answer[0].length}`;
-    // If all training outputs have same dims, answer should too
-    // If training dims vary (correlate with input), check pattern
     const uniqueTrainDims = [...new Set(trainDimPatterns)];
     if (uniqueTrainDims.length === 1 && answerDims !== uniqueTrainDims[0]) {
-      // All training outputs are same size but answer differs — could be wrong
-      // Only flag if training input/output are same-size (fixed output dims)
       const trainSameSize = task.train.every(p =>
         p.input.length === p.output.length && p.input[0].length === p.output[0].length);
       if (trainSameSize) {
@@ -157,59 +168,55 @@ if (session.currentIndex < taskIds.length) {
     }
   }
 
-  // --- SUBMIT OR DEFER ---
+  // --- SUBMIT OR DEFER, THEN CURATE ---
   if (solved && answer && sanityOk && confidence > 0) {
     const result = __arcSubmit.submit(taskId, answer);
     session.totalSubmissions++;
     console.log(`SUBMITTED ${taskId}: correct=${result.correct}, remaining=${result.remaining}`);
+
     if (result.correct) {
       session.submittedCorrect++;
+      // Promote strategy ONLY when submission is actually correct
+      if (logEntry.approach) {
+        const existing = library.strategies.find(s => s.approach === logEntry.approach);
+        if (existing) {
+          existing.taskIds.push(taskId);
+          existing.successCount++;
+        } else {
+          library.strategies.push({
+            approach: logEntry.approach,
+            structuralHints: logEntry.structuralProps || {},
+            taskIds: [taskId],
+            successCount: 1,
+          });
+        }
+      }
     } else {
       session.failedTaskIds.push(taskId);
+      // Record anti-pattern from SUBMISSION RESULT, not solver self-report
+      const warning = `${logEntry.approach} failed on ${taskId}: submitted but WRONG`;
+      library.antiPatterns.push(warning);
     }
   } else {
     session.failedTaskIds.push(taskId);
-    if (!solved) {
-      console.log(`NOT SUBMITTED: solver could not solve. Saving for pass@2.`);
-    } else if (!sanityOk) {
+    if (!sanityOk && solved) {
+      // Record anti-pattern when sanity check fails
+      const warning = `${logEntry?.approach} failed sanity on ${taskId}: ${logEntry?.keyInsight}`;
+      library.antiPatterns.push(warning);
       console.log(`NOT SUBMITTED: failed sanity check. Saving for pass@2.`);
+    } else if (!solved) {
+      console.log(`NOT SUBMITTED: solver could not solve. Saving for pass@2.`);
     } else {
       console.log(`NOT SUBMITTED: low confidence. Saving for pass@2.`);
     }
   }
 
-  // --- INLINE CURATION ---
-  if (logEntry) {
-    // Record strategy if solved
-    if (logEntry.solved && logEntry.approach) {
-      const existing = library.strategies.find(s => s.approach === logEntry.approach);
-      if (existing) {
-        existing.taskIds.push(taskId);
-        existing.successCount++;
-      } else {
-        library.strategies.push({
-          approach: logEntry.approach,
-          structuralHints: logEntry.structuralProps || {},
-          taskIds: [taskId],
-          successCount: 1,
-        });
-      }
-    }
-
-    // Record anti-pattern if failed
-    if (!logEntry.solved && logEntry.approach && logEntry.approach !== "crashed") {
-      const warning = `${logEntry.approach} failed on ${taskId}: ${logEntry.keyInsight}`;
-      if (!library.antiPatterns.some(ap => ap.includes(logEntry.approach))) {
-        library.antiPatterns.push(warning);
-      }
-    }
-
-    // Verify new primitives exist as live functions
-    if (logEntry.newPrimitives) {
-      for (const name of logEntry.newPrimitives) {
-        if (typeof library.primitives[name] === 'function') {
-          console.log(`  Primitive confirmed: ${name}`);
-        }
+  // --- VERIFY NEW PRIMITIVES ---
+  if (logEntry?.newPrimitives) {
+    for (const name of logEntry.newPrimitives) {
+      const prim = library.primitives[name];
+      if (typeof prim?.fn === 'function') {
+        console.log(`  Primitive confirmed: ${name} -- ${prim.doc || '(no doc)'}`);
       }
     }
   }
@@ -217,14 +224,14 @@ if (session.currentIndex < taskIds.length) {
   session.currentIndex++;
   console.log(`Progress: ${session.submittedCorrect}/${session.currentIndex} correct`);
   console.log(`Library: ${Object.keys(library.primitives).length} primitives, ${library.strategies.length} strategies, ${library.antiPatterns.length} anti-patterns`);
+
+  // STOP HERE. Next iteration processes the next task.
 }
 ```
 
-## Pass@2 (Retry Failed Tasks)
+## Pass@2 Transition
 
-After all tasks are done on pass@1, retry tasks that failed or weren't submitted. The solver now has the full accumulated library.
-
-**The retry prompt is diagnostic, not generic.** It tells the solver what was tried before and why it failed, and instructs it to try something different.
+After all tasks are done on pass@1, transition to pass@2. This should be its own iteration.
 
 ```javascript
 const session = globalThis.__arcSession;
@@ -235,30 +242,42 @@ if (session.pass === 1 && session.currentIndex >= globalThis.__arcTaskIds.length
   const retryIds = session.failedTaskIds.filter(id => __arcSubmit.remaining(id) > 0);
   console.log(`\n=== PASS@2: Retrying ${retryIds.length} tasks with full library ===`);
   console.log(`Library: ${Object.keys(library.primitives).length} primitives, ${library.strategies.length} strategies`);
-
   session.retryIds = retryIds;
   session.retryIndex = 0;
+  // STOP HERE. Next iteration processes the first retry.
 }
+```
+
+## Pass@2 Retry (One Task Per Iteration)
+
+**The retry prompt is diagnostic, not generic.** It tells the solver what was tried before and why it failed. Each retry is one iteration — do NOT batch.
+
+```javascript
+const session = globalThis.__arcSession;
+const library = globalThis.__arcLibrary;
 
 if (session.pass === 2 && session.retryIds && session.retryIndex < session.retryIds.length) {
   const taskId = session.retryIds[session.retryIndex];
   globalThis.__arcCurrentTask = taskId;
   const remaining = __arcSubmit.remaining(taskId);
 
-  // Find the previous attempt's log entry for this task
-  const prevEntry = library.taskLog.find(e => e.id === taskId);
+  // Find the previous attempt's log entry (last entry for this task)
+  const prevEntry = library.taskLog.filter(e => e.id === taskId).pop();
   const prevApproach = prevEntry?.approach || "unknown";
   const prevInsight = prevEntry?.keyInsight || "no insight recorded";
-  const primNames = Object.keys(library.primitives).join(', ') || '(none)';
+
+  // Build primitive listing with doc strings
+  const primList = Object.entries(library.primitives)
+    .map(([name, p]) => `  ${name}: ${p?.doc || '(no doc)'}`)
+    .join('\n') || '  (none)';
 
   console.log(`\n=== Retry ${session.retryIndex + 1}/${session.retryIds.length} [${taskId}] (${remaining} submissions left) ===`);
 
   // --- DIAGNOSTIC RETRY PROMPT ---
   const retryQuery = `Solve the current ARC task. A previous attempt tried "${prevApproach}" and failed: "${prevInsight}".
 DO NOT reuse that approach. Try something DIFFERENT.
-Available library primitives: ${primNames}.
-Compose existing primitives where possible — do not rewrite from scratch.
-Focus on what makes THIS task structurally different from what was already tried.`;
+Available library primitives:\n${primList}
+Compose existing primitives where possible — do not rewrite from scratch.`;
 
   let solverResult;
   try {
@@ -274,12 +293,12 @@ Focus on what makes THIS task structurally different from what was already tried
     });
   }
 
-  const logEntry = library.taskLog[library.taskLog.length - 1];
+  const logEntry = library.taskLog.filter(e => e.id === taskId).pop();
   const solved = logEntry?.solved ?? false;
   const answer = logEntry?.answer;
 
   if (solved && answer) {
-    // Run sanity checks (same as pass@1)
+    // Sanity checks (same as pass@1)
     const task = globalThis.__arcTasks[taskId];
     const trainOutputs = task.train.map(p => p.output);
     const trainColors = new Set();
@@ -297,21 +316,34 @@ Focus on what makes THIS task structurally different from what was already tried
       const result = __arcSubmit.submit(taskId, answer);
       session.totalSubmissions++;
       console.log(`RETRY SUBMITTED ${taskId}: correct=${result.correct}, remaining=${result.remaining}`);
-      if (result.correct) session.submittedCorrect++;
+      if (result.correct) {
+        session.submittedCorrect++;
+        // Promote strategy only on correct submission
+        if (logEntry.approach) {
+          const existing = library.strategies.find(s => s.approach === logEntry.approach);
+          if (existing) { existing.taskIds.push(taskId); existing.successCount++; }
+          else { library.strategies.push({ approach: logEntry.approach, structuralHints: logEntry.structuralProps || {}, taskIds: [taskId], successCount: 1 }); }
+        }
+      } else {
+        // Anti-pattern from ground truth
+        library.antiPatterns.push(`${logEntry.approach} failed on ${taskId}: submitted but WRONG (retry)`);
+      }
     } else {
       console.log(`RETRY: sanity check failed for ${taskId}. Not submitting.`);
+      library.antiPatterns.push(`${logEntry?.approach} failed sanity on ${taskId} (retry)`);
     }
   } else {
     console.log(`RETRY: solver still can't solve ${taskId}. Not submitting.`);
   }
 
   session.retryIndex++;
+  // STOP HERE. Next iteration processes the next retry.
 }
 ```
 
 ## Return
 
-When all tasks (both passes) are done, return the submission results.
+When all tasks (both passes) are done, return the submission results. Do NOT continue working after returning.
 
 ```javascript
 const session = globalThis.__arcSession;
@@ -331,6 +363,7 @@ if (allDone) {
   console.log(`Library: ${Object.keys(globalThis.__arcLibrary.primitives).length} primitives, ${globalThis.__arcLibrary.strategies.length} strategies`);
   console.log(`${'='.repeat(60)}`);
 
+  // Your job is DONE after this return. Do not solve tasks directly.
   return(JSON.stringify(results));
 }
 ```
@@ -341,15 +374,20 @@ You have ~100 iterations. Each task cycle costs 1-2 orchestrator iterations (set
 
 **Combine operations.** The solver delegation, submission decision, curation, and advancement should all happen in a single code block per task. Aim for 1-2 orchestrator iterations per task.
 
+## What You Cannot Do
+
+- You cannot solve tasks directly. Do not analyze grids, write transforms, or detect patterns. Delegate ALL solving to `rlm(goal, null, { app: "arc2-solver" })`.
+- You cannot promote strategies or dismiss anti-patterns based on solver self-report. Only ground truth from `__arcSubmit.submit()` determines correctness.
+- You cannot continue working after calling `return()`. If the harness asks you to verify, re-confirm and return again.
+
 ## Critical Rules
 
-1. **Pass by reference.** Read/write `globalThis`. Never serialize the library into child prompts.
-2. **One task per cycle.** Do not batch multiple tasks in one iteration.
-3. **Always delegate.** Do not try to solve tasks yourself. The solver has the exploration strategy.
-4. **try-catch everything.** Child crashes must not crash the session.
-5. **Sanity check before submission.** Validate dimensions, colors, non-triviality.
+1. **One task per iteration.** Process one task per code block. STOP after advancing the index.
+2. **Always delegate.** Do not try to solve tasks yourself. The solver does pattern discovery.
+3. **try-catch everything.** Child crashes must not crash the session.
+4. **Sanity check before submission.** Validate dimensions, colors, non-triviality.
+5. **Ground-truth curation.** Promote strategies only on correct submission. Record anti-patterns on wrong submission or failed sanity.
 6. **Diagnostic retries.** Tell the retry solver what was tried and what failed.
-7. **Track state on globalThis.** Use `globalThis.__arcSession` for all bookkeeping.
-8. **Submit strategically.** Only submit when solver self-verified AND sanity checks pass.
-9. **Return format.** `return(JSON.stringify(__arcSubmit.getResults()))`.
-10. **Log progress.** Every iteration should print a progress summary.
+7. **Pass by reference.** Read/write `globalThis`. Never serialize the library into child prompts.
+8. **Return format.** `return(JSON.stringify(__arcSubmit.getResults()))`.
+9. **Log progress.** Every iteration should print a progress summary.

@@ -1,23 +1,43 @@
 /**
- * OpenRouter-compatible CallLLM driver.
+ * OpenRouter-compatible CallLLM driver with OpenAI-format tool calls.
  *
  * Talks to any API that uses the OpenAI chat completions format:
  * OpenRouter, OpenAI, Groq, Together, Ollama, vLLM, etc.
+ *
+ * Uses a single `execute_code` tool with `parallel_tool_calls: false`
+ * to guarantee exactly one code execution per LLM response.
  *
  * Retries with exponential backoff, request timeouts, per-request
  * timing/logging to stderr, and both HTTP-level and JSON-level error handling.
  */
 
-import type { CallLLM } from "../rlm.js";
-import { fromAnthropicMessages } from "./anthropic-messages.js";
+import type { CallLLM, CallLLMResponse } from "../rlm.js";
+import { EXECUTE_CODE_TOOL, TOOL_CHOICE } from "../system-prompt.js";
 
 interface ChatMessage {
 	role: string;
-	content: string;
+	content: string | null;
+	tool_calls?: Array<{
+		id: string;
+		type: "function";
+		function: { name: string; arguments: string };
+	}>;
+	tool_call_id?: string;
 }
 
 interface ChatCompletionResponse {
-	choices: Array<{ message: { content: string }; finish_reason?: string; native_finish_reason?: string }>;
+	choices: Array<{
+		message: {
+			content: string | null;
+			tool_calls?: Array<{
+				id: string;
+				type: "function";
+				function: { name: string; arguments: string };
+			}>;
+		};
+		finish_reason?: string;
+		native_finish_reason?: string;
+	}>;
 	error?: { message: string; code?: number };
 }
 
@@ -28,30 +48,17 @@ export interface OpenRouterCompatibleOptions {
 	apiKey: string;
 	/** Model ID to send in the request body. */
 	model: string;
-	/** Request timeout in milliseconds (default 60000). */
+	/** Request timeout in milliseconds (default 120000). */
 	timeoutMs?: number;
 	/** Number of retries on 429/5xx (default 3). */
 	maxRetries?: number;
-	/** max_tokens for the response (default 4096). */
+	/** max_tokens for the response (default 16384). */
 	maxTokens?: number;
-	/**
-	 * Whether to send `tools: [], tool_choice: "none"` in the request body.
-	 * Needed for Gemini to suppress MALFORMED_FUNCTION_CALL errors.
-	 * Default false.
-	 */
-	tools?: boolean;
-	/**
-	 * Use SSE streaming and abort generation after the first complete code block.
-	 * When the model starts writing a second ```javascript fence, the stream is
-	 * cancelled and accumulated content (up to the second fence) is returned.
-	 * Saves 80%+ of generation time on responses with multiple code blocks.
-	 */
-	stopAfterFirstBlock?: boolean;
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_MAX_TOKENS = 16384;
 const BASE_DELAY_MS = 1000;
 
 async function sleep(ms: number): Promise<void> {
@@ -59,82 +66,74 @@ async function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Create a CallLLM function that calls any OpenAI-compatible chat completions API.
+ * Translate the engine's flat message array into OpenAI chat completions format
+ * with tool_calls / tool role messages.
+ *
+ * The engine maintains messages as `{ role: string; content: string }`. When the
+ * engine uses the tool-call path, assistant messages contain the full reasoning
+ * text followed by a tool-call marker, and the subsequent user message contains
+ * the tool result. This driver uses a convention to detect tool-call history:
+ *
+ * - Assistant messages starting with `__TOOL_CALL__` are tool-call responses
+ *   (format: `__TOOL_CALL__\n<tool_use_id>\n<reasoning>\n__CODE__\n<code>`)
+ * - User messages starting with `__TOOL_RESULT__` are tool results
+ *   (format: `__TOOL_RESULT__\n<tool_use_id>\n<content>`)
+ *
+ * Plain string messages (initial user query) are passed through as-is.
  */
-/** Find the byte offset where a second ```javascript/js/repl fence begins. */
-function findSecondFenceIndex(text: string): number | null {
-	const re = /```(?:javascript|js|repl)\n/g;
-	let count = 0;
-	let match;
-	while ((match = re.exec(text))) {
-		count++;
-		if (count === 2) return match.index;
+export function translateMessages(
+	engineMessages: Array<{ role: string; content: string }>,
+): ChatMessage[] {
+	const result: ChatMessage[] = [];
+
+	for (const msg of engineMessages) {
+		if (msg.role === "assistant" && msg.content.startsWith("__TOOL_CALL__\n")) {
+			// Reconstruct assistant message with content + tool_calls
+			const parts = msg.content.split("\n__CODE__\n");
+			const header = parts[0]; // "__TOOL_CALL__\n<id>\n<reasoning>"
+			const code = parts[1] ?? "";
+			const headerLines = header.split("\n");
+			const toolUseId = headerLines[1];
+			const reasoning = headerLines.slice(2).join("\n");
+
+			result.push({
+				role: "assistant",
+				content: reasoning || null,
+				tool_calls: [{
+					id: toolUseId,
+					type: "function",
+					function: {
+						name: "execute_code",
+						arguments: JSON.stringify({ code }),
+					},
+				}],
+			});
+		} else if (msg.role === "user" && msg.content.startsWith("__TOOL_RESULT__\n")) {
+			// Reconstruct tool result message
+			const lines = msg.content.split("\n");
+			const toolUseId = lines[1];
+			const content = lines.slice(2).join("\n");
+
+			result.push({
+				role: "tool",
+				content,
+				tool_call_id: toolUseId,
+			});
+		} else {
+			// Plain text message (initial user query)
+			result.push({ role: msg.role, content: msg.content });
+		}
 	}
-	return null;
+
+	return result;
 }
 
 /**
- * Read an SSE stream, accumulating content tokens. If a second code-fence
- * opening is detected, cancel the stream early and return the content
- * truncated just before the second fence.
+ * Create a CallLLM function that calls any OpenAI-compatible chat completions API
+ * with tool-call-based REPL execution.
+ *
+ * Returns `CallLLMResponse` objects: `{ reasoning, code, toolUseId }`.
  */
-async function readStreamUntilSecondBlock(
-	body: ReadableStream<Uint8Array>,
-	abortController: AbortController,
-): Promise<{ content: string; aborted: boolean }> {
-	const reader = body.getReader();
-	const decoder = new TextDecoder();
-	let content = "";
-	let sseBuffer = "";
-	let aborted = false;
-
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-
-			sseBuffer += decoder.decode(value, { stream: true });
-
-			// Parse complete SSE lines
-			const lines = sseBuffer.split("\n");
-			sseBuffer = lines.pop()!; // keep incomplete line
-
-			for (const line of lines) {
-				if (!line.startsWith("data: ")) continue;
-				const data = line.slice(6).trim();
-				if (data === "[DONE]") continue;
-				try {
-					const chunk = JSON.parse(data);
-					const delta = chunk.choices?.[0]?.delta?.content;
-					if (delta) content += delta;
-				} catch {
-					// Skip malformed chunks
-				}
-			}
-
-			// Check if a second code block is starting
-			const secondFence = findSecondFenceIndex(content);
-			if (secondFence !== null) {
-				content = content.slice(0, secondFence);
-				aborted = true;
-				abortController.abort();
-				break;
-			}
-		}
-	} catch (err) {
-		// AbortError is expected when we cancel the stream
-		if (err instanceof Error && err.name === "AbortError" && aborted) {
-			// Expected — we aborted intentionally
-		} else {
-			throw err;
-		}
-	} finally {
-		try { await reader.cancel(); } catch {}
-	}
-
-	return { content, aborted };
-}
-
 export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): CallLLM {
 	const {
 		baseUrl,
@@ -143,8 +142,6 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 		timeoutMs = DEFAULT_TIMEOUT_MS,
 		maxRetries = DEFAULT_MAX_RETRIES,
 		maxTokens = DEFAULT_MAX_TOKENS,
-		tools = false,
-		stopAfterFirstBlock = false,
 	} = options;
 
 	// Normalize: strip trailing slash so we can append /chat/completions reliably.
@@ -156,10 +153,10 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 	return async (messages, systemPrompt) => {
 		const chatMessages: ChatMessage[] = [
 			{ role: "system", content: systemPrompt },
-			...messages.map((m) => ({ role: m.role, content: m.content })),
+			...translateMessages(messages),
 		];
 		const callId = ++callCount;
-		const inputChars = chatMessages.reduce((n, m) => n + m.content.length, 0);
+		const inputChars = chatMessages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
 
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			const t0 = Date.now();
@@ -168,14 +165,10 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 				model,
 				messages: chatMessages,
 				max_tokens: maxTokens,
+				tools: [EXECUTE_CODE_TOOL],
+				tool_choice: TOOL_CHOICE,
+				parallel_tool_calls: false,
 			};
-			if (tools) {
-				reqBody.tools = [];
-				reqBody.tool_choice = "none";
-			}
-			if (stopAfterFirstBlock) {
-				reqBody.stream = true;
-			}
 
 			const abortController = new AbortController();
 			const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
@@ -193,6 +186,9 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 				});
 			} catch (err) {
 				clearTimeout(timeoutId);
+				if (err instanceof Error && err.name === "AbortError") {
+					throw new Error(`${model}: request timed out after ${timeoutMs}ms`);
+				}
 				throw err;
 			}
 
@@ -211,21 +207,6 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 				throw new Error(`${model} API error (${status}): ${text}`);
 			}
 
-			// --- Streaming path: read SSE tokens, abort at second code fence ---
-			if (stopAfterFirstBlock && response.body) {
-				const { content, aborted } = await readStreamUntilSecondBlock(response.body, abortController);
-				clearTimeout(timeoutId);
-				const elapsed = Date.now() - t0;
-				const suffix = aborted ? ", early-stop=second-fence" : "";
-				console.error(`[${model} #${callId}] ${elapsed}ms, in=${inputChars}c, out=${content.length}c, finish=stream${suffix}`);
-
-				if (!content) {
-					console.error(`[${model}] Empty streaming content`);
-				}
-				return content;
-			}
-
-			// --- Non-streaming path: read full JSON response ---
 			clearTimeout(timeoutId);
 			const data = (await response.json()) as ChatCompletionResponse;
 
@@ -245,16 +226,33 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 			}
 
 			const choice = data.choices[0];
-			const content = choice.message.content ?? "";
-			const elapsed = Date.now() - t0;
-			const outChars = content.length;
-			console.error(`[${model} #${callId}] ${elapsed}ms, in=${inputChars}c, out=${outChars}c, finish=${choice.finish_reason}`);
+			const reasoning = choice.message.content ?? "";
+			let code: string | null = null;
+			let toolUseId: string | null = null;
 
-			if (!content) {
-				console.error(`[${model}] Empty content. finish_reason=${(choice as any).native_finish_reason ?? choice.finish_reason}, keys=${Object.keys(choice.message).join(",")}`);
+			const toolCall = choice.message.tool_calls?.[0];
+			if (toolCall && toolCall.function.name === "execute_code") {
+				toolUseId = toolCall.id;
+				try {
+					const args = JSON.parse(toolCall.function.arguments);
+					code = args.code ?? null;
+				} catch {
+					// Malformed JSON in arguments — treat as no code
+					code = null;
+				}
 			}
 
-			return content;
+			const elapsed = Date.now() - t0;
+			const outChars = reasoning.length + (code?.length ?? 0);
+			console.error(
+				`[${model} #${callId}] ${elapsed}ms, in=${inputChars}c, out=${outChars}c, finish=${choice.finish_reason}`,
+			);
+
+			const result: CallLLMResponse = { reasoning, code };
+			if (toolUseId) {
+				result.toolUseId = toolUseId;
+			}
+			return result;
 		}
 
 		throw new Error(`${model}: exhausted all retries`);
@@ -333,17 +331,6 @@ export function fromProviderModel(
 				`You must pass both options.baseUrl and options.apiKey.`,
 			);
 		}
-	}
-
-	// Route anthropic/* models on OpenRouter to the Anthropic Messages driver
-	// for tool-call-based REPL execution (enforces one code block per turn).
-	if (provider === "openrouter" && model.startsWith("anthropic/")) {
-		return fromAnthropicMessages({
-			baseUrl,
-			apiKey,
-			model,
-			timeoutMs: options?.timeoutMs,
-		});
 	}
 
 	return fromOpenRouterCompatible({

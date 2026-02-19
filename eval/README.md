@@ -72,7 +72,7 @@ Run `npx tsx eval/run.ts --help` for all options.
 
 The plugin system has three kinds of plugins:
 
-- **Drivers** — model-specific reliability patches (e.g., suppress hallucinated tool calls, enforce one code block per response). Stack multiple drivers per run.
+- **Drivers** — model-specific reliability patches (e.g., enforce await discipline, verify-before-return). Stack multiple drivers per run.
 - **Apps** — task architectures (e.g., structured data aggregation, recursive delegation). Typically one app per run.
 - **Profiles** — named bundles of drivers for a model family. Profiles declare glob patterns to auto-match model strings.
 

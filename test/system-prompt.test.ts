@@ -110,7 +110,7 @@ describe("buildSystemPrompt", () => {
 
 	it("contains key rules: one block, await, verify", () => {
 		const result = buildSystemPrompt(BASE_OPTS);
-		expect(result).toContain("One ```javascript block per response");
+		expect(result).toContain("One execute_code tool call per response");
 		expect(result).toContain("await");
 		expect(result).toContain("verifying via");
 	});
