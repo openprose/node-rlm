@@ -42,6 +42,8 @@ export interface HarnessConfig {
 	traceChildren?: boolean;
 	/** When true, sandbox variable snapshots are captured after each iteration. */
 	traceSnapshots?: boolean;
+	/** Reasoning effort level for OpenRouter reasoning tokens. */
+	reasoningEffort?: string;
 	/** Create per-task sandbox globals. Called before rlm() for each task. */
 	setupSandbox?: (task: EvalTask) => Record<string, unknown>;
 	/** Cleanup after each task (success or error). */
@@ -113,7 +115,7 @@ export async function runEval(
 				}
 
 				try {
-					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs, config.childApps, config.traceChildren, config.traceSnapshots);
+					const result = await runSingleTask(task, config.callLLM, config.scoringFn, maxIterations, maxDepth, config.pluginBodies, config.models, config.setupSandbox, config.cleanupTask, config.getResultMetadata, config.globalDocs, config.childApps, config.traceChildren, config.traceSnapshots, config.reasoningEffort);
 					attemptScores.push(result.score);
 
 					if (!bestResult || result.score > bestResult.score) {
@@ -207,6 +209,7 @@ async function runSingleTask(
 	childApps?: Record<string, string>,
 	traceChildren?: boolean,
 	traceSnapshots?: boolean,
+	reasoningEffort?: string,
 ): Promise<EvalResult> {
 	const startTime = Date.now();
 
@@ -214,13 +217,13 @@ async function runSingleTask(
 	let totalInputChars = 0;
 	let totalOutputChars = 0;
 
-	const wrappedCallLLM: CallLLM = async (messages, systemPrompt) => {
+	const wrappedCallLLM: CallLLM = async (messages, systemPrompt, options) => {
 		totalInputChars += systemPrompt.length;
 		for (const msg of messages) {
 			totalInputChars += msg.content.length;
 		}
 
-		const response = await callLLM(messages, systemPrompt);
+		const response = await callLLM(messages, systemPrompt, options);
 		totalOutputChars += (response.reasoning?.length ?? 0) + (response.code?.length ?? 0);
 		return response;
 	};
@@ -239,6 +242,7 @@ async function runSingleTask(
 			...(childApps && { childApps }),
 			...(traceChildren && { traceChildren }),
 			...(traceSnapshots && { traceSnapshots }),
+			...(reasoningEffort && { reasoningEffort }),
 		});
 
 		const wallTimeMs = Date.now() - startTime;

@@ -45,8 +45,8 @@ export function withRateLimit(callLLM: CallLLM, config: RateLimitConfig): CallLL
 		config.burst ?? config.requestsPerSecond,
 		config.requestsPerSecond,
 	);
-	return async (messages, systemPrompt) => {
+	return async (messages, systemPrompt, options) => {
 		await bucket.acquire();
-		return callLLM(messages, systemPrompt);
+		return callLLM(messages, systemPrompt, options);
 	};
 }

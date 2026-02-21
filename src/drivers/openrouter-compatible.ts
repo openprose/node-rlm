@@ -11,12 +11,14 @@
  * timing/logging to stderr, and both HTTP-level and JSON-level error handling.
  */
 
-import type { CallLLM, CallLLMResponse } from "../rlm.js";
+import type { CallLLM, CallLLMOptions, CallLLMResponse } from "../rlm.js";
 import { EXECUTE_CODE_TOOL, TOOL_CHOICE } from "../system-prompt.js";
 
 interface ChatMessage {
 	role: string;
 	content: string | null;
+	reasoning?: string | null;
+	reasoning_details?: Array<Record<string, unknown>> | null;
 	tool_calls?: Array<{
 		id: string;
 		type: "function";
@@ -29,6 +31,8 @@ interface ChatCompletionResponse {
 	choices: Array<{
 		message: {
 			content: string | null;
+			reasoning?: string | null;
+			reasoning_details?: Array<Record<string, unknown>> | null;
 			tool_calls?: Array<{
 				id: string;
 				type: "function";
@@ -54,6 +58,8 @@ export interface OpenRouterCompatibleOptions {
 	maxRetries?: number;
 	/** max_tokens for the response (default 16384). */
 	maxTokens?: number;
+	/** Reasoning effort level (default: none). Set to enable OpenRouter reasoning tokens. */
+	reasoningEffort?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -82,7 +88,7 @@ async function sleep(ms: number): Promise<void> {
  * Plain string messages (initial user query) are passed through as-is.
  */
 export function translateMessages(
-	engineMessages: Array<{ role: string; content: string }>,
+	engineMessages: Array<{ role: string; content: string; meta?: Record<string, unknown> }>,
 ): ChatMessage[] {
 	const result: ChatMessage[] = [];
 
@@ -96,7 +102,7 @@ export function translateMessages(
 			const toolUseId = headerLines[1];
 			const reasoning = headerLines.slice(2).join("\n");
 
-			result.push({
+			const chatMsg: ChatMessage = {
 				role: "assistant",
 				content: reasoning || null,
 				tool_calls: [{
@@ -107,7 +113,14 @@ export function translateMessages(
 						arguments: JSON.stringify({ code }),
 					},
 				}],
-			});
+			};
+
+			// Attach reasoning details for round-trip if present
+			if (msg.meta?.reasoningDetails) {
+				chatMsg.reasoning_details = msg.meta.reasoningDetails as Array<Record<string, unknown>>;
+			}
+
+			result.push(chatMsg);
 		} else if (msg.role === "user" && msg.content.startsWith("__TOOL_RESULT__\n")) {
 			// Reconstruct tool result message
 			const lines = msg.content.split("\n");
@@ -142,6 +155,7 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 		timeoutMs = DEFAULT_TIMEOUT_MS,
 		maxRetries = DEFAULT_MAX_RETRIES,
 		maxTokens = DEFAULT_MAX_TOKENS,
+		reasoningEffort: defaultReasoningEffort,
 	} = options;
 
 	// Normalize: strip trailing slash so we can append /chat/completions reliably.
@@ -150,13 +164,18 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 
 	let callCount = 0;
 
-	return async (messages, systemPrompt) => {
+	return async (messages, systemPrompt, callOptions?: CallLLMOptions) => {
 		const chatMessages: ChatMessage[] = [
 			{ role: "system", content: systemPrompt },
 			...translateMessages(messages),
 		];
 		const callId = ++callCount;
 		const inputChars = chatMessages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+
+		// Per-call reasoning effort overrides the default from options
+		const effort = callOptions?.reasoningEffort ?? defaultReasoningEffort;
+
+		const useReasoning = !!(effort && effort !== "none");
 
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			const t0 = Date.now();
@@ -166,9 +185,18 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 				messages: chatMessages,
 				max_tokens: maxTokens,
 				tools: [EXECUTE_CODE_TOOL],
-				tool_choice: TOOL_CHOICE,
+				// Anthropic extended thinking is incompatible with forced tool_choice.
+				// When reasoning is enabled, fall back to "auto" so the API accepts it.
+				tool_choice: useReasoning ? "auto" : TOOL_CHOICE,
 				parallel_tool_calls: false,
 			};
+
+			// Add reasoning tokens request if effort is specified.
+			// Always include `enabled: true` — required by Claude 4.6+ adaptive thinking.
+			// The `effort` field is additive for models that support it; ignored by others.
+			if (useReasoning) {
+				reqBody.reasoning = { enabled: true, effort };
+			}
 
 			const abortController = new AbortController();
 			const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
@@ -226,7 +254,10 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 			}
 
 			const choice = data.choices[0];
-			const reasoning = choice.message.content ?? "";
+			const reasoning = choice.message.reasoning
+				?? choice.message.content
+				?? "";
+			const reasoningDetails = choice.message.reasoning_details ?? null;
 			let code: string | null = null;
 			let toolUseId: string | null = null;
 
@@ -251,6 +282,9 @@ export function fromOpenRouterCompatible(options: OpenRouterCompatibleOptions): 
 			const result: CallLLMResponse = { reasoning, code };
 			if (toolUseId) {
 				result.toolUseId = toolUseId;
+			}
+			if (reasoningDetails) {
+				result.reasoningDetails = reasoningDetails;
 			}
 			return result;
 		}
@@ -290,7 +324,7 @@ const KNOWN_PROVIDERS: Record<string, ProviderConfig> = {
  */
 export function fromProviderModel(
 	providerSlashModel: string,
-	options?: { apiKey?: string; baseUrl?: string; timeoutMs?: number },
+	options?: { apiKey?: string; baseUrl?: string; timeoutMs?: number; reasoningEffort?: string },
 ): CallLLM {
 	const slashIdx = providerSlashModel.indexOf("/");
 	if (slashIdx === -1) {
@@ -338,5 +372,6 @@ export function fromProviderModel(
 		apiKey,
 		model,
 		timeoutMs: options?.timeoutMs,
+		reasoningEffort: options?.reasoningEffort,
 	});
 }

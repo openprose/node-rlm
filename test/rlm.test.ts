@@ -869,4 +869,62 @@ describe("rlm", () => {
 			await expect(rlm("test query", undefined, { callLLM, maxIterations: 3 })).rejects.toThrow("max iterations");
 		});
 	});
+
+	describe("reasoning details round-trip", () => {
+		it("reasoningDetails from CallLLMResponse round-trips through message history", async () => {
+			const mockDetails = [
+				{ type: "reasoning.text", id: "rd_abc123", format: "anthropic-claude-v1", index: 0, text: "I'm thinking about this..." },
+			];
+			let secondCallMessages: Array<{ role: string; content: string; meta?: Record<string, unknown> }> | undefined;
+			let callIndex = 0;
+
+			const callLLM: CallLLM = async (messages, _systemPrompt) => {
+				callIndex++;
+				if (callIndex === 1) {
+					return {
+						reasoning: "I'm thinking about this...",
+						code: 'console.log("step 1")',
+						toolUseId: "t1",
+						reasoningDetails: mockDetails,
+					};
+				}
+				secondCallMessages = [...messages];
+				return { reasoning: "Done.", code: 'return "done"', toolUseId: "t2" };
+			};
+
+			await rlm("test query", undefined, { callLLM });
+
+			expect(secondCallMessages).toBeDefined();
+			// Find the assistant message with __TOOL_CALL__ marker
+			const assistantMsg = secondCallMessages!.find(
+				(m) => m.role === "assistant" && m.content.startsWith("__TOOL_CALL__"),
+			);
+			expect(assistantMsg).toBeDefined();
+			expect(assistantMsg!.meta).toBeDefined();
+			expect(assistantMsg!.meta!.reasoningDetails).toEqual(mockDetails);
+		});
+
+		it("messages without reasoningDetails have no meta field", async () => {
+			let secondCallMessages: Array<{ role: string; content: string; meta?: Record<string, unknown> }> | undefined;
+			let callIndex = 0;
+
+			const callLLM: CallLLM = async (messages, _systemPrompt) => {
+				callIndex++;
+				if (callIndex === 1) {
+					return { reasoning: "Step one.", code: 'console.log("hello")', toolUseId: "t1" };
+				}
+				secondCallMessages = [...messages];
+				return { reasoning: "Done.", code: 'return "done"', toolUseId: "t2" };
+			};
+
+			await rlm("test query", undefined, { callLLM });
+
+			expect(secondCallMessages).toBeDefined();
+			const assistantMsg = secondCallMessages!.find(
+				(m) => m.role === "assistant" && m.content.startsWith("__TOOL_CALL__"),
+			);
+			expect(assistantMsg).toBeDefined();
+			expect(assistantMsg!.meta).toBeUndefined();
+		});
+	});
 });

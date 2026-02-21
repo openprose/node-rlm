@@ -6,9 +6,16 @@ export interface CallLLMResponse {
 	code: string | null;
 	/** Tool use ID from the API response, used to match tool results in conversation history. */
 	toolUseId?: string;
+	/** Structured reasoning blocks for round-tripping to the API (opaque — never inspected by the engine). */
+	reasoningDetails?: Array<Record<string, unknown>> | null;
 }
 
-export type CallLLM = (messages: Array<{ role: string; content: string }>, systemPrompt: string) => Promise<CallLLMResponse>;
+export type CallLLM = (messages: Array<{ role: string; content: string; meta?: Record<string, unknown> }>, systemPrompt: string, options?: CallLLMOptions) => Promise<CallLLMResponse>;
+
+export interface CallLLMOptions {
+	/** Override reasoning effort level for this call. */
+	reasoningEffort?: string;
+}
 
 export interface ModelEntry {
 	callLLM: CallLLM;
@@ -43,6 +50,8 @@ export interface RlmOptions {
 	traceChildren?: boolean;
 	/** When true, sandbox variable snapshots are captured after each iteration. Default: false. */
 	traceSnapshots?: boolean;
+	/** Reasoning effort level for OpenRouter reasoning tokens (default: none). */
+	reasoningEffort?: string;
 }
 
 export interface RlmResult {
@@ -130,6 +139,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		childApps: options.childApps,
 		traceChildren: options.traceChildren ?? false,
 		traceSnapshots: options.traceSnapshots ?? false,
+		reasoningEffort: options.reasoningEffort,
 	};
 
 	const modelTable = buildModelTable(opts.models);
@@ -234,8 +244,10 @@ export async function rlm(query: string, context: string | undefined, options: R
 		customSystemPrompt?: string,
 		callLLMOverride?: CallLLM,
 		maxIterationsOverride?: number,
+		reasoningEffortOverride?: string,
 	): Promise<RlmResult> {
 		const callLLM = callLLMOverride ?? opts.callLLM;
+		const effectiveReasoningEffort = reasoningEffortOverride ?? opts.reasoningEffort;
 
 		// Children inherit parent's budget by default; parent can override via maxIterations option
 		const effectiveMaxIterations = maxIterationsOverride !== undefined
@@ -315,7 +327,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 			);
 		}
 
-		const messages: Array<{ role: string; content: string }> = [{ role: "user", content: query }];
+		const messages: Array<{ role: string; content: string; meta?: Record<string, unknown> }> = [{ role: "user", content: query }];
 		const trace: TraceEntry[] = [];
 
 		for (let iteration = 0; iteration < effectiveMaxIterations; iteration++) {
@@ -325,7 +337,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 
 			let response: CallLLMResponse;
 			try {
-				response = await callLLM(messages, effectiveSystemPrompt);
+				response = await callLLM(messages, effectiveSystemPrompt, effectiveReasoningEffort ? { reasoningEffort: effectiveReasoningEffort } : undefined);
 			} catch (err) {
 				throw new RlmError(
 					err instanceof Error ? err.message : String(err),
@@ -337,6 +349,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 			const reasoning = response.reasoning;
 			const codeBlocks = response.code !== null ? [response.code] : [];
 			const toolUseId = response.toolUseId ?? null;
+			const reasoningDetails = response.reasoningDetails ?? null;
 
 			let combinedOutput = "";
 			let combinedError: string | null = null;
@@ -432,6 +445,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 				messages.push({
 					role: "assistant",
 					content: `__TOOL_CALL__\n${toolUseId}\n${reasoning}\n__CODE__\n${code}`,
+					...(reasoningDetails ? { meta: { reasoningDetails } } : {}),
 				});
 				// Tool result
 				messages.push({
@@ -452,7 +466,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 		throw new RlmMaxIterationsError(effectiveMaxIterations, trace);
 	}
 
-	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number; app?: string }): Promise<string> => {
+	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number; app?: string; reasoning?: string }): Promise<string> => {
 		// Reject delegation at max depth
 		if (activeDepth >= opts.maxDepth) {
 			return Promise.reject(
@@ -511,7 +525,7 @@ export async function rlm(query: string, context: string | undefined, options: R
 			const parentTraceSlot = childTraceSlot.current;
 			childTraceSlot.current = null;
 			try {
-				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, resolvedSystemPrompt, modelCallLLM, rlmOpts?.maxIterations);
+				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, resolvedSystemPrompt, modelCallLLM, rlmOpts?.maxIterations, rlmOpts?.reasoning);
 				childTraceSlot.current = parentTraceSlot;
 				if (opts.traceChildren && childTraceSlot.current) {
 					childTraceSlot.current.push({

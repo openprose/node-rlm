@@ -91,6 +91,7 @@ interface CliArgs {
 	traceActions: boolean;
 	traceChildren: boolean;
 	traceSnapshots: boolean;
+	reasoningEffort: string;
 }
 
 function usage(): never {
@@ -131,6 +132,7 @@ Options:
   --trace-snapshots        Capture sandbox variable snapshots per iteration
   --trace-actions          ARC-3: record action log per task
   --trace-full             Enable all trace options above
+  --reasoning-effort <s>   Reasoning effort: xhigh, high, medium, low, minimal, none (default: medium)
   --filter <expr>          OOLONG: filter tasks by field values (comma=AND, pipe=OR)
                            e.g. "task_group=TASK_TYPE.NUMERIC_ONE_CLASS"
                            e.g. "answer_type=ANSWER_TYPE.NUMERIC|ANSWER_TYPE.COMPARISON"
@@ -222,6 +224,7 @@ function parseArgs(argv: string[]): CliArgs {
 		attempts: parseInt(args.attempts ?? "1", 10),
 		game: args.game ?? null,
 		program: args.program ?? null,
+		reasoningEffort: args["reasoning-effort"] ?? "medium",
 	};
 }
 
@@ -258,7 +261,7 @@ function modelOverrides(model: string): { maxTokens?: number; timeoutMs?: number
 	return {};
 }
 
-function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string } {
+function resolveCallLLM(spec: string, reasoningEffort?: string): { callLLM: CallLLM; displayName: string } {
 	const parts = spec.split("/");
 	if (parts.length < 2) {
 		console.error(`Invalid model format: ${spec}. Expected provider/model-id`);
@@ -272,7 +275,10 @@ function resolveCallLLM(spec: string): { callLLM: CallLLM; displayName: string }
 		process.exit(1);
 	}
 
-	const overrides: { maxTokens?: number; timeoutMs?: number } = modelOverrides(spec);
+	const overrides: { maxTokens?: number; timeoutMs?: number; reasoningEffort?: string } = modelOverrides(spec);
+	if (reasoningEffort && reasoningEffort !== "none") {
+		overrides.reasoningEffort = reasoningEffort;
+	}
 
 	// If model spec starts with "openrouter/", strip the prefix —
 	// OpenRouter expects just "provider/model" (e.g. "google/gemini-3-flash-preview").
@@ -640,6 +646,9 @@ async function main(): Promise<void> {
 	if (args.rateLimit > 0) {
 		console.log(`Rate Limit:      ${args.rateLimit} req/s (burst: ${args.rateBurst})`);
 	}
+	if (args.reasoningEffort && args.reasoningEffort !== "none") {
+		console.log(`Reasoning:       ${args.reasoningEffort}`);
+	}
 	if (args.program) {
 		console.log(`Program:         ${args.program}`);
 	}
@@ -659,7 +668,7 @@ async function main(): Promise<void> {
 
 	// Resolve model and create callLLM
 	console.log("Resolving model...");
-	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model);
+	const { callLLM: rawCallLLM, displayName } = resolveCallLLM(args.model, args.reasoningEffort);
 	const callLLM = args.rateLimit > 0
 		? withRateLimit(rawCallLLM, { requestsPerSecond: args.rateLimit, burst: args.rateBurst })
 		: rawCallLLM;
@@ -792,6 +801,7 @@ async function main(): Promise<void> {
 		...(hasChildApps && { childApps: allChildApps }),
 		...(args.traceChildren && { traceChildren: true }),
 		...(args.traceSnapshots && { traceSnapshots: true }),
+		...(args.reasoningEffort && args.reasoningEffort !== "none" && { reasoningEffort: args.reasoningEffort }),
 		filter: args.filter ?? undefined,
 		onProgress: printProgress,
 	});
