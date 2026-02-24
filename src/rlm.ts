@@ -1,4 +1,5 @@
 import { JsEnvironment } from "./environment.js";
+import type { RlmEvent, RlmEventSink } from "./events.js";
 import { buildModelTable, buildSystemPrompt } from "./system-prompt.js";
 
 export interface CallLLMResponse {
@@ -34,6 +35,7 @@ export interface RlmOptions {
 	/** Keyed by name; looked up when a parent calls `rlm(query, ctx, { app: "name" })`. */
 	childApps?: Record<string, string>;
 	reasoningEffort?: string;
+	observer?: RlmEventSink;
 }
 
 export interface RlmResult {
@@ -98,6 +100,11 @@ export async function rlm(query: string, context: string | undefined, options: R
 		childApps: options.childApps,
 		reasoningEffort: options.reasoningEffort,
 	};
+
+	const emit: ((event: RlmEvent) => void) | undefined = options.observer
+		? (event) => options.observer!.emit(event)
+		: undefined;
+	const runId = globalThis.crypto.randomUUID();
 
 	const modelTable = buildModelTable(opts.models);
 
@@ -230,6 +237,17 @@ export async function rlm(query: string, context: string | undefined, options: R
 			modelTable,
 		});
 
+		emit?.({
+			type: "invocation:start",
+			runId,
+			timestamp: performance.now(),
+			invocationId,
+			parentId,
+			depth,
+			query,
+			systemPrompt: effectiveSystemPrompt,
+		});
+
 		if (!contextStore.locals.has(invocationId)) {
 			contextStore.locals.set(invocationId, {});
 		}
@@ -279,21 +297,82 @@ export async function rlm(query: string, context: string | undefined, options: R
 
 		const messages: Array<{ role: string; content: string; meta?: Record<string, unknown> }> = [{ role: "user", content: query }];
 
+		let invocationResult: RlmResult | undefined;
+		let invocationError: unknown;
+		try {
 		for (let iteration = 0; iteration < effectiveMaxIterations; iteration++) {
+			emit?.({
+				type: "iteration:start",
+				runId,
+				timestamp: performance.now(),
+				invocationId,
+				parentId,
+				depth,
+				iteration,
+				budgetRemaining: effectiveMaxIterations - iteration,
+			});
+
+			let iterationReturned = false;
+			let iterationCode: string | null = null;
+			let iterationOutput = "";
+			let iterationError: string | null = null;
+
+			try {
+
+			const llmStart = performance.now();
+			emit?.({
+				type: "llm:request",
+				runId,
+				timestamp: llmStart,
+				invocationId,
+				parentId,
+				depth,
+				iteration,
+				messageCount: messages.length,
+				systemPromptLength: effectiveSystemPrompt.length,
+			});
+
 			let response: CallLLMResponse;
 			try {
 				response = await callLLM(messages, effectiveSystemPrompt, effectiveReasoningEffort ? { reasoningEffort: effectiveReasoningEffort } : undefined);
 			} catch (err) {
-				throw new RlmError(
-					err instanceof Error ? err.message : String(err),
+				const llmError = err instanceof Error ? err.message : String(err);
+				emit?.({
+					type: "llm:error",
+					runId,
+					timestamp: performance.now(),
+					invocationId,
+					parentId,
+					depth,
 					iteration,
-				);
+					error: llmError,
+					duration: performance.now() - llmStart,
+				});
+				iterationError = llmError;
+				throw new RlmError(llmError, iteration);
 			}
+
+			emit?.({
+				type: "llm:response",
+				runId,
+				timestamp: performance.now(),
+				invocationId,
+				parentId,
+				depth,
+				iteration,
+				duration: performance.now() - llmStart,
+				reasoning: response.reasoning,
+				code: response.code,
+				hasToolUse: !!response.toolUseId,
+				usage: (response as unknown as Record<string, unknown>).usage as import("./events.js").TokenUsage | undefined,
+			});
 
 			const reasoning = response.reasoning;
 			const codeBlocks = response.code !== null ? [response.code] : [];
 			const toolUseId = response.toolUseId ?? null;
 			const reasoningDetails = response.reasoningDetails ?? null;
+
+			iterationCode = response.code;
 
 			let combinedOutput = "";
 			let combinedError: string | null = null;
@@ -334,6 +413,15 @@ export async function rlm(query: string, context: string | undefined, options: R
 					await new Promise((r) => setTimeout(r, 0));
 					if (pendingRlmCalls.size > 0) {
 						const count = pendingRlmCalls.size;
+						emit?.({
+							type: "delegation:unawaited",
+							runId,
+							timestamp: performance.now(),
+							invocationId,
+							parentId,
+							depth,
+							count,
+						});
 						const warning =
 							`[ERROR] ${count} rlm() call(s) were NOT awaited. Their results are LOST and the API calls were wasted. ` +
 							`You MUST write: const result = await rlm("query", context). ` +
@@ -352,9 +440,15 @@ export async function rlm(query: string, context: string | undefined, options: R
 						break;
 					}
 					const answer = typeof returnValue === "object" ? JSON.stringify(returnValue) : String(returnValue);
-					return { answer, iterations: iteration + 1 };
+					iterationReturned = true;
+					iterationOutput = combinedOutput;
+					invocationResult = { answer, iterations: iteration + 1 };
+					return invocationResult;
 				}
 			}
+
+			iterationOutput = combinedOutput;
+			iterationError = combinedError;
 
 			// Build iteration context for the next turn (if there will be one)
 			const nextIterContext = (effectiveMaxIterations > 1 && iteration + 1 < effectiveMaxIterations)
@@ -386,9 +480,57 @@ export async function rlm(query: string, context: string | undefined, options: R
 						"[WARNING] No code was executed. Use the execute_code tool to run JavaScript and make progress.",
 				});
 			}
+
+			} finally {
+				emit?.({
+					type: "iteration:end",
+					runId,
+					timestamp: performance.now(),
+					invocationId,
+					parentId,
+					depth,
+					iteration,
+					code: iterationCode,
+					output: iterationOutput,
+					error: iterationError,
+					returned: iterationReturned,
+				});
+
+				if (emit) {
+					emit({
+						type: "sandbox:snapshot",
+						runId,
+						timestamp: performance.now(),
+						invocationId,
+						parentId,
+						depth,
+						iteration,
+						state: env.snapshot(snapshotExcludeKeys),
+					});
+				}
+			}
 		}
 
-		throw new RlmMaxIterationsError(effectiveMaxIterations);
+		const maxIterErr = new RlmMaxIterationsError(effectiveMaxIterations);
+		invocationError = maxIterErr;
+		throw maxIterErr;
+
+		} catch (err) {
+			invocationError = err;
+			throw err;
+		} finally {
+			emit?.({
+				type: "invocation:end",
+				runId,
+				timestamp: performance.now(),
+				invocationId,
+				parentId,
+				depth,
+				answer: invocationResult?.answer ?? null,
+				error: invocationError instanceof Error ? invocationError.message : invocationError ? String(invocationError) : null,
+				iterations: invocationResult?.iterations ?? (invocationError instanceof RlmError ? invocationError.iterations : 0),
+			});
+		}
 	}
 
 	env.set("rlm", (q: string, c?: string, rlmOpts?: { systemPrompt?: string; model?: string; maxIterations?: number; app?: string; reasoning?: string }): Promise<string> => {
@@ -440,10 +582,48 @@ export async function rlm(query: string, context: string | undefined, options: R
 			? childDepthLabel
 			: `${callerInvocationId}.${childDepthLabel}`;
 
+		emit?.({
+			type: "delegation:spawn",
+			runId,
+			timestamp: performance.now(),
+			invocationId: callerInvocationId,
+			parentId: (env.get("__rlm") as DelegationContext | undefined)?.parentId ?? null,
+			depth: savedDepth,
+			childId: childInvocationId,
+			query: q,
+			modelAlias: rlmOpts?.model,
+			maxIterations: rlmOpts?.maxIterations,
+			appName: rlmOpts?.app,
+		});
+
 		const promise = (async () => {
 			try {
 				const result = await rlmInternal(q, c, savedDepth + 1, childLineage, childInvocationId, callerInvocationId, resolvedSystemPrompt, modelCallLLM, rlmOpts?.maxIterations, rlmOpts?.reasoning);
+				emit?.({
+					type: "delegation:return",
+					runId,
+					timestamp: performance.now(),
+					invocationId: callerInvocationId,
+					parentId: (env.get("__rlm") as DelegationContext | undefined)?.parentId ?? null,
+					depth: savedDepth,
+					childId: childInvocationId,
+					answer: result.answer,
+					iterations: result.iterations,
+				});
 				return result.answer;
+			} catch (err) {
+				emit?.({
+					type: "delegation:error",
+					runId,
+					timestamp: performance.now(),
+					invocationId: callerInvocationId,
+					parentId: (env.get("__rlm") as DelegationContext | undefined)?.parentId ?? null,
+					depth: savedDepth,
+					childId: childInvocationId,
+					error: err instanceof Error ? err.message : String(err),
+					iterations: err instanceof RlmError ? err.iterations : 0,
+				});
+				throw err;
 			} finally {
 				activeDepth = savedDepth;
 			}
@@ -455,5 +635,37 @@ export async function rlm(query: string, context: string | undefined, options: R
 		return promise;
 	});
 
-	return rlmInternal(query, context, 0, [query], "root", null);
+	emit?.({
+		type: "run:start",
+		runId,
+		timestamp: performance.now(),
+		invocationId: "root",
+		parentId: null,
+		depth: 0,
+		query,
+		maxIterations: opts.maxIterations,
+		maxDepth: opts.maxDepth,
+	});
+
+	let runResult: RlmResult | undefined;
+	let runError: unknown;
+	try {
+		runResult = await rlmInternal(query, context, 0, [query], "root", null);
+		return runResult;
+	} catch (err) {
+		runError = err;
+		throw err;
+	} finally {
+		emit?.({
+			type: "run:end",
+			runId,
+			timestamp: performance.now(),
+			invocationId: "root",
+			parentId: null,
+			depth: 0,
+			answer: runResult?.answer ?? null,
+			error: runError instanceof Error ? runError.message : runError ? String(runError) : null,
+			iterations: runResult?.iterations ?? (runError instanceof RlmError ? runError.iterations : 0),
+		});
+	}
 }
