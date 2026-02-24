@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "node:path";
 import { rlm, RlmError, RlmMaxIterationsError } from "../src/rlm.js";
 import type { CallLLM, ModelEntry } from "../src/rlm.js";
+import { RlmObserver } from "../src/observer.js";
 import type {
 	BenchmarkResult,
 	EvalResult,
@@ -145,6 +146,7 @@ export async function runEval(
 						wallTimeMs: 0,
 						charCount: { input: 0, output: 0 },
 						error: err instanceof Error ? err.message : String(err),
+						events: [],
 					};
 					attemptScores.push(0);
 
@@ -244,6 +246,7 @@ async function runSingleTask(cfg: SingleTaskConfig): Promise<EvalResult> {
 	};
 
 	const sandboxGlobals = setupSandbox?.(task);
+	const observer = new RlmObserver();
 
 	try {
 		const result = await rlm(task.query, task.context, {
@@ -256,6 +259,7 @@ async function runSingleTask(cfg: SingleTaskConfig): Promise<EvalResult> {
 			globalDocs,
 			childApps,
 			reasoningEffort,
+			observer,
 		});
 
 		const wallTimeMs = Date.now() - startTime;
@@ -271,6 +275,7 @@ async function runSingleTask(cfg: SingleTaskConfig): Promise<EvalResult> {
 			wallTimeMs,
 			charCount: { input: totalInputChars, output: totalOutputChars },
 			metadata,
+			events: observer.getEvents(),
 		};
 	} catch (err) {
 		const wallTimeMs = Date.now() - startTime;
@@ -289,6 +294,7 @@ async function runSingleTask(cfg: SingleTaskConfig): Promise<EvalResult> {
 			charCount: { input: totalInputChars, output: totalOutputChars },
 			error: errMsg,
 			metadata,
+			events: observer.getEvents(),
 		};
 	} finally {
 		await cleanupTask?.(task);
@@ -395,7 +401,7 @@ function loadPartialResults(
 }
 
 function saveResults(filePath: string, result: BenchmarkResult): void {
-	// Use a cycle-breaking replacer — child traces can share references
+	// Use a cycle-breaking replacer — event payloads can share references
 	const seen = new WeakSet();
 	const json = JSON.stringify(result, (_key, value) => {
 		if (typeof value === "object" && value !== null) {

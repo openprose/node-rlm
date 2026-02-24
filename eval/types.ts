@@ -1,3 +1,5 @@
+import type { RlmEvent } from "../src/events.js";
+
 export interface EvalTask {
 	id: string;
 	query: string;
@@ -23,6 +25,8 @@ export interface EvalResult {
 	bestAttempt?: number;
 	/** Benchmark-specific metadata (e.g. scorecard IDs, replay URLs). */
 	metadata?: Record<string, unknown>;
+	/** Observer events collected during this task's rlm() run. */
+	events?: RlmEvent[];
 }
 
 export interface BenchmarkResult {

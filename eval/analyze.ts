@@ -1,8 +1,9 @@
-// Post-hoc trace analysis for RLM eval results.
+// Post-hoc event analysis for RLM eval results.
 // Usage: npx tsx eval/analyze.ts [result-file.json ...]
 
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
+import type { RlmEvent, IterationEndEvent, LlmResponseEvent } from "../src/events.js";
 import type { BenchmarkResult, EvalResult } from "./types.js";
 import { formatDuration } from "./utils.js";
 
@@ -18,21 +19,20 @@ interface TaskAnalysis {
 	hasConsoleLog: boolean;
 	usesLetConst: boolean;
 	errorCount: number;
-	eagerReturn: boolean; // return called in first trace entry
+	eagerReturn: boolean; // returned on first iteration
 	selfCorrected: boolean; // score > 0 and iterations > 1
 	wallTimeMs: number;
 }
 
-// Legacy result files may still contain a `trace` array from before trace removal.
-interface LegacyTraceEntry {
-	reasoning: string;
-	code: string[];
-	output: string;
-	error: string | null;
-}
-
 function analyzeTask(result: EvalResult): TaskAnalysis {
-	const trace: LegacyTraceEntry[] = (result as unknown as Record<string, unknown>).trace as LegacyTraceEntry[] ?? [];
+	const events: RlmEvent[] = result.events ?? [];
+
+	const iterEnds = events.filter(
+		(e): e is IterationEndEvent => e.type === "iteration:end" && e.depth === 0,
+	);
+	const llmResponses = events.filter(
+		(e): e is LlmResponseEvent => e.type === "llm:response" && e.depth === 0,
+	);
 
 	let totalCodeBlocks = 0;
 	let totalCodeLines = 0;
@@ -40,28 +40,26 @@ function analyzeTask(result: EvalResult): TaskAnalysis {
 	let hasConsoleLog = false;
 	let usesLetConst = false;
 	let errorCount = 0;
-	let eagerReturn = false;
 
-	for (let i = 0; i < trace.length; i++) {
-		const entry = trace[i];
-		totalCodeBlocks += entry.code.length;
+	for (const resp of llmResponses) {
+		if (resp.code == null) continue;
+		totalCodeBlocks++;
+		totalCodeLines += resp.code.split("\n").length;
 
-		for (const block of entry.code) {
-			totalCodeLines += block.split("\n").length;
+		const rlmMatches = resp.code.match(/\brlm\s*\(/g);
+		if (rlmMatches) rlmCallCount += rlmMatches.length;
 
-			const rlmMatches = block.match(/\brlm\s*\(/g);
-			if (rlmMatches) rlmCallCount += rlmMatches.length;
-
-			if (block.includes("console.log(") || block.includes("console.error(")) {
-				hasConsoleLog = true;
-			}
-			if (/\b(?:let|const)\s/.test(block)) usesLetConst = true;
-
-			if (i === 0 && /\breturn[\s(]/.test(block)) eagerReturn = true;
+		if (resp.code.includes("console.log(") || resp.code.includes("console.error(")) {
+			hasConsoleLog = true;
 		}
-
-		if (entry.error) errorCount++;
+		if (/\b(?:let|const)\s/.test(resp.code)) usesLetConst = true;
 	}
+
+	for (const ie of iterEnds) {
+		if (ie.error) errorCount++;
+	}
+
+	const eagerReturn = iterEnds.length > 0 && iterEnds[0].returned;
 
 	return {
 		taskId: result.taskId,
@@ -69,7 +67,7 @@ function analyzeTask(result: EvalResult): TaskAnalysis {
 		iterations: result.iterations,
 		totalCodeBlocks,
 		totalCodeLines,
-		codeBlocksPerIteration: trace.length > 0 ? totalCodeBlocks / trace.length : 0,
+		codeBlocksPerIteration: iterEnds.length > 0 ? totalCodeBlocks / iterEnds.length : 0,
 		hasRlmCall: rlmCallCount > 0,
 		rlmCallCount,
 		hasConsoleLog,
