@@ -22,9 +22,9 @@ Every iteration is captured: reasoning, code, output, error. The trace is a stru
 
 The engine is a single module. One runtime dependency: `acorn` for JavaScript parsing. No frameworks. No abstractions that do not pay for themselves. The artifact is the product.
 
-## Plugins are Programs Written in Prose
+## Programs are Written in Prose
 
-Drivers and apps are markdown files -- strings -- injected into the system prompt. Drivers are composable behavioral shims (stack many). Apps are task architectures (run one). Complex control flow, state management, and composition are all expressed in natural language, and the RLM self-configures into the structures these programs describe. This is what makes the system programmable without making the engine complex.
+Drivers, components, and programs are markdown files -- strings -- injected into the system prompt. Drivers are composable behavioral shims (stack many). Programs are multi-file compositions of components, each with a role and contract. Complex control flow, state management, and composition are all expressed in natural language, and the RLM self-configures into the structures these programs describe. This is what makes the system programmable without making the engine complex.
 
 ## Explicit Termination
 

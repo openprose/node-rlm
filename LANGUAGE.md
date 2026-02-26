@@ -116,7 +116,7 @@ name: arc3-level-solver
 kind: program-node
 role: coordinator          # orchestrator | coordinator | leaf
 version: 0.4.0
-delegates: [oha]           # child app names this node delegates to
+delegates: [oha]           # child component names this node delegates to
 prohibited: [arc3.step]    # sandbox APIs this node must NOT call
 state:
   reads: [&GameKnowledge, &LevelState]
@@ -270,7 +270,7 @@ shape:
   prohibited: [arc3.step]
 ```
 
-`prohibited` names sandbox APIs that exist and are callable but that this node must not use. `delegates` maps child app names to the capabilities they own. Together, these establish a hard boundary: "this work belongs to my children, not to me."
+`prohibited` names sandbox APIs that exist and are callable but that this node must not use. `delegates` maps child component names to the capabilities they own. Together, these establish a hard boundary: "this work belongs to my children, not to me."
 
 Why this matters: LLMs gravitate toward the simplest path. If a coordinator node can see `arc3.step()` in the sandbox, it will call it directly rather than composing a delegation via `rlm()`. `prohibited` makes the boundary explicit — the model sees "I can call this, but my program forbids it."
 

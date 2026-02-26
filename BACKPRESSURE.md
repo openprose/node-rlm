@@ -32,16 +32,19 @@ The judge is an RLM program. It takes a completed execution trace (events from t
 - Are there recurring deviation patterns that suggest a missing language construct?
 - Would a different program structure have served the model better?
 
-### Evolving the vocabulary
+### Evolving the standard library
 
-The composition vocabulary (`direct`, `coordinated`, `exploratory`, `targeted`) is a scaffold, not a cage. It's a seed -- useful starting patterns based on engineering intuition, like SFT before RLHF. The judge's deepest function is to evolve this vocabulary empirically:
+The standard library (`lib/`) ships with composites, roles, and controls -- reusable program patterns seeded from engineering intuition. The composition vocabulary (`direct`, `coordinated`, `exploratory`, `targeted`) is similarly seeded. All of it is scaffold, not cage. Like SFT before RLHF, useful for bootstrapping, expected to be superseded by empirically-discovered patterns.
 
-1. **Detect recurring patterns.** Across many traces, identify composition behaviors that succeed repeatedly -- patterns the model discovers on its own that aren't in the current vocabulary.
-2. **Name and promote.** When a pattern recurs reliably, give it a name and add it to the vocabulary. The vocabulary grows from evidence, not intuition.
-3. **Demote and retire.** When a named pattern consistently fails or goes unused, remove it. The vocabulary shrinks when patterns stop paying for themselves.
-4. **Discover missing axes.** The current vocabulary has two axes (topology, brief richness). The judge may discover that successful runs differ on dimensions we haven't named yet -- and those dimensions become new axes.
+The judge's deepest function is to evolve the entire library:
 
-The hand-designed vocabulary is a starting point. The judge is the feedback loop that turns it into an empirically-grounded vocabulary. This is the bitter-lesson-compatible path: seed with human intuition, refine with data.
+1. **Detect recurring patterns.** Across many traces, identify behaviors that succeed repeatedly -- structural patterns the model discovers on its own that aren't in the current library.
+2. **Name and promote.** When a pattern recurs reliably, give it a name and add it to the library as a composite, role, or control. The library grows from evidence, not intuition.
+3. **Demote and retire.** When a library component consistently fails or goes unused, remove it. The library shrinks when patterns stop paying for themselves.
+4. **Discover missing axes.** The composition vocabulary currently has two axes (topology, brief richness). A third axis -- delegation mode (`observed`, `bounded`, `speculative`, `checkpointed`) -- is emerging. The judge may discover others.
+5. **Evaluate stdlib usage.** When a program uses stdlib components, was that effective? When it doesn't, would a stdlib component have helped? This informs both library evolution and program improvement.
+
+The hand-designed library is a starting point. The judge is the feedback loop that turns it into an empirically-grounded standard library.
 
 ## Input
 
@@ -86,6 +89,17 @@ AdherenceReport {
     score: 0..1
   }
 
+  stdlib: {
+    components_used: [{ name, category, effective: boolean, notes }]
+    missed_opportunities: string[]   -- where a stdlib component would have helped
+    novel_patterns: [{               -- patterns that could become new lib/ components
+      description: string
+      frequency: string
+      candidate_category: "composite" | "role" | "control"
+      recommendation: string         -- promote, investigate, ignore
+    }]
+  }
+
   meta: {
     spec_issues: [{ location, issue, suggestion }]
     missing_constructs: string[]     -- language constructs that would have helped
@@ -119,7 +133,11 @@ programs/judge/
 
 Each specialist receives the event trace and program files as context, analyzes its domain, and returns structured findings. The evaluator orchestrator curates findings into the final `AdherenceReport`.
 
-The meta-critic is the most important component. It's the one that looks beyond "did the model follow the program" to "should the program have been different." Its vocabulary observations feed the evolution loop.
+The judge architecture is itself multi-polar (TENETS.md: "Multi-Polarity Over Monologue"). The specialists create structural tension -- the shape-judge and delegation-judge may disagree about whether a violation was a shape problem or a delegation problem. The meta-critic disagrees with all of them by design: it asks whether the program itself was wrong, not just whether the model deviated from it. This tension is the judge's strength. A single monolithic evaluator would rationalize its own assessments.
+
+The judge can use stdlib composites where they fit. The shape-judge + meta-critic relationship resembles `witness` (independent observation, discrepancies are signal). The evaluator's curation of specialist findings is a natural `pipeline`. The judge eating its own dogfood is the ultimate test of the stdlib.
+
+The meta-critic is the most important component. It's the one that looks beyond "did the model follow the program" to "should the program have been different." Its `stdlib` and `vocabulary_observations` fields feed the evolution loop.
 
 ## Running the judge
 
@@ -140,13 +158,26 @@ The judge output is JSON, stored alongside the result file. The viewer (eval/vie
 
 The post-hoc judge validates the pattern. The eventual path to real-time backpressure:
 
-1. **Expose the observer to the sandbox.** A parent calling `rlm()` with `observed: true` gets a scoped observer that receives the child's events synchronously during execution. No new engine primitive needed beyond a sandbox binding.
+### Delegation modes: a third composition axis
 
-2. **`observed` as a composition modifier.** A third axis on the composition vocabulary: delegation mode. `observed` means the parent monitors the child during execution, not just before (brief) and after (curation). Other delegation modes: `bounded` (hard-kill after budget), `speculative` (fan-out, take first result), `checkpointed` (snapshot at each iteration, resume from any point).
+The composition vocabulary currently has two axes: topology (direct/coordinated) and brief richness (exploratory/targeted). A third axis is emerging: **delegation mode** -- how the parent relates to the child during execution, not just before (brief) and after (curation).
 
-3. **Oversight-rlm.** The judge program (or a simplified version) runs as an oversight agent alongside the target. It receives events in real-time via the observer binding, writes assessments to shared `&`-state, and the target reads them between iterations. The parent composes both the target and the oversight agent.
+| Mode | What it does | Engine requirement |
+|------|-------------|-------------------|
+| `observed` | Parent receives child's event stream in real-time | Observer exposed to sandbox |
+| `bounded` | Hard-kill after N iterations or M seconds, return partial result | Cancellation primitive |
+| `speculative` | Fan-out K children, take first result, cancel rest | Concurrent execution + cancellation |
+| `checkpointed` | Snapshot child state at each iteration, parent can resume from any point | Checkpoint/restore in sandbox |
 
-These are parent-side concerns. The child never knows it's being observed. This preserves "Trust the Model" -- the child runs its program faithfully. The parent manages the composition.
+These are parent-side concerns — the child never knows. They compose with the existing axes: `observed + coordinated + targeted` is a retry with monitoring. `speculative + direct + exploratory` is fan-out discovery.
+
+Delegation modes are engine mechanisms (parameters on `rlm()`), not program patterns. They differ from stdlib composites, which are program-level patterns composed from multiple `rlm()` calls. A composite like `worker-critic` could USE delegation modes internally (e.g., `bounded` on the worker to prevent runaway iterations).
+
+### The path
+
+1. **Expose the observer to the sandbox.** A parent calling `rlm()` with `observed: true` gets a scoped observer that receives the child's events synchronously during execution via `observer.on()` handlers. No new engine primitive needed beyond a sandbox binding.
+
+2. **Oversight-rlm.** The judge program (or a simplified version) runs as an oversight agent alongside the target. It receives events in real-time via the observer binding, writes assessments to shared `&`-state, and the target reads them between iterations. The parent composes both the target and the oversight agent. This could become `lib/composites/oversight.md`.
 
 ## Relationship to the language
 
