@@ -55,8 +55,11 @@ ensures:
 const { refiner, evaluator, task_brief, max_rounds = 3, threshold = 0.8 } = __controlState;
 let currentResult = null;
 let currentScore = 0;
+let roundsUsed = 0;
 
 for (let round = 0; round < max_rounds; round++) {
+  roundsUsed = round + 1;
+
   // Refiner produces or improves
   let refinerBrief = round === 0
     ? task_brief
@@ -79,7 +82,7 @@ for (let round = 0; round < max_rounds; round++) {
 
 __controlState.result = currentResult;
 __controlState.score = currentScore;
-__controlState.rounds_used = Math.min(max_rounds, /* actual rounds */);
+__controlState.rounds_used = roundsUsed;
 return(currentResult);
 ```
 

@@ -187,9 +187,9 @@ programs/             Domain-specific compositions (multi-file programs)
 lib/
   drivers/            Model-specific reliability patches
   profiles/           Model-to-driver mappings
-  composites/         Multi-agent structural patterns (future)
-  roles/              Single-agent reusable behaviors (future)
-  controls/           Delegation flow patterns (future)
+  composites/         Multi-agent structural patterns (standard library)
+  roles/              Single-agent reusable behaviors (standard library)
+  controls/           Delegation flow patterns (standard library)
 
 eval/                 Benchmark harness (OOLONG, S-NIAH, ARC, ARC-AGI-3) -- see eval/README.md
 test/                 Vitest tests

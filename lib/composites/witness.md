@@ -58,14 +58,41 @@ const reportB = await rlm(task_brief, null, { use: witness_b });
 
 __compositeState.reports = { a: reportA, b: reportB };
 
-// Diff the reports — use the model's own reasoning to classify
-const diffBrief = `Compare these two independent observation reports of the same data.\n\nIdentify:\n1. Findings both reports agree on\n2. Discrepancies — findings that differ or appear in only one report\n3. Overall confidence (proportion of agreement)\n\nReport A:\n${reportA}\n\nReport B:\n${reportB}`;
+// The coordinator diffs the reports itself — structural work, not a slot.
+// Compare findings, classify agreements and discrepancies.
+const reportAStr = String(reportA);
+const reportBStr = String(reportB);
 
-// The coordinator itself performs the diff — this is structural work, not a slot
-const diffAnalysis = `Agreements are high-confidence. Discrepancies flag genuinely ambiguous or hard-to-interpret data.`;
+// Use the coordinator's own reasoning to produce the structured diff.
+// Parse both reports, identify overlapping and divergent findings.
+const agreed = [];
+const discrepancies = [];
 
-__compositeState.result = { report_a: reportA, report_b: reportB };
-return({ report_a: reportA, report_b: reportB });
+// Split reports into findings (heuristic: line-by-line or paragraph-by-paragraph)
+const findingsA = reportAStr.split(/\n+/).filter(l => l.trim());
+const findingsB = reportBStr.split(/\n+/).filter(l => l.trim());
+
+for (const f of findingsA) {
+  const match = findingsB.some(fb => fb.includes(f.trim()) || f.includes(fb.trim()));
+  if (match) {
+    agreed.push(f.trim());
+  } else {
+    discrepancies.push({ source: "a_only", finding: f.trim() });
+  }
+}
+for (const f of findingsB) {
+  const alreadyAgreed = agreed.some(a => f.includes(a) || a.includes(f.trim()));
+  if (!alreadyAgreed) {
+    discrepancies.push({ source: "b_only", finding: f.trim() });
+  }
+}
+
+const total = agreed.length + discrepancies.length;
+const confidence = total > 0 ? agreed.length / total : 0;
+
+const result = { agreed, discrepancies, confidence };
+__compositeState.result = result;
+return(result);
 ```
 
 ## Notes
