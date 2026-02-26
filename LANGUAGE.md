@@ -364,7 +364,7 @@ The `requires/produces/does NOT produce` contract is the component's interface. 
 
 ### Composition Vocabulary
 
-A small set of composition styles that agents select from when delegating. Grounded in observable state conditions.
+Named composition patterns grounded in observable state conditions. These are a starting vocabulary, not a closed set -- a model that discovers an effective pattern not listed here is doing the right thing.
 
 ```
 styles:
@@ -415,16 +415,21 @@ principles:
   SATISFY REQUIRES BEFORE DELEGATING
     Check the component's "requires from caller" before calling rlm().
     If you skip a coordinator, you inherit its responsibilities.
+
+  TENSION IS STRUCTURAL ERROR CORRECTION
+    A single agent rationalizes its own mistakes.
+    Two or three agents with distinct roles create adversarial tension
+    that catches errors no single agent would notice.
 ```
 
 ---
 
 ## File Structure
 
-Programs live in `plugins/programs/{name}/`:
+Programs live in `programs/{name}/`:
 
 ```
-plugins/programs/arc3/
+programs/arc3/
   root.md              # composition root — component catalog, state schemas, composition principles
   game-solver.md       # orchestrator node
   level-solver.md      # coordinator node

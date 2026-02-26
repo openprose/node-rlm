@@ -40,7 +40,7 @@ Diverging from classical IoC introduces concrete risks:
 
 ## The Composition Vocabulary
 
-Agents select from a small set of composition styles when delegating. These are the equivalent of Erlang/OTP supervision strategies -- a bounded vocabulary of structural decisions, not free-form reasoning.
+Agents select from a small set of named composition styles when delegating. These are the equivalent of Erlang/OTP supervision strategies -- a bounded vocabulary of structural decisions that makes composition reasoning tractable.
 
 The vocabulary has two orthogonal axes:
 
@@ -56,7 +56,7 @@ These are composable. A `coordinated + exploratory` delegation interposes a coor
 
 ## Composition Principles
 
-Five invariants govern when and how to compose, regardless of which components are selected.
+Six invariants govern when and how to compose, regardless of which components are selected.
 
 **Curation is the return on composition.** A flat architecture (one agent does everything) is simpler. A composed architecture only pays off if knowledge flows upward after each delegation. If you delegate without curating the return, you paid the cost of composition without getting the benefit. Better to not delegate at all.
 
@@ -67,6 +67,8 @@ Five invariants govern when and how to compose, regardless of which components a
 **Satisfy requires before delegating.** Before calling `rlm()` with a component, check its `requires from caller` contract. If you skip a coordinator (direct style), you inherit its responsibilities -- initializing state, setting strategy, extracting findings after the child returns.
 
 **Briefs are interfaces.** When you delegate, pass the child facts from `&`-state -- not your own analysis. Your analysis is at the wrong level of abstraction for the child. The child has its own program that teaches it how to observe and act. The brief provides context; the program provides methodology. A brief contains goals, confirmed knowledge, open questions, and retry context. A brief never contains action instructions, domain interpretation, or tactical advice.
+
+**Tension is structural error correction.** A single agent rationalizes its own mistakes -- it cannot be both actor and critic. Two or three agents with distinct roles (observer/actor, delegator/curator, target/oversight) create adversarial-like tension that catches errors no single agent would notice. This is the structural argument for composition beyond efficiency: a 2-agent composite is more robust than a 1-agent monolith, not because it does more work, but because it can disagree with itself.
 
 ## How Components Are Made Legible
 
@@ -98,7 +100,7 @@ The name `root.md` communicates its role: the top of the composition tree, disti
 
 ## The Program Loading Pipeline
 
-`loadProgram()` in `src/plugins.ts` reads `plugins/programs/{name}/` and classifies files by frontmatter:
+`loadProgram()` in `src/plugins.ts` reads `programs/{name}/` and classifies files by frontmatter:
 
 1. **`kind: program`** (root.md): body becomes `globalDocs`. Visible at all depths via `<rlm-environment>`.
 2. **`kind: program-node`, `role: orchestrator`**: full content (including frontmatter) becomes `rootAppBody`. This is the root agent's `<rlm-program>`.
@@ -142,7 +144,9 @@ Where it diverges:
 
 Erlang/OTP supervision trees use a small vocabulary of supervision strategies (`one_for_one`, `one_for_all`, `rest_for_one`). Supervisors make local composition decisions using this bounded vocabulary. The strategies are grounded in observable behavior (which child crashed, how to restart), not abstractions.
 
-The composition vocabulary serves the same purpose. `direct`, `coordinated`, `exploratory`, `targeted` are a small set of named strategies grounded in observable state conditions (budget remaining, mechanics confirmed, retry count, depth headroom). Composition decisions are local -- each delegating agent selects from the vocabulary based on its own situation. The vocabulary is small enough that the model can reason about it reliably, but expressive enough to cover the composition space.
+The composition vocabulary serves the same purpose. `direct`, `coordinated`, `exploratory`, `targeted` are a small set of named strategies grounded in observable state conditions (budget remaining, mechanics confirmed, retry count, depth headroom). Composition decisions are local -- each delegating agent selects from the vocabulary based on its own situation.
+
+The Erlang parallel has a limit. OTP strategies are hard constraints enforced by the runtime. The composition vocabulary is not enforced -- it is a set of named patterns the model can lean on, improve upon, or ignore. "Here are patterns that work well" is a guideline. "You must select from these" would be a bet against the model. The hand-designed vocabulary is a seed: useful for bootstrapping because current models aren't reliable at meta-reasoning about composition from scratch, but the long-term move is to let effective patterns emerge from traces rather than from intuitions.
 
 ## What Is Not Implemented Yet
 

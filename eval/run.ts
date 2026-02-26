@@ -110,7 +110,7 @@ Options:
   --model <provider/id>    Model to use (required)
   --profile <name>         Load a named driver profile (e.g. gemini-3-flash)
   --app <name>             Load a named app plugin (e.g. structured-data-aggregation)
-  --program <name>         Load a program from plugins/programs/<name>/ (mutually exclusive with --app)
+  --program <name>         Load a program from programs/<name>/ (mutually exclusive with --app)
   --drivers <list>         Comma-separated extra driver names (appended after profile drivers)
   --concurrency <n>        Parallel tasks (default: 5)
   --max-iterations <n>     Max REPL iterations (default: 15)

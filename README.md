@@ -160,9 +160,8 @@ The sandbox is shared across depths. Children inherit the parent's `maxIteration
 
 Plugins are markdown files that get concatenated into the root agent's system prompt via `pluginBodies`.
 
-- `plugins/drivers/` -- Model-specific reliability patches (e.g., enforce await discipline, verify-before-return). Stack multiple per run.
-- `plugins/apps/` -- Task architectures (e.g., structured data aggregation, recursive delegation). Typically one per run.
-- `plugins/profiles/` -- Profiles use YAML frontmatter to map model name patterns to a list of drivers. The plugin loader picks the right profile automatically.
+- `lib/drivers/` -- Model-specific reliability patches (e.g., enforce await discipline, verify-before-return). Stack multiple per run.
+- `lib/profiles/` -- Profiles use YAML frontmatter to map model name patterns to a list of drivers. The plugin loader picks the right profile automatically.
 
 ```typescript
 import { loadStack } from "node-rlm/plugins"; // or import from source
@@ -184,10 +183,13 @@ src/
   drivers/
     openrouter-compatible.ts   CallLLM adapter for OpenAI-compatible APIs
 
-plugins/
+programs/             Domain-specific compositions (multi-file programs)
+lib/
   drivers/            Model-specific reliability patches
-  apps/               Task-strategy prompts
   profiles/           Model-to-driver mappings
+  composites/         Multi-agent structural patterns (future)
+  roles/              Single-agent reusable behaviors (future)
+  controls/           Delegation flow patterns (future)
 
 eval/                 Benchmark harness (OOLONG, S-NIAH, ARC, ARC-AGI-3) -- see eval/README.md
 test/                 Vitest tests

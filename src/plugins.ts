@@ -2,7 +2,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_PLUGINS_DIR = resolve(fileURLToPath(import.meta.url), "../../plugins");
+const DEFAULT_LIB_DIR = resolve(fileURLToPath(import.meta.url), "../../lib");
+const DEFAULT_PROGRAMS_DIR = resolve(fileURLToPath(import.meta.url), "../../programs");
+const DEFAULT_ARCHIVE_DIR = resolve(fileURLToPath(import.meta.url), "../../archive");
 
 export function parseFrontmatter(content: string): { frontmatter: Record<string, any>; body: string } {
 	const trimmed = content.trimStart();
@@ -78,9 +80,9 @@ export function parseFrontmatter(content: string): { frontmatter: Record<string,
 export async function loadPlugins(
 	names: string[],
 	subdir: "drivers" | "apps",
-	pluginsDir?: string,
+	baseDir?: string,
 ): Promise<string> {
-	const dir = pluginsDir ?? DEFAULT_PLUGINS_DIR;
+	const dir = baseDir ?? (subdir === "drivers" ? DEFAULT_LIB_DIR : DEFAULT_ARCHIVE_DIR);
 
 	const bodies = await Promise.all(
 		names.map(async (name) => {
@@ -95,9 +97,9 @@ export async function loadPlugins(
 
 export async function loadProfile(
 	name: string,
-	pluginsDir?: string,
+	libDir?: string,
 ): Promise<{ drivers: string[]; models: string[] }> {
-	const dir = pluginsDir ?? DEFAULT_PLUGINS_DIR;
+	const dir = libDir ?? DEFAULT_LIB_DIR;
 	const filePath = join(dir, "profiles", `${name}.md`);
 	const content = await readFile(filePath, "utf-8");
 	const { frontmatter } = parseFrontmatter(content);
@@ -116,9 +118,9 @@ function globToRegExp(pattern: string): RegExp {
 // Match model string against profile globs (tries with and without provider prefix).
 export async function detectProfile(
 	model: string,
-	pluginsDir?: string,
+	libDir?: string,
 ): Promise<{ name: string; drivers: string[] } | null> {
-	const dir = pluginsDir ?? DEFAULT_PLUGINS_DIR;
+	const dir = libDir ?? DEFAULT_LIB_DIR;
 	const profilesDir = join(dir, "profiles");
 
 	let files: string[];
@@ -168,10 +170,10 @@ export interface ProgramDefinition {
 // Nodes include frontmatter in the agent prompt (role, delegates, api, prohibited).
 export async function loadProgram(
 	name: string,
-	pluginsDir?: string,
+	programsDir?: string,
 ): Promise<ProgramDefinition> {
-	const dir = pluginsDir ?? DEFAULT_PLUGINS_DIR;
-	const programDir = join(dir, "programs", name);
+	const dir = programsDir ?? DEFAULT_PROGRAMS_DIR;
+	const programDir = join(dir, name);
 
 	const files = await readdir(programDir);
 	const mdFiles = files.filter((f) => f.endsWith(".md"));
@@ -219,17 +221,17 @@ export async function loadStack(options: {
 	app?: string;
 	profile?: string;
 	model?: string;
-	pluginsDir?: string;
+	libDir?: string;
 }): Promise<string> {
-	const { drivers: extraDrivers, app, profile, model, pluginsDir } = options;
+	const { drivers: extraDrivers, app, profile, model, libDir } = options;
 
 	let profileDrivers: string[] = [];
 
 	if (profile) {
-		const loaded = await loadProfile(profile, pluginsDir);
+		const loaded = await loadProfile(profile, libDir);
 		profileDrivers = loaded.drivers;
 	} else if (model) {
-		const detected = await detectProfile(model, pluginsDir);
+		const detected = await detectProfile(model, libDir);
 		if (detected) {
 			profileDrivers = detected.drivers;
 		}
@@ -247,12 +249,12 @@ export async function loadStack(options: {
 	const parts: string[] = [];
 
 	if (allDrivers.length > 0) {
-		const driverBodies = await loadPlugins(allDrivers, "drivers", pluginsDir);
+		const driverBodies = await loadPlugins(allDrivers, "drivers");
 		parts.push(driverBodies);
 	}
 
 	if (app) {
-		const appBody = await loadPlugins([app], "apps", pluginsDir);
+		const appBody = await loadPlugins([app], "apps");
 		parts.push(appBody);
 	}
 

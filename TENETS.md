@@ -38,6 +38,10 @@ Errors are surfaced, not swallowed. If the model's code fails, the error goes ba
 
 `rlm()` is a recursive loop. A small `maxIterations` (e.g., 1 or 3) makes it cheap and fast. A large budget makes it thorough. The model should calibrate the iteration budget to the subtask: use `rlm("query", ctx, { maxIterations: 1 })` for one-shot classification, and a full budget when the problem demands iterative refinement.
 
+## Multi-Polarity Over Monologue
+
+A single agent cannot meaningfully check itself -- it rationalizes its own errors. Two or three agents with distinct roles create structural tension: the observer catches what the actor misses, the curator questions what the delegator assumed. This is not "more agents = better." Many agents add communication overhead and diffuse responsibility. The minimum viable multi-polarity is 2, and small composites with well-defined tension are more robust than either 1 agent or N agents.
+
 ## Testable Through Seams
 
 Testability comes from the API surface, not mocks or dependency injection frameworks. `CallLLM` is a function you pass in. Swap it for a stub. Set `maxIterations` to 1. Inject different plugin bodies. The seams are already there because the design is honest about its boundaries.
