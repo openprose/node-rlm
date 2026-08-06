@@ -24,7 +24,7 @@ jobs:
           mkdir -p .claude/skills
           cp -r /tmp/prose/skills/open-prose .claude/skills/open-prose
 
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@c038e4dcdedfbbca18dfb17df35a17e40ded4ddc # v1.0.186
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "prose run pr-review.prose"
