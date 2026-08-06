@@ -33,6 +33,15 @@ jobs:
       #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       #   # To enable: add NPM_TOKEN to repository secrets,
       #   # and add `registry-url: https://registry.npmjs.org` to setup-node above.
+      #   #
+      #   # Heads up: .npmrc sets `ignore-scripts=true` so no dependency install
+      #   # script ever runs. That setting is not limited to dependencies — it also
+      #   # suppresses this package's own `prepublishOnly` hook
+      #   # (`npm run clean && npm run build`), so `npm publish` will NOT build
+      #   # dist/ for you. The explicit `npm run build` step above is what produces
+      #   # the artifact; keep it before any publish step (or run
+      #   # `npm run clean && npm run build` here) so a stale or empty dist/ is
+      #   # never published.
 
       # - name: Create GitHub Release
       #   run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
