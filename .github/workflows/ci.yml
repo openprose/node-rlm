@@ -20,6 +20,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      # Blocking. Every installed dependency must carry a valid npm registry
+      # signature, so a tampered or unsigned tarball fails the build.
+      - run: npm audit signatures
+      # Blocking. This tree has no known advisories in its production
+      # dependencies today, so keep it that way: fix, replace, or drop the
+      # dependency rather than loosening the gate.
+      - run: npm audit --omit=dev
       - run: npx tsc --noEmit
       - run: npx biome check .
       - run: npx vitest --run
