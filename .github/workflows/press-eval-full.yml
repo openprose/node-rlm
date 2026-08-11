@@ -4,14 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       tier:
-        description: "Eval tier: quick (3 cheap), standard (6 default), full (all)"
+        description: "Eval tier"
         required: false
         default: "standard"
+        type: choice
+        options: [quick, standard, full]
       model:
-        description: "Override model for all evals"
+        description: "Override model for all evals (provider/name form)"
         required: false
       concurrency:
-        description: "Max parallel evals"
+        description: "Max parallel evals (1-10)"
         required: false
         default: "3"
 
@@ -42,13 +44,39 @@ jobs:
       - run: npm ci
 
       - name: Run Press evals
+        # Dispatch inputs travel through the environment and are validated before
+        # use. Interpolating them straight into this script would let a dispatch
+        # value containing shell syntax execute as code, in a job that holds a
+        # provider key. `--no-install` keeps tsx on the lockfile's copy.
         run: |
-          npx tsx src/eval-pipeline.ts \
-            --tier ${{ inputs.tier || 'standard' }} \
-            --concurrency ${{ inputs.concurrency || '3' }} \
-            ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
+          set -euo pipefail
+
+          case "${TIER}" in
+            quick|standard|full) ;;
+            *) echo "::error::Invalid tier: ${TIER}" >&2; exit 1 ;;
+          esac
+
+          if ! printf '%s' "${CONCURRENCY}" | grep -qE '^([1-9]|10)$'; then
+            echo "::error::concurrency must be an integer from 1 to 10" >&2
+            exit 1
+          fi
+
+          args=(--tier "${TIER}" --concurrency "${CONCURRENCY}")
+
+          if [ -n "${MODEL}" ]; then
+            if ! printf '%s' "${MODEL}" | grep -qE '^[A-Za-z0-9._-]+/[A-Za-z0-9._:-]+$'; then
+              echo "::error::model must look like provider/name" >&2
+              exit 1
+            fi
+            args+=(--model "${MODEL}")
+          fi
+
+          npx --no-install tsx src/eval-pipeline.ts "${args[@]}"
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TIER: ${{ inputs.tier || 'standard' }}
+          CONCURRENCY: ${{ inputs.concurrency || '3' }}
+          MODEL: ${{ inputs.model }}
         timeout-minutes: 25
 
       - name: Upload eval results
