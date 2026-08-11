@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install OpenProse skill
         # Pinned to a commit rather than tracking the default branch. This skill
@@ -35,7 +35,7 @@ jobs:
           mkdir -p .claude/skills
           cp -r /tmp/prose/skills/open-prose .claude/skills/open-prose
 
-      - uses: anthropics/claude-code-action@c038e4dcdedfbbca18dfb17df35a17e40ded4ddc # v1.0.186
+      - uses: anthropics/claude-code-action@6b082c41935b4c8a3b8b0ef85ba4ba4d9eeb8975 # v1.0.189
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "prose run pr-review.prose"
