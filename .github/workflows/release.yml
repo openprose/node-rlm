@@ -5,21 +5,30 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here writes to the repository, so leave no git credential on
+          # disk for the build and test steps to reach.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npx biome check .
-      - run: npx vitest --run
+      # Blocking, and repeated from pull-request CI on purpose: this workflow
+      # runs on push, so it is the only check a change merged without a pull
+      # request ever sees.
+      - run: npm audit signatures
+      - run: npm audit --omit=dev
+      # See ci.yml for why these carry `--no-install` and why there is no lint step.
+      - run: npx --no-install tsc --noEmit
+      - run: npx --no-install vitest --run
 
       - name: Get version
         id: version
@@ -47,3 +56,7 @@ jobs:
       #   run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
       #   env:
       #     GH_TOKEN: ${{ github.token }}
+      #   # To enable: this needs `contents: write`, which the workflow no longer
+      #   # grants. Give it to a separate release job rather than widening the
+      #   # build job — the build runs the whole dev dependency graph, and the
+      #   # release step needs nothing from it but the finished dist/.
