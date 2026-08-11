@@ -26,6 +26,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: openprose/prose
+          # Pinned: without a ref this tracks that repository's default branch,
+          # so a commit made there would change what runs in this job — which
+          # holds a provider key — with no change reviewed here. Bump
+          # deliberately.
+          ref: f7fa6770c4bf46d8af23215734ac5f16e5c3ee96
+          persist-credentials: false
           path: prose
 
       - uses: actions/setup-node@v4

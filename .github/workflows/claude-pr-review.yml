@@ -19,8 +19,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install OpenProse skill
+        # Pinned to a commit rather than tracking the default branch. This skill
+        # becomes the instructions Claude follows in a job that holds an API key
+        # and can write to pull requests, so a commit pushed to that repository
+        # would otherwise change behaviour here with nothing reviewed on this
+        # side. Bump deliberately.
+        env:
+          PROSE_REF: f7fa6770c4bf46d8af23215734ac5f16e5c3ee96
         run: |
-          git clone --depth 1 https://github.com/openprose/prose.git /tmp/prose
+          set -euo pipefail
+          git init --quiet /tmp/prose
+          git -C /tmp/prose fetch --depth 1 --quiet \
+            https://github.com/openprose/prose.git "${PROSE_REF}"
+          git -C /tmp/prose checkout --quiet FETCH_HEAD
           mkdir -p .claude/skills
           cp -r /tmp/prose/skills/open-prose .claude/skills/open-prose
 
