@@ -27,7 +27,9 @@ jobs:
       - run: npm ci
 
       - name: Run Press evals (quick tier)
-        run: npx tsx src/eval-pipeline.ts --tier quick --concurrency 3
+        # `--no-install` so this runs the lockfile's tsx rather than fetching an
+        # unpinned one from the registry into a job holding a provider key.
+        run: npx --no-install tsx src/eval-pipeline.ts --tier quick --concurrency 3
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         timeout-minutes: 8

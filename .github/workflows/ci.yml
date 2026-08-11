@@ -20,6 +20,19 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npx biome check .
-      - run: npx vitest --run
+      # Blocking. Every installed dependency must carry a valid npm registry
+      # signature, so a tampered or unsigned tarball fails the build.
+      - run: npm audit signatures
+      # Blocking. This tree has no known advisories in its production
+      # dependencies today, so keep it that way: fix, replace, or drop the
+      # dependency rather than loosening the gate.
+      - run: npm audit --omit=dev
+      # `--no-install` keeps these on the binaries `npm ci` just installed and
+      # verified. Without it, npx silently fetches an unpinned package from the
+      # registry whenever a tool is missing from the lockfile, which lands
+      # unreviewed code in the job right after the gates above cleared it.
+      - run: npx --no-install tsc --noEmit
+      - run: npx --no-install vitest --run
+      # No lint step: the Biome CLI is not a declared dependency here, so
+      # invoking it would download an unreviewed binary on every run. Wiring up
+      # @biomejs/biome, and fixing what it reports, is a separate change.
