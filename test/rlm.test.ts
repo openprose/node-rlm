@@ -547,6 +547,33 @@ describe("press", () => {
 		expect(toolResult!.content).toContain("other-component");
 	});
 
+	it("caught delegation failure does not surface as a phantom error", async () => {
+		const events: Array<{ type: string; invocationId?: string; error?: string | null }> = [];
+		const callLLM = mockToolCallLLM([
+			tc(`try { await press("child task", undefined, { model: "failer" }) } catch (e) { console.log("caught:", e.message) }`, "t1"),
+			tc('return "ok"', "t2"),
+		]);
+
+		const result = await press("parent task", undefined, {
+			callLLM,
+			maxDepth: 3,
+			models: {
+				failer: {
+					callLLM: async () => {
+						throw new Error("child boom");
+					},
+				},
+			},
+			observer: { emit: (event) => events.push(event as { type: string; invocationId?: string; error?: string | null }) },
+		});
+
+		expect(result.answer).toBe("ok");
+		const rootIterationEnds = events.filter((e) => e.type === "iteration:end" && e.invocationId === "root");
+		for (const event of rootIterationEnds) {
+			expect(event.error).toBeNull();
+		}
+	});
+
 	it("use + systemPrompt concatenated", async () => {
 		const systemPrompts: string[] = [];
 		const callLLM: CallLLM = async (messages, systemPrompt) => {

@@ -705,7 +705,8 @@ export async function press(query: string, context: Record<string, unknown> | un
 		})();
 
 		pendingRlmCalls.add(promise);
-		promise.finally(() => pendingRlmCalls.delete(promise));
+		const removeFromPending = () => pendingRlmCalls.delete(promise);
+		promise.then(removeFromPending, removeFromPending);
 
 		return promise;
 	};
