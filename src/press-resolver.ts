@@ -29,7 +29,8 @@ export interface ResolvedPressCall {
 // ---------------------------------------------------------------------------
 
 /**
- * Determine if a value looks like a resolvable file path (contains `/` and ends with `.md`, excluding URLs).
+ * Determine if a value looks like a resolvable file path (contains a path
+ * separator and ends with `.md`, excluding URLs).
  * @param value - The input string to check.
  * @returns `true` if the value should be read from disk during input resolution.
  */
@@ -37,7 +38,7 @@ export function isResolvablePath(value: string): boolean {
 	if (value.startsWith("http://") || value.startsWith("https://")) {
 		return false;
 	}
-	return value.includes("/") && value.endsWith(".md");
+	return (value.includes("/") || value.includes("\\")) && value.endsWith(".md");
 }
 
 // ---------------------------------------------------------------------------
