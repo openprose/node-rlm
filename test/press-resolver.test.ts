@@ -38,6 +38,10 @@ describe("isResolvablePath", () => {
 		expect(isResolvablePath("/absolute/path/to/file.md")).toBe(true);
 	});
 
+	it("returns true for a Windows-style absolute path", () => {
+		expect(isResolvablePath("C:\\Users\\me\\docs\\file.md")).toBe(true);
+	});
+
 	it("returns false for a bare word like 'haiku'", () => {
 		expect(isResolvablePath("haiku")).toBe(false);
 	});

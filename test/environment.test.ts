@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { join } from "node:path";
 import { JsEnvironment, SANDBOX_BUILTINS } from "../src/environment.js";
 
 describe("JsEnvironment", () => {
@@ -67,7 +68,7 @@ describe("JsEnvironment", () => {
 	it("require: node built-ins", async () => {
 		const env = new JsEnvironment();
 		const result = await env.exec('const path = require("path"); console.log(path.join("a", "b"))');
-		expect(result.output).toBe("a/b");
+		expect(result.output).toBe(join("a", "b"));
 	});
 
 	it("require: rejects non-builtins", async () => {
